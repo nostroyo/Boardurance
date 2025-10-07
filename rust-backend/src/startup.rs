@@ -1,5 +1,5 @@
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::routes::{health_check, test_items};
+use crate::routes::{health_check, test_items, players};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
 
@@ -55,17 +55,44 @@ impl Application {
         crate::routes::health_check,
         crate::routes::test_items::create_test_item,
         crate::routes::test_items::get_test_items,
+        crate::routes::players::create_player,
+        crate::routes::players::get_all_players,
+        crate::routes::players::get_player_by_wallet,
+        crate::routes::players::update_player_team_name,
+        crate::routes::players::delete_player,
+        crate::routes::players::add_car_to_player,
+        crate::routes::players::remove_car_from_player,
+        crate::routes::players::add_pilot_to_player,
+        crate::routes::players::remove_pilot_from_player,
     ),
     components(
         schemas(
             crate::domain::TestItem,
+            crate::domain::Player,
+            crate::domain::Car,
+            crate::domain::Pilot,
+            crate::domain::CarType,
+            crate::domain::CarRarity,
+            crate::domain::CarStats,
+            crate::domain::PilotClass,
+            crate::domain::PilotRarity,
+            crate::domain::PilotSkills,
+            crate::domain::PilotClassBonus,
             crate::routes::test_items::CreateTestItemRequest,
+            crate::routes::players::CreatePlayerRequest,
+            crate::routes::players::UpdateTeamNameRequest,
+            crate::routes::players::AddCarRequest,
+            crate::routes::players::CarStatsRequest,
+            crate::routes::players::AddPilotRequest,
+            crate::routes::players::PilotSkillsRequest,
+            crate::routes::players::PlayerResponse,
             crate::routes::HealthResponse
         )
     ),
     tags(
         (name = "health", description = "Health check endpoints"),
-        (name = "test", description = "Test endpoints")
+        (name = "test", description = "Test endpoints"),
+        (name = "players", description = "Player management endpoints")
     )
 )]
 struct ApiDoc;
@@ -78,6 +105,7 @@ pub async fn run(
     let app = Router::new()
         .route("/health_check", get(health_check))
         .nest("/api/v1", test_items::routes())
+        .nest("/api/v1", players::routes())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

@@ -10,6 +10,7 @@ switch ($Command.ToLower()) {
         Write-Host "  dev          - Start development environment with MongoDB" -ForegroundColor White
         Write-Host "  dev-ui       - Start development with MongoDB Express UI" -ForegroundColor White
         Write-Host "  test         - Run tests with test MongoDB" -ForegroundColor White
+        Write-Host "  test-players - Test player management endpoints" -ForegroundColor White
         Write-Host "  build        - Build the application" -ForegroundColor White
         Write-Host "  check        - Check code compilation" -ForegroundColor White
         Write-Host "  clean        - Clean build artifacts and stop containers" -ForegroundColor White
@@ -41,6 +42,11 @@ switch ($Command.ToLower()) {
     "test" {
         Write-Host "🧪 Running tests..." -ForegroundColor Green
         & .\scripts\test-with-mongodb.ps1
+    }
+    
+    "test-players" {
+        Write-Host "🎮 Testing player endpoints..." -ForegroundColor Green
+        & .\test-player-endpoints.ps1
     }
     
     "build" {

@@ -1,0 +1,229 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+use unicode_segmentation::UnicodeSegmentation;
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct Pilot {
+    pub uuid: Uuid,
+    pub nft_mint_address: Option<String>, // Solana NFT mint address
+    pub name: PilotName,
+    pub pilot_class: PilotClass,
+    pub rarity: PilotRarity,
+    pub skills: PilotSkills,
+    pub experience_level: u32,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PilotName(String);
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub enum PilotClass {
+    Speedster,    // Focuses on speed and acceleration
+    Technician,   // Focuses on handling and precision
+    Endurance,    // Focuses on durability and consistency
+    AllRounder,   // Balanced across all skills
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub enum PilotRarity {
+    Rookie,
+    Professional,
+    Expert,
+    Champion,
+    Legend,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PilotSkills {
+    pub reaction_time: u8,    // 1-100 - affects acceleration
+    pub precision: u8,        // 1-100 - affects handling
+    pub focus: u8,           // 1-100 - affects consistency
+    pub stamina: u8,         // 1-100 - affects performance over time
+}
+
+impl Pilot {
+    pub fn new(
+        name: PilotName,
+        pilot_class: PilotClass,
+        rarity: PilotRarity,
+        skills: PilotSkills,
+        nft_mint_address: Option<String>,
+    ) -> Result<Self, String> {
+        skills.validate()?;
+        
+        let now = Utc::now();
+        Ok(Self {
+            uuid: Uuid::new_v4(),
+            nft_mint_address,
+            name,
+            pilot_class,
+            rarity,
+            skills,
+            experience_level: 1,
+            is_active: false,
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    pub fn activate(&mut self) {
+        self.is_active = true;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn deactivate(&mut self) {
+        self.is_active = false;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn gain_experience(&mut self, amount: u32) {
+        self.experience_level += amount;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn update_skills(&mut self, new_skills: PilotSkills) -> Result<(), String> {
+        new_skills.validate()?;
+        self.skills = new_skills;
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn calculate_overall_skill(&self) -> u8 {
+        let total = self.skills.reaction_time as u16 
+            + self.skills.precision as u16 
+            + self.skills.focus as u16 
+            + self.skills.stamina as u16;
+        (total / 4) as u8
+    }
+
+    pub fn get_class_bonus(&self) -> PilotClassBonus {
+        match self.pilot_class {
+            PilotClass::Speedster => PilotClassBonus {
+                speed_bonus: 15,
+                acceleration_bonus: 20,
+                handling_bonus: 0,
+                durability_bonus: 0,
+            },
+            PilotClass::Technician => PilotClassBonus {
+                speed_bonus: 0,
+                acceleration_bonus: 5,
+                handling_bonus: 25,
+                durability_bonus: 10,
+            },
+            PilotClass::Endurance => PilotClassBonus {
+                speed_bonus: 0,
+                acceleration_bonus: 0,
+                handling_bonus: 10,
+                durability_bonus: 30,
+            },
+            PilotClass::AllRounder => PilotClassBonus {
+                speed_bonus: 8,
+                acceleration_bonus: 8,
+                handling_bonus: 8,
+                durability_bonus: 8,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PilotClassBonus {
+    pub speed_bonus: u8,
+    pub acceleration_bonus: u8,
+    pub handling_bonus: u8,
+    pub durability_bonus: u8,
+}
+
+impl PilotName {
+    pub fn parse(s: String) -> Result<PilotName, String> {
+        let is_empty_or_whitespace = s.trim().is_empty();
+        let is_too_long = s.graphemes(true).count() > 25;
+        let is_too_short = s.graphemes(true).count() < 2;
+        let forbidden_characters = ['<', '>', '"', '\'', '&', '\n', '\r', '\t'];
+        let contains_forbidden_characters = s.chars().any(|g| forbidden_characters.contains(&g));
+
+        if is_empty_or_whitespace {
+            Err("Pilot name cannot be empty".to_string())
+        } else if is_too_short {
+            Err("Pilot name must be at least 2 characters long".to_string())
+        } else if is_too_long {
+            Err("Pilot name cannot be longer than 25 characters".to_string())
+        } else if contains_forbidden_characters {
+            Err("Pilot name contains forbidden characters".to_string())
+        } else {
+            Ok(Self(s.trim().to_string()))
+        }
+    }
+}
+
+impl AsRef<str> for PilotName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PilotSkills {
+    pub fn new(reaction_time: u8, precision: u8, focus: u8, stamina: u8) -> Result<Self, String> {
+        let skills = Self {
+            reaction_time,
+            precision,
+            focus,
+            stamina,
+        };
+        skills.validate()?;
+        Ok(skills)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.reaction_time == 0 || self.reaction_time > 100 {
+            return Err("Reaction time must be between 1 and 100".to_string());
+        }
+        if self.precision == 0 || self.precision > 100 {
+            return Err("Precision must be between 1 and 100".to_string());
+        }
+        if self.focus == 0 || self.focus > 100 {
+            return Err("Focus must be between 1 and 100".to_string());
+        }
+        if self.stamina == 0 || self.stamina > 100 {
+            return Err("Stamina must be between 1 and 100".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl PilotRarity {
+    pub fn get_skill_multiplier(&self) -> f32 {
+        match self {
+            PilotRarity::Rookie => 1.0,
+            PilotRarity::Professional => 1.15,
+            PilotRarity::Expert => 1.3,
+            PilotRarity::Champion => 1.5,
+            PilotRarity::Legend => 1.8,
+        }
+    }
+
+    pub fn get_max_skills(&self) -> u8 {
+        match self {
+            PilotRarity::Rookie => 60,
+            PilotRarity::Professional => 70,
+            PilotRarity::Expert => 80,
+            PilotRarity::Champion => 90,
+            PilotRarity::Legend => 100,
+        }
+    }
+
+    pub fn get_experience_multiplier(&self) -> f32 {
+        match self {
+            PilotRarity::Rookie => 1.0,
+            PilotRarity::Professional => 1.2,
+            PilotRarity::Expert => 1.4,
+            PilotRarity::Champion => 1.6,
+            PilotRarity::Legend => 2.0,
+        }
+    }
+}
