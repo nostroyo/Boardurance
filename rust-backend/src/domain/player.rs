@@ -11,7 +11,7 @@ pub struct Player {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<mongodb::bson::oid::ObjectId>,
     pub uuid: Uuid,
-    pub wallet_address: WalletAddress,
+    pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
     pub cars: Vec<Car>,
     pub pilots: Vec<Pilot>,
@@ -27,7 +27,7 @@ pub struct TeamName(String);
 
 impl Player {
     pub fn new(
-        wallet_address: WalletAddress,
+        wallet_address: Option<WalletAddress>,
         team_name: TeamName,
         cars: Vec<Car>,
         pilots: Vec<Pilot>,
@@ -47,6 +47,10 @@ impl Player {
 
     pub fn validate_for_game(&self) -> Result<(), String> {
         // Validate player constraints for game participation
+        if self.wallet_address.is_none() {
+            return Err("Player must have a connected wallet to participate in games".to_string());
+        }
+
         if self.cars.len() != 2 {
             return Err("Player must have exactly 2 cars to participate in games".to_string());
         }
@@ -56,6 +60,28 @@ impl Player {
         }
 
         Ok(())
+    }
+
+    pub fn connect_wallet(&mut self, wallet_address: WalletAddress) -> Result<(), String> {
+        if self.wallet_address.is_some() {
+            return Err("Player already has a connected wallet".to_string());
+        }
+        self.wallet_address = Some(wallet_address);
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn disconnect_wallet(&mut self) {
+        self.wallet_address = None;
+        self.updated_at = Utc::now();
+    }
+
+    pub fn is_wallet_connected(&self) -> bool {
+        self.wallet_address.is_some()
+    }
+
+    pub fn get_wallet_address(&self) -> Option<&str> {
+        self.wallet_address.as_ref().map(|addr| addr.as_ref())
     }
 
     pub fn update_team_name(&mut self, new_team_name: TeamName) {
