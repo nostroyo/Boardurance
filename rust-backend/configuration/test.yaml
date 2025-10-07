@@ -1,0 +1,9 @@
+application:
+  port: 3001
+database:
+  host: "localhost"
+  port: 27018
+  database_name: "rust_backend_test"
+  username: "test_user"
+  password: "test_password"
+  require_ssl: false

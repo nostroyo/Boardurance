@@ -1,0 +1,28 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Configuration
+configuration/local.yaml
+configuration/production.yaml
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Scripts
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+application:
+  host: "0.0.0.0"
+  base_url: "http://127.0.0.1"
+database:
+  host: "localhost"
+  port: 27017
+  database_name: "rust_backend"
+  username: "rust_app"
+  password: "rust_password"
+  require_ssl: false

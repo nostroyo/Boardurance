@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  mongodb-test:
+    image: mongo:7.0
+    container_name: rust-backend-mongodb-test
+    ports:
+      - "27018:27017"  # Different port for test to avoid conflicts
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: test_admin
+      MONGO_INITDB_ROOT_PASSWORD: test_password
+      MONGO_INITDB_DATABASE: rust_backend_test
+    volumes:
+      - ./docker/mongo-test-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - rust-backend-test-network
+    command: --quiet  # Reduce log verbosity for tests
+
+networks:
+  rust-backend-test-network:
+    driver: bridge
