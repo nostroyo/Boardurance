@@ -13,6 +13,7 @@ pub struct Car {
     pub car_type: CarType,
     pub rarity: CarRarity,
     pub stats: CarStats,
+    pub performance: CarPerformance,
     pub is_equipped: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -47,15 +48,35 @@ pub struct CarStats {
     pub durability: u8,   // 1-100
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct CarPerformance {
+    pub engine: EngineStats,
+    pub body: BodyStats,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct EngineStats {
+    pub straight_value: u8,  // 1-100
+    pub curve_value: u8,     // 1-100
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct BodyStats {
+    pub straight_value: u8,  // 1-100
+    pub curve_value: u8,     // 1-100
+}
+
 impl Car {
     pub fn new(
         name: CarName,
         car_type: CarType,
         rarity: CarRarity,
         stats: CarStats,
+        performance: CarPerformance,
         nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
         stats.validate()?;
+        performance.validate()?;
         
         let now = Utc::now();
         Ok(Self {
@@ -65,6 +86,7 @@ impl Car {
             car_type,
             rarity,
             stats,
+            performance,
             is_equipped: false,
             created_at: now,
             updated_at: now,
@@ -149,6 +171,56 @@ impl CarStats {
         }
         if self.durability == 0 || self.durability > 100 {
             return Err("Durability must be between 1 and 100".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl CarPerformance {
+    pub fn new(engine: EngineStats, body: BodyStats) -> Result<Self, String> {
+        let performance = Self { engine, body };
+        performance.validate()?;
+        Ok(performance)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        self.engine.validate()?;
+        self.body.validate()?;
+        Ok(())
+    }
+}
+
+impl EngineStats {
+    pub fn new(straight_value: u8, curve_value: u8) -> Result<Self, String> {
+        let stats = Self { straight_value, curve_value };
+        stats.validate()?;
+        Ok(stats)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.straight_value == 0 || self.straight_value > 100 {
+            return Err("Engine straight value must be between 1 and 100".to_string());
+        }
+        if self.curve_value == 0 || self.curve_value > 100 {
+            return Err("Engine curve value must be between 1 and 100".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl BodyStats {
+    pub fn new(straight_value: u8, curve_value: u8) -> Result<Self, String> {
+        let stats = Self { straight_value, curve_value };
+        stats.validate()?;
+        Ok(stats)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.straight_value == 0 || self.straight_value > 100 {
+            return Err("Body straight value must be between 1 and 100".to_string());
+        }
+        if self.curve_value == 0 || self.curve_value > 100 {
+            return Err("Body curve value must be between 1 and 100".to_string());
         }
         Ok(())
     }

@@ -532,11 +532,43 @@ pub async fn add_car_to_player(
         }
     };
 
+    // Create performance based on stats (temporary implementation)
+    let engine_stats = match crate::domain::EngineStats::new(
+        (car_stats.speed + car_stats.acceleration) / 2,  // straight value
+        (car_stats.handling + car_stats.durability) / 2, // curve value
+    ) {
+        Ok(stats) => stats,
+        Err(e) => {
+            tracing::warn!("Failed to create engine stats: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let body_stats = match crate::domain::BodyStats::new(
+        (car_stats.speed + car_stats.durability) / 2,   // straight value
+        (car_stats.handling + car_stats.acceleration) / 2, // curve value
+    ) {
+        Ok(stats) => stats,
+        Err(e) => {
+            tracing::warn!("Failed to create body stats: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let car_performance = match crate::domain::CarPerformance::new(engine_stats, body_stats) {
+        Ok(performance) => performance,
+        Err(e) => {
+            tracing::warn!("Failed to create car performance: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
     let car = match Car::new(
         car_name,
         payload.car_type,
         payload.rarity,
         car_stats,
+        car_performance,
         payload.nft_mint_address,
     ) {
         Ok(car) => car,
@@ -671,11 +703,24 @@ pub async fn add_pilot_to_player(
         }
     };
 
+    // Create performance based on skills (temporary implementation)
+    let pilot_performance = match crate::domain::PilotPerformance::new(
+        (pilot_skills.reaction_time + pilot_skills.focus) / 2,    // straight value
+        (pilot_skills.precision + pilot_skills.stamina) / 2,     // curve value
+    ) {
+        Ok(performance) => performance,
+        Err(e) => {
+            tracing::warn!("Failed to create pilot performance: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
     let pilot = match Pilot::new(
         pilot_name,
         payload.pilot_class,
         payload.rarity,
         pilot_skills,
+        pilot_performance,
         payload.nft_mint_address,
     ) {
         Ok(pilot) => pilot,

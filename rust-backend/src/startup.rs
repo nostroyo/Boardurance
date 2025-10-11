@@ -1,5 +1,5 @@
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::routes::{health_check, test_items, players};
+use crate::routes::{health_check, test_items, players, races};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
 
@@ -67,6 +67,13 @@ impl Application {
         crate::routes::players::remove_car_from_player,
         crate::routes::players::add_pilot_to_player,
         crate::routes::players::remove_pilot_from_player,
+        crate::routes::races::create_race,
+        crate::routes::races::get_all_races,
+        crate::routes::races::get_race,
+        crate::routes::races::join_race,
+        crate::routes::races::start_race,
+        crate::routes::races::process_turn,
+        crate::routes::races::get_race_status,
     ),
     components(
         schemas(
@@ -81,6 +88,16 @@ impl Application {
             crate::domain::PilotRarity,
             crate::domain::PilotSkills,
             crate::domain::PilotClassBonus,
+            crate::domain::Race,
+            crate::domain::Track,
+            crate::domain::Sector,
+            crate::domain::SectorType,
+            crate::domain::RaceParticipant,
+            crate::domain::RaceStatus,
+            crate::domain::LapAction,
+            crate::domain::LapResult,
+            crate::domain::ParticipantMovement,
+            crate::domain::MovementType,
             crate::routes::test_items::CreateTestItemRequest,
             crate::routes::players::CreatePlayerRequest,
             crate::routes::players::ConnectWalletRequest,
@@ -90,13 +107,21 @@ impl Application {
             crate::routes::players::AddPilotRequest,
             crate::routes::players::PilotSkillsRequest,
             crate::routes::players::PlayerResponse,
+            crate::routes::races::CreateRaceRequest,
+            crate::routes::races::CreateSectorRequest,
+            crate::routes::races::JoinRaceRequest,
+            crate::routes::races::ProcessLapRequest,
+            crate::routes::races::LapActionRequest,
+            crate::routes::races::RaceResponse,
+            crate::routes::races::LapResultResponse,
             crate::routes::HealthResponse
         )
     ),
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "test", description = "Test endpoints"),
-        (name = "players", description = "Player management endpoints")
+        (name = "players", description = "Player management endpoints"),
+        (name = "races", description = "Race management and gameplay endpoints")
     )
 )]
 struct ApiDoc;
@@ -110,6 +135,7 @@ pub async fn run(
         .route("/health_check", get(health_check))
         .nest("/api/v1", test_items::routes())
         .nest("/api/v1", players::routes())
+        .nest("/api/v1", races::routes())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

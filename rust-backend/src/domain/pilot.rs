@@ -13,6 +13,7 @@ pub struct Pilot {
     pub pilot_class: PilotClass,
     pub rarity: PilotRarity,
     pub skills: PilotSkills,
+    pub performance: PilotPerformance,
     pub experience_level: u32,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
@@ -47,15 +48,23 @@ pub struct PilotSkills {
     pub stamina: u8,         // 1-100 - affects performance over time
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PilotPerformance {
+    pub straight_value: u8,  // 1-100
+    pub curve_value: u8,     // 1-100
+}
+
 impl Pilot {
     pub fn new(
         name: PilotName,
         pilot_class: PilotClass,
         rarity: PilotRarity,
         skills: PilotSkills,
+        performance: PilotPerformance,
         nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
         skills.validate()?;
+        performance.validate()?;
         
         let now = Utc::now();
         Ok(Self {
@@ -65,6 +74,7 @@ impl Pilot {
             pilot_class,
             rarity,
             skills,
+            performance,
             experience_level: 1,
             is_active: false,
             created_at: now,
@@ -192,6 +202,24 @@ impl PilotSkills {
         }
         if self.stamina == 0 || self.stamina > 100 {
             return Err("Stamina must be between 1 and 100".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl PilotPerformance {
+    pub fn new(straight_value: u8, curve_value: u8) -> Result<Self, String> {
+        let performance = Self { straight_value, curve_value };
+        performance.validate()?;
+        Ok(performance)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.straight_value == 0 || self.straight_value > 100 {
+            return Err("Pilot straight value must be between 1 and 100".to_string());
+        }
+        if self.curve_value == 0 || self.curve_value > 100 {
+            return Err("Pilot curve value must be between 1 and 100".to_string());
         }
         Ok(())
     }
