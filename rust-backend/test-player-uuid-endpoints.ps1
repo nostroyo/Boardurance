@@ -174,5 +174,5 @@ Write-Host "   ✅ Optional wallet addresses - players can be created without wa
 Write-Host "   ✅ UUID-based identification - primary key is now UUID, not wallet" -ForegroundColor White
 Write-Host "   ✅ Wallet connection/disconnection - players can connect/disconnect wallets" -ForegroundColor White
 Write-Host "   ✅ Guest player support - players can play without Web3 wallet initially" -ForegroundColor White
-Write-Host "   ✅ Flexible onboarding - traditional signup → wallet connection later" -ForegroundColor White
+Write-Host "   - Flexible onboarding - traditional signup then wallet connection later" -ForegroundColor White
 Write-Host "   ✅ Backward compatibility - still supports wallet-based lookups" -ForegroundColor White

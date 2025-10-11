@@ -6,6 +6,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Pilot {
+    #[serde(with = "uuid_as_string")]
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: PilotName,
@@ -225,5 +226,25 @@ impl PilotRarity {
             PilotRarity::Champion => 1.6,
             PilotRarity::Legend => 2.0,
         }
+    }
+}
+
+mod uuid_as_string {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&uuid.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
     }
 }

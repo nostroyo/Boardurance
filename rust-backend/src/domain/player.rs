@@ -10,13 +10,35 @@ use super::{Car, Pilot};
 pub struct Player {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<mongodb::bson::oid::ObjectId>,
+    #[serde(with = "uuid_as_string")]
     pub uuid: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
     pub cars: Vec<Car>,
     pub pilots: Vec<Pilot>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+mod uuid_as_string {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&uuid.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
