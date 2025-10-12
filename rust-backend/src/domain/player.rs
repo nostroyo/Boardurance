@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Car, Pilot};
+use super::{Car, Pilot, Engine, Body};
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Player {
@@ -12,11 +12,14 @@ pub struct Player {
     pub id: Option<mongodb::bson::oid::ObjectId>,
     #[serde(with = "uuid_as_string")]
     pub uuid: Uuid,
+    pub email: Email,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
     pub cars: Vec<Car>,
     pub pilots: Vec<Pilot>,
+    pub engines: Vec<Engine>,
+    pub bodies: Vec<Body>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -45,11 +48,14 @@ mod uuid_as_string {
 pub struct WalletAddress(String);
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct Email(String);
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct TeamName(String);
 
 impl Player {
     pub fn new(
-        wallet_address: Option<WalletAddress>,
+        email: Email,
         team_name: TeamName,
         cars: Vec<Car>,
         pilots: Vec<Pilot>,
@@ -58,10 +64,37 @@ impl Player {
         Ok(Self {
             id: None,
             uuid: Uuid::new_v4(),
-            wallet_address,
+            email,
+            wallet_address: None,
             team_name,
             cars,
             pilots,
+            engines: vec![],
+            bodies: vec![],
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    pub fn new_with_assets(
+        email: Email,
+        team_name: TeamName,
+        cars: Vec<Car>,
+        pilots: Vec<Pilot>,
+        engines: Vec<Engine>,
+        bodies: Vec<Body>,
+    ) -> Result<Self, String> {
+        let now = Utc::now();
+        Ok(Self {
+            id: None,
+            uuid: Uuid::new_v4(),
+            email,
+            wallet_address: None,
+            team_name,
+            cars,
+            pilots,
+            engines,
+            bodies,
             created_at: now,
             updated_at: now,
         })
@@ -154,6 +187,52 @@ impl Player {
         self.updated_at = Utc::now();
         Ok(())
     }
+
+    pub fn add_engine(&mut self, engine: Engine) {
+        self.engines.push(engine);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn remove_engine(&mut self, engine_uuid: Uuid) -> Result<(), String> {
+        let initial_len = self.engines.len();
+        self.engines.retain(|engine| engine.uuid != engine_uuid);
+        
+        if self.engines.len() == initial_len {
+            return Err("Engine not found".to_string());
+        }
+        
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn add_body(&mut self, body: Body) {
+        self.bodies.push(body);
+        self.updated_at = Utc::now();
+    }
+
+    pub fn remove_body(&mut self, body_uuid: Uuid) -> Result<(), String> {
+        let initial_len = self.bodies.len();
+        self.bodies.retain(|body| body.uuid != body_uuid);
+        
+        if self.bodies.len() == initial_len {
+            return Err("Body not found".to_string());
+        }
+        
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn get_engine(&self, engine_uuid: Uuid) -> Option<&Engine> {
+        self.engines.iter().find(|engine| engine.uuid == engine_uuid)
+    }
+
+    pub fn get_body(&self, body_uuid: Uuid) -> Option<&Body> {
+        self.bodies.iter().find(|body| body.uuid == body_uuid)
+    }
+
+    pub fn get_pilot(&self, pilot_uuid: Uuid) -> Option<&Pilot> {
+        self.pilots.iter().find(|pilot| pilot.uuid == pilot_uuid)
+    }
 }
 
 impl WalletAddress {
@@ -185,8 +264,55 @@ impl AsRef<str> for WalletAddress {
     }
 }
 
-impl TeamName {
-    pub fn parse(s: &str) -> Result<TeamName, String> {
+impl Email {
+    pub fn parse(s: &str) -> Result<Email, String> {
+        let trimmed = s.trim();
+        
+        if trimmed.is_empty() {
+            return Err("Email cannot be empty".to_string());
+        }
+        
+        // Basic email validation
+        if !trimmed.contains('@') {
+            return Err("Email must contain @ symbol".to_string());
+        }
+        
+        let parts: Vec<&str> = trimmed.split('@').collect();
+        if parts.len() != 2 {
+            return Err("Email must have exactly one @ symbol".to_string());
+        }
+        
+        let local = parts[0];
+        let domain = parts[1];
+        
+        if local.is_empty() {
+            return Err("Email local part cannot be empty".to_string());
+        }
+        
+        if domain.is_empty() {
+            return Err("Email domain cannot be empty".to_string());
+        }
+        
+        if !domain.contains('.') {
+            return Err("Email domain must contain at least one dot".to_string());
+        }
+        
+        if trimmed.len() > 254 {
+            return Err("Email cannot be longer than 254 characters".to_string());
+        }
+        
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl AsRef<str> for Email {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+pub fn parse(s: &str) -> Result<TeamName, String> {
+        impl TeamName {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 50;
         let is_too_short = s.graphemes(true).count() < 2;

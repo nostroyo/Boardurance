@@ -4,92 +4,78 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::engine::ComponentRarity;
+
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct Car {
+pub struct Body {
     #[serde(with = "uuid_as_string")]
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
-    pub name: CarName,
-    pub pilot_uuid: Option<Uuid>,  // Assigned pilot
-    pub engine_uuid: Option<Uuid>, // Assigned engine
-    pub body_uuid: Option<Uuid>,   // Assigned body
-    pub is_equipped: bool,
+    pub name: BodyName,
+    pub rarity: ComponentRarity,
+    pub straight_value: u8,  // 1-100
+    pub curve_value: u8,     // 1-100
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct CarName(String);
+pub struct BodyName(String);
 
-
-
-impl Car {
+impl Body {
     pub fn new(
-        name: CarName,
+        name: BodyName,
+        rarity: ComponentRarity,
+        straight_value: u8,
+        curve_value: u8,
         nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
+        if straight_value == 0 || straight_value > 100 {
+            return Err("Body straight value must be between 1 and 100".to_string());
+        }
+        if curve_value == 0 || curve_value > 100 {
+            return Err("Body curve value must be between 1 and 100".to_string());
+        }
+        
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
             nft_mint_address,
             name,
-            pilot_uuid: None,
-            engine_uuid: None,
-            body_uuid: None,
-            is_equipped: false,
+            rarity,
+            straight_value,
+            curve_value,
             created_at: now,
             updated_at: now,
         })
     }
 
-    pub fn equip(&mut self) {
-        self.is_equipped = true;
+    pub fn update_values(&mut self, straight_value: u8, curve_value: u8) -> Result<(), String> {
+        if straight_value == 0 || straight_value > 100 {
+            return Err("Body straight value must be between 1 and 100".to_string());
+        }
+        if curve_value == 0 || curve_value > 100 {
+            return Err("Body curve value must be between 1 and 100".to_string());
+        }
+        
+        self.straight_value = straight_value;
+        self.curve_value = curve_value;
         self.updated_at = Utc::now();
-    }
-
-    pub fn unequip(&mut self) {
-        self.is_equipped = false;
-        self.updated_at = Utc::now();
-    }
-
-    pub fn assign_pilot(&mut self, pilot_uuid: Uuid) {
-        self.pilot_uuid = Some(pilot_uuid);
-        self.updated_at = Utc::now();
-    }
-
-    pub fn unassign_pilot(&mut self) {
-        self.pilot_uuid = None;
-        self.updated_at = Utc::now();
-    }
-
-    pub fn assign_engine(&mut self, engine_uuid: Uuid) {
-        self.engine_uuid = Some(engine_uuid);
-        self.updated_at = Utc::now();
-    }
-
-    pub fn unassign_engine(&mut self) {
-        self.engine_uuid = None;
-        self.updated_at = Utc::now();
-    }
-
-    pub fn assign_body(&mut self, body_uuid: Uuid) {
-        self.body_uuid = Some(body_uuid);
-        self.updated_at = Utc::now();
-    }
-
-    pub fn unassign_body(&mut self) {
-        self.body_uuid = None;
-        self.updated_at = Utc::now();
+        Ok(())
     }
 
     #[must_use]
-    pub fn is_complete(&self) -> bool {
-        self.pilot_uuid.is_some() && self.engine_uuid.is_some() && self.body_uuid.is_some()
+    pub fn calculate_overall_rating(&self) -> u8 {
+        let total = u16::from(self.straight_value) + u16::from(self.curve_value);
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            (total / 2) as u8
+        }
     }
 }
 
-impl CarName {
-    pub fn parse(s: &str) -> Result<CarName, String> {
+impl BodyName {
+    pub fn parse(s: &str) -> Result<BodyName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 30;
         let is_too_short = s.graphemes(true).count() < 1;
@@ -97,26 +83,24 @@ impl CarName {
         let contains_forbidden_characters = s.chars().any(|g| forbidden_characters.contains(&g));
 
         if is_empty_or_whitespace {
-            Err("Car name cannot be empty".to_string())
+            Err("Body name cannot be empty".to_string())
         } else if is_too_short {
-            Err("Car name must be at least 1 character long".to_string())
+            Err("Body name must be at least 1 character long".to_string())
         } else if is_too_long {
-            Err("Car name cannot be longer than 30 characters".to_string())
+            Err("Body name cannot be longer than 30 characters".to_string())
         } else if contains_forbidden_characters {
-            Err("Car name contains forbidden characters".to_string())
+            Err("Body name contains forbidden characters".to_string())
         } else {
             Ok(Self(s.trim().to_string()))
         }
     }
 }
 
-impl AsRef<str> for CarName {
+impl AsRef<str> for BodyName {
     fn as_ref(&self) -> &str {
         &self.0
     }
 }
-
-
 
 mod uuid_as_string {
     use serde::{Deserialize, Deserializer, Serializer};

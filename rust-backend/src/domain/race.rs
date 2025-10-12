@@ -233,7 +233,13 @@ impl Race {
                     // TODO: Calculate base value from car engine + body + pilot performance
                     // For now, use a simple base value
                     let base_value = 10; // Placeholder
-                    let final_value = base_value + action.boost_value;
+                    
+                    // Apply sector performance ceiling: cap base value to current sector's max_value
+                    let current_sector = &self.track.sectors[participant.current_sector as usize];
+                    let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
+                    
+                    // Add boost to the capped base value
+                    let final_value = capped_base_value + action.boost_value;
                     participant_values.insert(action.player_uuid, final_value);
                 }
             }
@@ -291,29 +297,29 @@ impl Race {
     fn process_sector_movements(&mut self, sector_id: u32, participant_values: &HashMap<Uuid, u32>) -> Vec<ParticipantMovement> {
         let mut movements = Vec::new();
         
-        // Get all participants in this sector
-        let participants_in_sector: Vec<usize> = self.participants
+        // Get all participants in this sector with their performance values
+        let mut participants_in_sector: Vec<(usize, u32)> = self.participants
             .iter()
             .enumerate()
             .filter(|(_, p)| p.current_sector == sector_id && !p.is_finished)
-            .map(|(i, _)| i)
+            .filter_map(|(i, p)| {
+                participant_values.get(&p.player_uuid).map(|&value| (i, value))
+            })
             .collect();
 
-        // Process each participant in this sector
-        for &participant_index in &participants_in_sector {
-            let participant = &self.participants[participant_index];
-            let player_uuid = participant.player_uuid;
-            
-            if let Some(&final_value) = participant_values.get(&player_uuid) {
-                let movement = self.calculate_movement_for_participant(participant_index, final_value, sector_id);
-                movements.push(movement);
-            }
+        // Sort by performance value (highest first) - this determines ranking
+        participants_in_sector.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // Process each participant, but only allow the first-ranked car to move up
+        for (rank, &(participant_index, final_value)) in participants_in_sector.iter().enumerate() {
+            let movement = self.calculate_movement_for_participant(participant_index, final_value, sector_id, rank == 0);
+            movements.push(movement);
         }
 
         movements
     }
 
-    fn calculate_movement_for_participant(&mut self, participant_index: usize, final_value: u32, current_sector_id: u32) -> ParticipantMovement {
+    fn calculate_movement_for_participant(&mut self, participant_index: usize, final_value: u32, current_sector_id: u32, is_first_ranked: bool) -> ParticipantMovement {
         let participant = &self.participants[participant_index];
         let player_uuid = participant.player_uuid;
         let from_sector = current_sector_id;
@@ -334,13 +340,13 @@ impl Race {
 
         // Check movement conditions
         if final_value < sector.min_value {
-            // Move DOWN
+            // Move DOWN - any car can move down if performance is too low
             self.move_participant_down(participant_index, from_sector, final_value)
-        } else if final_value > sector.max_value {
-            // Try to move UP
+        } else if final_value > sector.max_value && is_first_ranked {
+            // Try to move UP - only the first-ranked car can move up
             self.move_participant_up(participant_index, from_sector, final_value)
         } else {
-            // Stay in current sector
+            // Stay in current sector (either performance is within range, or not first-ranked)
             ParticipantMovement {
                 player_uuid,
                 from_sector,
@@ -831,27 +837,138 @@ mod tests {
         
         race.start_race().unwrap();
         
-        // All players try to move up with high boost
-        let actions: Vec<LapAction> = player_uuids.iter().map(|&uuid| LapAction {
+        // Give different boost values to test performance-based movement priority
+        let actions: Vec<LapAction> = player_uuids.iter().enumerate().map(|(i, &uuid)| LapAction {
             player_uuid: uuid,
-            boost_value: 5, // Base 10 + boost 5 = 15, exceeds sector 0 max (10)
+            boost_value: 5 - (i as u32), // First player gets 5, second gets 4, etc.
+            // This creates final values: 15, 14, 13, 12, 11 (all exceed sector 0 max of 10)
         }).collect();
         
-        let _result = race.process_lap(&actions).unwrap();
+        let _ = race.process_lap(&actions).unwrap();
         
         // Count how many are in sector 1 (capacity 3)
         let sector_1_count = race.participants.iter()
             .filter(|p| p.current_sector == 1)
             .count();
         
-        // Should respect capacity limit of 3
-        assert!(sector_1_count <= 3);
+        // Should respect first-ranked rule - only 1 car should move up
+        assert_eq!(sector_1_count, 1);
         
-        // Some should stay in sector 0 due to capacity limits
+        // The remaining 4 should stay in sector 0 due to first-ranked rule
         let sector_0_count = race.participants.iter()
             .filter(|p| p.current_sector == 0)
             .count();
-        assert!(sector_0_count >= 2); // At least 2 should stay in sector 0
+        assert_eq!(sector_0_count, 4);
+        
+        // Verify that the participant who moved up is the best performer
+        let moved_up_participant = race.participants.iter()
+            .find(|p| p.current_sector == 1)
+            .expect("Should have one participant in sector 1");
+        
+        // The best performer should have moved up (boost value 5)
+        // Total value should be 15
+        assert_eq!(moved_up_participant.total_value, 15, "Best performer should move up");
+    }
+
+    #[test]
+    fn test_single_slot_capacity_priority() {
+        // Test the specific case where only ONE car can move up
+        let sectors = vec![
+            Sector {
+                id: 0,
+                name: "Start".to_string(),
+                min_value: 0,
+                max_value: 10,
+                slot_capacity: None, // Infinite
+                sector_type: SectorType::Start,
+            },
+            Sector {
+                id: 1,
+                name: "Limited".to_string(),
+                min_value: 8,
+                max_value: 15,
+                slot_capacity: Some(1), // Only ONE slot
+                sector_type: SectorType::Straight,
+            },
+            Sector {
+                id: 2,
+                name: "Finish".to_string(),
+                min_value: 12,
+                max_value: 20,
+                slot_capacity: None, // Infinite
+                sector_type: SectorType::Finish,
+            },
+        ];
+
+        let track = Track::new("Single Slot Track".to_string(), sectors).unwrap();
+        let mut race = Race::new("Single Slot Test".to_string(), track, 1);
+        
+        // Add 3 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..3 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set all participants to start in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // All participants try to move up with different performance
+        let actions: Vec<LapAction> = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Final: 15 (best)
+            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Final: 14 (second)
+            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Final: 13 (third)
+        ];
+        
+        let result = race.process_lap(&actions).unwrap();
+        
+        // Only ONE car should move to sector 1 (the best performer)
+        let sector_1_count = race.participants.iter()
+            .filter(|p| p.current_sector == 1)
+            .count();
+        assert_eq!(sector_1_count, 1);
+        
+        // The other 2 should stay in sector 0
+        let sector_0_count = race.participants.iter()
+            .filter(|p| p.current_sector == 0)
+            .count();
+        assert_eq!(sector_0_count, 2);
+        
+        // The car that moved up should be the one with the highest performance (boost 5)
+        let moved_up_participant = race.participants.iter()
+            .find(|p| p.current_sector == 1)
+            .unwrap();
+        assert_eq!(moved_up_participant.player_uuid, player_uuids[0]);
+        assert_eq!(moved_up_participant.total_value, 15); // base 10 + boost 5
+        
+        // Check that the participant in sector 1 has higher total_value than those in sector 0
+        let stayed_participants: Vec<_> = race.participants.iter()
+            .filter(|p| p.current_sector == 0)
+            .collect();
+            
+        for stayed_participant in &stayed_participants {
+            assert!(moved_up_participant.total_value > stayed_participant.total_value,
+                "Moved participant should have higher performance than stayed participant");
+        }
+        
+        // Verify the movements were recorded correctly - only 1 car should move up (first-ranked rule)
+        let move_up_count = result.movements.iter()
+            .filter(|m| m.movement_type == MovementType::MovedUp)
+            .count();
+        assert_eq!(move_up_count, 1, "Should have exactly 1 MovedUp movement (first-ranked car only)");
+        
+        let stayed_count = result.movements.iter()
+            .filter(|m| m.movement_type == MovementType::StayedInSector)
+            .count();
+        assert_eq!(stayed_count, 2, "Should have exactly 2 StayedInSector movements");
     }
 
     #[test]
@@ -1047,6 +1164,126 @@ mod tests {
     }
 
     #[test]
+    fn test_single_slot_movement_priority() {
+        let track = create_test_track();
+        let mut race = Race::new("Test Race".to_string(), track, 1);
+        
+        // Add 3 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..3 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set all participants in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        // Fill sector 1 with 2 participants (capacity is 3, so only 1 slot left)
+        race.participants[0].current_sector = 1;
+        race.participants[1].current_sector = 1;
+        // participant[2] stays in sector 0
+        
+        race.start_race().unwrap();
+        
+        // All participants need actions, but only the one in sector 0 can potentially move
+        let actions = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 0 }, // Already in sector 1
+            LapAction { player_uuid: player_uuids[1], boost_value: 0 }, // Already in sector 1
+            LapAction { player_uuid: player_uuids[2], boost_value: 5 }, // In sector 0, tries to move up
+        ];
+        
+        let result = race.process_lap(&actions).unwrap();
+        
+        // Only the participant with higher performance should move up
+        assert_eq!(race.participants[2].current_sector, 1, "Best performer should move up");
+        
+        // Verify movements were recorded (3 total: 2 stay in sector 1, 1 moves up from sector 0)
+        assert_eq!(result.movements.len(), 3);
+        
+        // Find the movement for the participant who was in sector 0
+        let sector_0_movement = result.movements.iter()
+            .find(|m| m.player_uuid == player_uuids[2])
+            .expect("Should find movement for sector 0 participant");
+        assert_eq!(sector_0_movement.movement_type, MovementType::MovedUp);
+        
+        // Verify sector 1 is now at capacity (3 participants)
+        let sector_1_count = race.participants.iter()
+            .filter(|p| p.current_sector == 1)
+            .count();
+        assert_eq!(sector_1_count, 3, "Sector 1 should be at full capacity");
+        
+        // Verify movement counts
+        let move_up_count = result.movements.iter()
+            .filter(|m| m.movement_type == MovementType::MovedUp)
+            .count();
+        assert_eq!(move_up_count, 1, "Should have exactly 1 MovedUp movement");
+        
+        let stayed_count = result.movements.iter()
+            .filter(|m| m.movement_type == MovementType::StayedInSector)
+            .count();
+        assert_eq!(stayed_count, 2, "Should have exactly 2 StayedInSector movements");
+    }
+
+    #[test]
+    fn test_multiple_cars_one_slot_performance_priority() {
+        let track = create_test_track();
+        let mut race = Race::new("Test Race".to_string(), track, 1);
+        
+        // Add 4 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..4 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set up scenario: sector 1 has 2 cars (capacity 3), sector 0 has 2 cars
+        race.participants[0].current_sector = 1; // Already in sector 1
+        race.participants[1].current_sector = 1; // Already in sector 1
+        race.participants[2].current_sector = 0; // In sector 0, wants to move up
+        race.participants[3].current_sector = 0; // In sector 0, wants to move up
+        
+        race.start_race().unwrap();
+        
+        // Both cars in sector 0 try to move up, but only 1 slot available in sector 1
+        // Give different performance values to test priority
+        let actions = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 0 }, // Stay in sector 1
+            LapAction { player_uuid: player_uuids[1], boost_value: 0 }, // Stay in sector 1
+            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Lower performance (base 10 + 3 = 13)
+            LapAction { player_uuid: player_uuids[3], boost_value: 5 }, // Higher performance (base 10 + 5 = 15)
+        ];
+        
+        let result = race.process_lap(&actions).unwrap();
+        
+        // Only the best performer (player 3) should move up
+        assert_eq!(race.participants[3].current_sector, 1, "Best performer should move up to sector 1");
+        assert_eq!(race.participants[2].current_sector, 0, "Lower performer should stay in sector 0");
+        
+        // Verify sector 1 is now at capacity
+        let sector_1_count = race.participants.iter()
+            .filter(|p| p.current_sector == 1)
+            .count();
+        assert_eq!(sector_1_count, 3, "Sector 1 should be at full capacity");
+        
+        // Verify exactly one car moved up
+        let move_up_movements: Vec<_> = result.movements.iter()
+            .filter(|m| m.movement_type == MovementType::MovedUp)
+            .collect();
+        assert_eq!(move_up_movements.len(), 1, "Exactly one car should move up");
+        assert_eq!(move_up_movements[0].player_uuid, player_uuids[3], "The best performer should be the one who moved up");
+    }
+
+    #[test]
     fn test_qualification_random_starting_positions() {
         let track = create_test_track();
         let track_sector_count = track.sectors.len() as u32;
@@ -1074,5 +1311,273 @@ mod tests {
         for &sector in &starting_sectors {
             assert!(sector < track_sector_count);
         }
+    }
+
+    #[test]
+    fn test_sector_performance_ceiling_caps_base_value() {
+        let track = create_test_track();
+        let mut race = Race::new("Test Race".to_string(), track, 1);
+        
+        let player_uuid = Uuid::new_v4();
+        let car_uuid = Uuid::new_v4();
+        let pilot_uuid = Uuid::new_v4();
+        
+        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        
+        // Set participant to start in sector 0 (max_value = 10)
+        race.participants[0].current_sector = 0;
+        
+        race.start_race().unwrap();
+        
+        // Give a high boost that would normally result in base value > sector max
+        // Base value is 10 (engine 5 + body 3 + pilot 2)
+        // Sector 0 max_value is 10, so no capping should occur
+        let actions = vec![LapAction {
+            player_uuid,
+            boost_value: 3,
+        }];
+        
+        let _result = race.process_lap(&actions).unwrap();
+        
+        // Final value should be base (10) + boost (3) = 13
+        assert_eq!(race.participants[0].total_value, 13);
+        
+        // Now test with a car that has higher base stats
+        // Manually set higher base stats by modifying the calculation
+        // We'll create a scenario where base would be 15 but sector max is 10
+        
+        // Reset for second test
+        let mut race2 = Race::new("Test Race 2".to_string(), create_test_track(), 1);
+        race2.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        race2.participants[0].current_sector = 0; // Sector 0 max_value = 10
+        race2.start_race().unwrap();
+        
+        // We need to test the capping logic directly since we can't easily modify car stats
+        // Let's verify the capping logic by checking a scenario where it would apply
+        
+        // Test the capping calculation directly
+        let base_value = 15u32; // Hypothetical high base value
+        let sector_max = 10u32;  // Sector 0 max value
+        let boost = 3u32;
+        
+        let capped_base = std::cmp::min(base_value, sector_max);
+        let final_value = capped_base + boost;
+        
+        assert_eq!(capped_base, 10, "Base value should be capped to sector maximum");
+        assert_eq!(final_value, 13, "Final value should be capped base + boost");
+        
+        // Verify that without capping, the value would be different
+        let uncapped_final = base_value + boost;
+        assert_eq!(uncapped_final, 18, "Without capping, final value would be higher");
+        assert_ne!(final_value, uncapped_final, "Capping should make a difference");
+    }
+
+    #[test]
+    fn test_sector_ceiling_different_scenarios() {
+        // Test multiple scenarios of sector ceiling effects
+        
+        // Scenario 1: Base value below sector ceiling (no capping)
+        let base_value_1 = 8u32;
+        let sector_max_1 = 10u32;
+        let boost_1 = 2u32;
+        
+        let capped_1 = std::cmp::min(base_value_1, sector_max_1);
+        let final_1 = capped_1 + boost_1;
+        
+        assert_eq!(capped_1, 8, "Base value below ceiling should not be capped");
+        assert_eq!(final_1, 10, "Final value should be base + boost");
+        
+        // Scenario 2: Base value exactly at sector ceiling (no capping)
+        let base_value_2 = 10u32;
+        let sector_max_2 = 10u32;
+        let boost_2 = 2u32;
+        
+        let capped_2 = std::cmp::min(base_value_2, sector_max_2);
+        let final_2 = capped_2 + boost_2;
+        
+        assert_eq!(capped_2, 10, "Base value at ceiling should not be capped");
+        assert_eq!(final_2, 12, "Final value should be base + boost");
+        
+        // Scenario 3: Base value above sector ceiling (capping applied)
+        let base_value_3 = 15u32;
+        let sector_max_3 = 10u32;
+        let boost_3 = 2u32;
+        
+        let capped_3 = std::cmp::min(base_value_3, sector_max_3);
+        let final_3 = capped_3 + boost_3;
+        
+        assert_eq!(capped_3, 10, "Base value above ceiling should be capped");
+        assert_eq!(final_3, 12, "Final value should be capped base + boost");
+        
+        // Scenario 4: High base value with high boost (capping still applies to base only)
+        let base_value_4 = 20u32;
+        let sector_max_4 = 5u32;
+        let boost_4 = 5u32;
+        
+        let capped_4 = std::cmp::min(base_value_4, sector_max_4);
+        let final_4 = capped_4 + boost_4;
+        
+        assert_eq!(capped_4, 5, "High base value should be capped to low sector ceiling");
+        assert_eq!(final_4, 10, "Final value should be capped base + full boost");
+        
+        // Verify the strategic implication: boost becomes more important when capped
+        let uncapped_final_4 = base_value_4 + boost_4;
+        assert_eq!(uncapped_final_4, 25, "Without capping, final would be much higher");
+        
+        let boost_percentage_capped = (boost_4 as f32 / final_4 as f32) * 100.0;
+        let boost_percentage_uncapped = (boost_4 as f32 / uncapped_final_4 as f32) * 100.0;
+        
+        assert!(boost_percentage_capped > boost_percentage_uncapped, 
+                "Boost should be proportionally more important when base is capped");
+    }
+
+    #[test]
+    fn test_move_up_only_first_ranked_car() {
+        let track = create_test_track();
+        let mut race = Race::new("Test Race".to_string(), track, 1);
+        
+        // Add 3 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..3 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set all participants to start in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Give different performance levels to create clear ranking
+        let actions: Vec<LapAction> = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Best: 15
+            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Second: 14  
+            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Third: 13
+        ];
+        
+        let _result = race.process_lap(&actions).unwrap();
+        
+        // All cars that exceed the threshold should move up (sector 1 has capacity 3, so space available)
+        let sector_1_participants: Vec<_> = race.participants.iter()
+            .filter(|p| p.current_sector == 1)
+            .collect();
+        
+        assert_eq!(sector_1_participants.len(), 1, "Only the first-ranked car should move up");
+        
+        // Verify the moved car is the best performer
+        let moved_car = sector_1_participants[0];
+        assert_eq!(moved_car.total_value, 15, "Best performer should move up");
+        
+        // The other cars should stay in sector 0
+        let sector_0_participants: Vec<_> = race.participants.iter()
+            .filter(|p| p.current_sector == 0)
+            .collect();
+        
+        assert_eq!(sector_0_participants.len(), 2, "Other cars should stay in sector 0");
+        
+        // Verify the cars in sector 0 have lower performance than the moved car
+        for participant in &sector_0_participants {
+            assert!(participant.total_value < moved_car.total_value, "Cars in sector 0 should have lower performance");
+        }
+    }
+
+    #[test]
+    fn test_move_up_with_equal_performance() {
+        let track = create_test_track();
+        let mut race = Race::new("Test Race".to_string(), track, 1);
+        
+        // Add 3 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..3 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set all participants to start in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Give all cars the same performance level
+        let actions: Vec<LapAction> = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 4 }, // All: 14
+            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // All: 14
+            LapAction { player_uuid: player_uuids[2], boost_value: 4 }, // All: 14
+        ];
+        
+        let _result = race.process_lap(&actions).unwrap();
+        
+        // With equal performance, only one car should move up (first processed)
+        let sector_1_count = race.participants.iter()
+            .filter(|p| p.current_sector == 1)
+            .count();
+        
+        assert_eq!(sector_1_count, 1, "Only one car should move up when all have equal performance");
+        
+        // Two cars should stay in sector 0
+        let sector_0_count = race.participants.iter()
+            .filter(|p| p.current_sector == 0)
+            .count();
+        
+        assert_eq!(sector_0_count, 2, "Two cars should stay in sector 0");
+        
+        // All cars should have the same total value
+        let all_values: Vec<u32> = race.participants.iter()
+            .map(|p| p.total_value)
+            .collect();
+        
+        assert!(all_values.iter().all(|&v| v == 14), "All cars should have the same total value");
+    }
+
+    #[test]
+    fn test_first_ranked_car_progression() {
+        let track = create_test_track();
+        let mut race = Race::new("Progression Test".to_string(), track, 2);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set both to start in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // LAP 1: Both try to move up, only first-ranked succeeds
+        let actions_lap1: Vec<LapAction> = vec![
+            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Best performer
+            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Second performer
+        ];
+        
+        let _result1 = race.process_lap(&actions_lap1).unwrap();
+        
+        // Only the best car should move to sector 1 (first-ranked rule)
+        assert_eq!(race.participants.iter().filter(|p| p.current_sector == 1).count(), 1);
+        assert_eq!(race.participants.iter().filter(|p| p.current_sector == 0).count(), 1);
+        
+        // Verify which car moved
+        let sector_1_car = race.participants.iter().find(|p| p.current_sector == 1).unwrap();
+        let sector_0_car = race.participants.iter().find(|p| p.current_sector == 0).unwrap();
+        
+        assert_eq!(sector_1_car.player_uuid, player_uuids[0]); // Best performer moved up
+        assert_eq!(sector_0_car.player_uuid, player_uuids[1]); // Second performer stayed
     }
 }

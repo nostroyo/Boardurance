@@ -11,13 +11,20 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::{
-    Player, WalletAddress, TeamName, Car, CarName, CarType, CarRarity, CarStats,
+    Player, WalletAddress, TeamName, Email, Car, CarName,
     Pilot, PilotName, PilotClass, PilotRarity, PilotSkills,
+    Engine, EngineName, Body, BodyName, ComponentRarity,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePlayerRequest {
     pub wallet_address: Option<String>,
+    pub team_name: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreatePlayerWithAssetsRequest {
+    pub email: String,
     pub team_name: String,
 }
 
@@ -34,18 +41,7 @@ pub struct UpdateTeamNameRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddCarRequest {
     pub name: String,
-    pub car_type: CarType,
-    pub rarity: CarRarity,
-    pub stats: CarStatsRequest,
     pub nft_mint_address: Option<String>,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct CarStatsRequest {
-    pub speed: u8,
-    pub acceleration: u8,
-    pub handling: u8,
-    pub durability: u8,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -74,6 +70,7 @@ pub struct PlayerResponse {
 pub fn routes() -> Router<Database> {
     Router::new()
         .route("/players", post(create_player))
+        .route("/players/create-with-assets", post(create_player_with_assets))
         .route("/players", get(get_all_players))
         .route("/players/:player_uuid", get(get_player_by_uuid))
         .route("/players/:player_uuid", put(update_player_team_name))
@@ -85,6 +82,7 @@ pub fn routes() -> Router<Database> {
         .route("/players/:player_uuid/pilots", post(add_pilot_to_player))
         .route("/players/:player_uuid/pilots/:pilot_uuid", delete(remove_pilot_from_player))
         .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet))
+        .route("/players/by-email/:email", get(get_player_by_email))
 }
 
 /// Create a new player
@@ -112,26 +110,11 @@ pub async fn create_player(
     State(database): State<Database>,
     Json(payload): Json<CreatePlayerRequest>,
 ) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
-    let wallet_address = if let Some(addr_str) = payload.wallet_address {
-        match WalletAddress::parse(&addr_str) {
-            Ok(addr) => {
-                // Check if wallet is already connected to another player
-                if let Ok(existing) = get_player_by_wallet_address(&database, addr.as_ref()).await {
-                    if existing.is_some() {
-                        tracing::warn!("Wallet address {} is already connected to another player", addr.as_ref());
-                        return Err(StatusCode::CONFLICT);
-                    }
-                }
-                Some(addr)
-            }
-            Err(e) => {
-                tracing::warn!("Invalid wallet address: {}", e);
-                return Err(StatusCode::BAD_REQUEST);
-            }
-        }
-    } else {
-        None
-    };
+    // For now, we'll ignore the wallet_address in the old create_player endpoint
+    // Users should use the new create-with-assets endpoint
+    if payload.wallet_address.is_some() {
+        tracing::warn!("Wallet address provided to old endpoint - use create-with-assets instead");
+    }
 
     let team_name = match TeamName::parse(&payload.team_name) {
         Ok(name) => name,
@@ -141,8 +124,9 @@ pub async fn create_player(
         }
     };
 
-    // Create player with empty cars and pilots initially
-    let player = match Player::new(wallet_address, team_name, vec![], vec![]) {
+    // Create player with empty cars and pilots initially (using temporary email)
+    let temp_email = Email::parse("temp@example.com").unwrap();
+    let player = match Player::new(temp_email, team_name, vec![], vec![]) {
         Ok(p) => p,
         Err(e) => {
             tracing::error!("Failed to create player: {}", e);
@@ -158,6 +142,171 @@ pub async fn create_player(
                 Json(PlayerResponse {
                     player: created_player,
                     message: "Player created successfully".to_string(),
+                }),
+            ))
+        }
+        Err(e) => {
+            tracing::error!("Failed to create player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Create a new player with starter assets
+#[utoipa::path(
+    post,
+    path = "/api/v1/players/create-with-assets",
+    request_body = CreatePlayerWithAssetsRequest,
+    responses(
+        (status = 201, description = "Player created successfully with assets", body = PlayerResponse),
+        (status = 400, description = "Bad request"),
+        (status = 409, description = "Email already exists"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "players"
+)]
+#[tracing::instrument(
+    name = "Creating a new player with assets",
+    skip(database, payload),
+    fields(
+        email = %payload.email,
+        team_name = %payload.team_name
+    )
+)]
+pub async fn create_player_with_assets(
+    State(database): State<Database>,
+    Json(payload): Json<CreatePlayerWithAssetsRequest>,
+) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
+    let email = match Email::parse(&payload.email) {
+        Ok(email) => {
+            // Check if email is already registered
+            if let Ok(existing) = get_player_by_email_address(&database, email.as_ref()).await {
+                if existing.is_some() {
+                    tracing::warn!("Email {} is already registered", email.as_ref());
+                    return Err(StatusCode::CONFLICT);
+                }
+            }
+            email
+        }
+        Err(e) => {
+            tracing::warn!("Invalid email address: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let team_name = match TeamName::parse(&payload.team_name) {
+        Ok(name) => name,
+        Err(e) => {
+            tracing::warn!("Invalid team name: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    // Create 2 empty cars
+    let car1 = match Car::new(
+        CarName::parse("Car 1").unwrap(),
+        None,
+    ) {
+        Ok(car) => car,
+        Err(e) => {
+            tracing::error!("Failed to create car 1: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let car2 = match Car::new(
+        CarName::parse("Car 2").unwrap(),
+        None,
+    ) {
+        Ok(car) => car,
+        Err(e) => {
+            tracing::error!("Failed to create car 2: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Create 2 basic engines
+    let engine1 = match Engine::new(
+        EngineName::parse("Basic Engine 1").unwrap(),
+        ComponentRarity::Common,
+        30, // straight_value
+        25, // curve_value
+        None,
+    ) {
+        Ok(engine) => engine,
+        Err(e) => {
+            tracing::error!("Failed to create engine 1: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let engine2 = match Engine::new(
+        EngineName::parse("Basic Engine 2").unwrap(),
+        ComponentRarity::Common,
+        25, // straight_value
+        30, // curve_value
+        None,
+    ) {
+        Ok(engine) => engine,
+        Err(e) => {
+            tracing::error!("Failed to create engine 2: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Create 2 basic bodies
+    let body1 = match Body::new(
+        BodyName::parse("Basic Body 1").unwrap(),
+        ComponentRarity::Common,
+        20, // straight_value
+        30, // curve_value
+        None,
+    ) {
+        Ok(body) => body,
+        Err(e) => {
+            tracing::error!("Failed to create body 1: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    let body2 = match Body::new(
+        BodyName::parse("Basic Body 2").unwrap(),
+        ComponentRarity::Common,
+        30, // straight_value
+        20, // curve_value
+        None,
+    ) {
+        Ok(body) => body,
+        Err(e) => {
+            tracing::error!("Failed to create body 2: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Create player with assets
+    let player = match Player::new_with_assets(
+        email,
+        team_name,
+        vec![car1, car2],
+        vec![], // Empty pilots as requested
+        vec![engine1, engine2],
+        vec![body1, body2],
+    ) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create player: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    match insert_player(&database, &player).await {
+        Ok(created_player) => {
+            tracing::info!("Player created successfully with assets. UUID: {}", created_player.uuid);
+            Ok((
+                StatusCode::CREATED,
+                Json(PlayerResponse {
+                    player: created_player,
+                    message: "Player created successfully with starter assets".to_string(),
                 }),
             ))
         }
@@ -261,6 +410,41 @@ pub async fn get_player_by_wallet(
         }
         Ok(None) => {
             tracing::warn!("Player not found for wallet address: {}", wallet_address);
+            Err(StatusCode::NOT_FOUND)
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Get player by email address
+#[utoipa::path(
+    get,
+    path = "/api/v1/players/by-email/{email}",
+    params(
+        ("email" = String, Path, description = "Player's email address")
+    ),
+    responses(
+        (status = 200, description = "Player found", body = Player),
+        (status = 404, description = "Player not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "players"
+)]
+#[tracing::instrument(name = "Fetching player by email address", skip(database))]
+pub async fn get_player_by_email(
+    State(database): State<Database>,
+    Path(email): Path<String>,
+) -> Result<Json<Player>, StatusCode> {
+    match get_player_by_email_address(&database, &email).await {
+        Ok(Some(player)) => {
+            tracing::info!("Player found for email address: {}", email);
+            Ok(Json(player))
+        }
+        Ok(None) => {
+            tracing::warn!("Player not found for email address: {}", email);
             Err(StatusCode::NOT_FOUND)
         }
         Err(e) => {
@@ -519,56 +703,8 @@ pub async fn add_car_to_player(
         }
     };
 
-    let car_stats = match CarStats::new(
-        payload.stats.speed,
-        payload.stats.acceleration,
-        payload.stats.handling,
-        payload.stats.durability,
-    ) {
-        Ok(stats) => stats,
-        Err(e) => {
-            tracing::warn!("Invalid car stats: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    // Create performance based on stats (temporary implementation)
-    let engine_stats = match crate::domain::EngineStats::new(
-        u8::midpoint(car_stats.speed, car_stats.acceleration),  // straight value
-        u8::midpoint(car_stats.handling, car_stats.durability), // curve value
-    ) {
-        Ok(stats) => stats,
-        Err(e) => {
-            tracing::warn!("Failed to create engine stats: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    let body_stats = match crate::domain::BodyStats::new(
-        u8::midpoint(car_stats.speed, car_stats.durability),   // straight value
-        u8::midpoint(car_stats.handling, car_stats.acceleration), // curve value
-    ) {
-        Ok(stats) => stats,
-        Err(e) => {
-            tracing::warn!("Failed to create body stats: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    let car_performance = match crate::domain::CarPerformance::new(engine_stats, body_stats) {
-        Ok(performance) => performance,
-        Err(e) => {
-            tracing::warn!("Failed to create car performance: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
     let car = match Car::new(
         car_name,
-        payload.car_type,
-        payload.rarity,
-        car_stats,
-        car_performance,
         payload.nft_mint_address,
     ) {
         Ok(car) => car,
@@ -842,6 +978,16 @@ pub async fn get_player_by_wallet_address(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
+    collection.find_one(filter, None).await
+}
+
+#[tracing::instrument(name = "Getting player by email address from the database", skip(database))]
+pub async fn get_player_by_email_address(
+    database: &Database,
+    email: &str,
+) -> Result<Option<Player>, mongodb::error::Error> {
+    let collection = database.collection::<Player>("players");
+    let filter = doc! { "email": email };
     collection.find_one(filter, None).await
 }
 
