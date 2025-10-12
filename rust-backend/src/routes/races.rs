@@ -498,9 +498,8 @@ pub async fn join_race_in_db(
     let collection = database.collection::<Race>("races");
     
     // Get the race first
-    let mut race = match get_race_by_uuid(database, race_uuid).await? {
-        Some(race) => race,
-        None => return Ok(None),
+    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+        return Ok(None);
     };
 
     // Try to add participant
@@ -528,9 +527,8 @@ pub async fn start_race_in_db(
     let collection = database.collection::<Race>("races");
     
     // Get the race first
-    let mut race = match get_race_by_uuid(database, race_uuid).await? {
-        Some(race) => race,
-        None => return Ok(None),
+    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+        return Ok(None);
     };
 
     // Try to start race
@@ -561,13 +559,12 @@ pub async fn process_lap_in_db(
     let collection = database.collection::<Race>("races");
     
     // Get the race first
-    let mut race = match get_race_by_uuid(database, race_uuid).await? {
-        Some(race) => race,
-        None => return Ok(None),
+    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+        return Ok(None);
     };
 
     // Process the lap
-    let lap_result = match race.process_lap(actions) {
+    let lap_result = match race.process_lap(&actions) {
         Ok(result) => result,
         Err(e) => return Err(mongodb::error::Error::custom(e)),
     };

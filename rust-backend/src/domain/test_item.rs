@@ -21,6 +21,7 @@ pub struct TestItemName(String);
 pub struct TestItemDescription(String);
 
 impl TestItem {
+    #[must_use]
     pub fn new(name: TestItemName, description: Option<TestItemDescription>) -> Self {
         let now = Utc::now();
         Self {

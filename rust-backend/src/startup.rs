@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)]
+
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::routes::{health_check, test_items, players, races};
 use axum::{routing::get, Router};
@@ -126,6 +128,7 @@ impl Application {
 )]
 struct ApiDoc;
 
+#[allow(clippy::unused_async)]
 pub async fn run(
     listener: TokioTcpListener,
     db_pool: Database,

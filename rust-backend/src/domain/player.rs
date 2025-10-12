@@ -98,12 +98,14 @@ impl Player {
         self.updated_at = Utc::now();
     }
 
+    #[must_use]
     pub fn is_wallet_connected(&self) -> bool {
         self.wallet_address.is_some()
     }
 
+    #[must_use]
     pub fn get_wallet_address(&self) -> Option<&str> {
-        self.wallet_address.as_ref().map(|addr| addr.as_ref())
+        self.wallet_address.as_ref().map(std::convert::AsRef::as_ref)
     }
 
     pub fn update_team_name(&mut self, new_team_name: TeamName) {
@@ -155,7 +157,7 @@ impl Player {
 }
 
 impl WalletAddress {
-    pub fn parse(s: String) -> Result<WalletAddress, String> {
+    pub fn parse(s: &str) -> Result<WalletAddress, String> {
         let trimmed = s.trim();
         
         // Basic Solana wallet address validation
@@ -184,7 +186,7 @@ impl AsRef<str> for WalletAddress {
 }
 
 impl TeamName {
-    pub fn parse(s: String) -> Result<TeamName, String> {
+    pub fn parse(s: &str) -> Result<TeamName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 50;
         let is_too_short = s.graphemes(true).count() < 2;

@@ -104,14 +104,19 @@ impl Pilot {
         Ok(())
     }
 
+    #[must_use]
     pub fn calculate_overall_skill(&self) -> u8 {
-        let total = self.skills.reaction_time as u16 
-            + self.skills.precision as u16 
-            + self.skills.focus as u16 
-            + self.skills.stamina as u16;
-        (total / 4) as u8
+        let total = u16::from(self.skills.reaction_time)
+            + u16::from(self.skills.precision)
+            + u16::from(self.skills.focus)
+            + u16::from(self.skills.stamina);
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            (total / 4) as u8
+        }
     }
 
+    #[must_use]
     pub fn get_class_bonus(&self) -> PilotClassBonus {
         match self.pilot_class {
             PilotClass::Speedster => PilotClassBonus {
@@ -151,7 +156,7 @@ pub struct PilotClassBonus {
 }
 
 impl PilotName {
-    pub fn parse(s: String) -> Result<PilotName, String> {
+    pub fn parse(s: &str) -> Result<PilotName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 25;
         let is_too_short = s.graphemes(true).count() < 2;
@@ -226,6 +231,7 @@ impl PilotPerformance {
 }
 
 impl PilotRarity {
+    #[must_use]
     pub fn get_skill_multiplier(&self) -> f32 {
         match self {
             PilotRarity::Rookie => 1.0,
@@ -236,6 +242,7 @@ impl PilotRarity {
         }
     }
 
+    #[must_use]
     pub fn get_max_skills(&self) -> u8 {
         match self {
             PilotRarity::Rookie => 60,
@@ -246,6 +253,7 @@ impl PilotRarity {
         }
     }
 
+    #[must_use]
     pub fn get_experience_multiplier(&self) -> f32 {
         match self {
             PilotRarity::Rookie => 1.0,

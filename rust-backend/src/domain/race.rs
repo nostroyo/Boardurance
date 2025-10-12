@@ -112,6 +112,7 @@ pub enum MovementType {
 }
 
 impl Race {
+    #[must_use]
     pub fn new(name: String, track: Track, total_laps: u32) -> Self {
         let now = Utc::now();
         Self {
@@ -164,6 +165,7 @@ impl Race {
         // TODO: Replace with proper qualification system
         use rand::Rng;
         let mut rng = rand::thread_rng();
+        #[allow(clippy::cast_possible_truncation)]
         let max_sector = (self.track.sectors.len() - 1) as u32;
         rng.gen_range(0..=max_sector)
     }
@@ -180,7 +182,7 @@ impl Race {
         self.status = RaceStatus::InProgress;
         
         // Set initial lap characteristic (random for now)
-        self.lap_characteristic = self.generate_lap_characteristic();
+        self.lap_characteristic = Self::generate_lap_characteristic();
         
         // Sort participants in their starting sectors
         self.sort_participants_in_sectors();
@@ -189,7 +191,7 @@ impl Race {
         Ok(())
     }
 
-    fn generate_lap_characteristic(&self) -> LapCharacteristic {
+    fn generate_lap_characteristic() -> LapCharacteristic {
         // Random lap characteristic for now
         // TODO: Replace with track-specific or strategic system
         use rand::Rng;
@@ -201,7 +203,7 @@ impl Race {
         }
     }
 
-    pub fn process_lap(&mut self, actions: Vec<LapAction>) -> Result<LapResult, String> {
+    pub fn process_lap(&mut self, actions: &[LapAction]) -> Result<LapResult, String> {
         if self.status != RaceStatus::InProgress {
             return Err("Race is not in progress".to_string());
         }
@@ -217,7 +219,7 @@ impl Race {
         }
 
         // Validate boost values
-        for action in &actions {
+        for action in actions {
             if action.boost_value > 5 {
                 return Err(format!("Invalid boost value {} for player {}", action.boost_value, action.player_uuid));
             }
@@ -225,7 +227,7 @@ impl Race {
 
         // Calculate final values for all participants
         let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
-        for action in &actions {
+        for action in actions {
             if let Some(participant) = self.participants.iter().find(|p| p.player_uuid == action.player_uuid) {
                 if !participant.is_finished {
                     // TODO: Calculate base value from car engine + body + pilot performance
@@ -239,6 +241,7 @@ impl Race {
 
         // Process movements using the new algorithm: best sector to worst sector
         let mut movements = Vec::new();
+        #[allow(clippy::cast_possible_truncation)]
         let max_sector = (self.track.sectors.len() - 1) as u32;
         
         // Process sectors from highest to lowest (best to worst)
@@ -248,7 +251,7 @@ impl Race {
         }
 
         // Update total values for all participants
-        for action in &actions {
+        for action in actions {
             if let Some(participant) = self.participants.iter_mut().find(|p| p.player_uuid == action.player_uuid) {
                 if !participant.is_finished {
                     if let Some(&final_value) = participant_values.get(&action.player_uuid) {
@@ -271,7 +274,7 @@ impl Race {
         if self.status == RaceStatus::InProgress {
             self.current_lap += 1;
             if self.current_lap <= self.total_laps {
-                self.lap_characteristic = self.generate_lap_characteristic();
+                self.lap_characteristic = Self::generate_lap_characteristic();
             }
         }
 
@@ -315,6 +318,7 @@ impl Race {
         let player_uuid = participant.player_uuid;
         let from_sector = current_sector_id;
         
+        #[allow(clippy::cast_possible_truncation)]
         if current_sector_id >= self.track.sectors.len() as u32 {
             // Invalid sector - shouldn't happen
             return ParticipantMovement {
@@ -418,6 +422,7 @@ impl Race {
         let next_sector = from_sector + 1;
 
         // Check if we've reached the end (lap completion or race finish)
+        #[allow(clippy::cast_possible_truncation)]
         if next_sector >= self.track.sectors.len() as u32 {
             // Completed a lap
             self.participants[participant_index].current_lap += 1;
@@ -432,17 +437,16 @@ impl Race {
                     final_value,
                     movement_type: MovementType::FinishedRace,
                 };
-            } else {
-                // Start new lap - go back to sector 0
-                self.participants[participant_index].current_sector = 0;
-                return ParticipantMovement {
-                    player_uuid,
-                    from_sector,
-                    to_sector: 0,
-                    final_value,
-                    movement_type: MovementType::FinishedLap,
-                };
             }
+            // Start new lap - go back to sector 0
+            self.participants[participant_index].current_sector = 0;
+            return ParticipantMovement {
+                player_uuid,
+                from_sector,
+                to_sector: 0,
+                final_value,
+                movement_type: MovementType::FinishedLap,
+            };
         }
 
         // Check if next sector has capacity
@@ -468,15 +472,14 @@ impl Race {
                 final_value,
                 movement_type: MovementType::MovedUp,
             };
-        } else {
-            // Sector is full, stay in current sector
-            return ParticipantMovement {
-                player_uuid,
-                from_sector,
-                to_sector: from_sector,
-                final_value,
-                movement_type: MovementType::StayedInSector,
-            };
+        }
+        // Sector is full, stay in current sector
+        ParticipantMovement {
+            player_uuid,
+            from_sector,
+            to_sector: from_sector,
+            final_value,
+            movement_type: MovementType::StayedInSector,
         }
     }
 
@@ -489,35 +492,38 @@ impl Race {
         for participant in &mut self.participants {
             if !participant.is_finished {
                 sector_groups.entry(participant.current_sector)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(participant);
             }
         }
 
         // Sort each sector group by total_value (descending = better position)
-        for (_, participants) in sector_groups.iter_mut() {
+        for participants in sector_groups.values_mut() {
             participants.sort_by(|a, b| b.total_value.cmp(&a.total_value));
             
             // Update position in sector
             for (index, participant) in participants.iter_mut().enumerate() {
-                participant.current_position_in_sector = index as u32;
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    participant.current_position_in_sector = index as u32;
+                }
             }
         }
     }
 
     fn get_sector_positions(&self) -> HashMap<u32, Vec<RaceParticipant>> {
-        let mut positions = HashMap::new();
+        let mut positions: HashMap<u32, Vec<RaceParticipant>> = HashMap::new();
         
         for participant in &self.participants {
             if !participant.is_finished {
                 positions.entry(participant.current_sector)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(participant.clone());
             }
         }
 
         // Sort each sector by position
-        for (_, participants) in positions.iter_mut() {
+        for participants in positions.values_mut() {
             participants.sort_by_key(|p| p.current_position_in_sector);
         }
 
@@ -545,7 +551,10 @@ impl Race {
             });
             
             for (index, participant) in all_participants.iter_mut().enumerate() {
-                participant.finish_position = Some(index as u32 + 1);
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    participant.finish_position = Some(index as u32 + 1);
+                }
             }
         }
     }
@@ -729,7 +738,7 @@ mod tests {
             boost_value: 5,
         }];
         
-        let result = race.process_lap(actions).unwrap();
+        let result = race.process_lap(&actions).unwrap();
         
         assert_eq!(result.lap, 1);
         assert_eq!(result.movements.len(), 1);
@@ -760,7 +769,7 @@ mod tests {
             player_uuid,
             boost_value: 5,
         }];
-        let result = race.process_lap(actions).unwrap();
+        let result = race.process_lap(&actions).unwrap();
         
         assert_eq!(result.movements[0].movement_type, MovementType::MovedUp);
         assert_eq!(race.participants[0].current_sector, 1);
@@ -792,7 +801,7 @@ mod tests {
         
         // We need to simulate a low base value for this test
         // For now, let's test with the current implementation
-        let result = race.process_lap(actions).unwrap();
+        let result = race.process_lap(&actions).unwrap();
         
         // With base value 10, the participant should stay in sector 1
         assert_eq!(result.movements[0].movement_type, MovementType::StayedInSector);
@@ -828,7 +837,7 @@ mod tests {
             boost_value: 5, // Base 10 + boost 5 = 15, exceeds sector 0 max (10)
         }).collect();
         
-        let _result = race.process_lap(actions).unwrap();
+        let _result = race.process_lap(&actions).unwrap();
         
         // Count how many are in sector 1 (capacity 3)
         let sector_1_count = race.participants.iter()
@@ -862,7 +871,7 @@ mod tests {
             boost_value: 6, // Invalid: max is 5
         }];
         
-        let result = race.process_lap(actions);
+        let result = race.process_lap(&actions);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid boost value"));
     }
@@ -921,7 +930,7 @@ mod tests {
             LapAction { player_uuid: player_uuids[3], boost_value: 5 }, // Should exceed sector 0 max
         ];
         
-        let result = race.process_lap(actions).unwrap();
+        let result = race.process_lap(&actions).unwrap();
         
         // Player should stay in sector 0 because sector 1 is full
         assert_eq!(result.movements[0].movement_type, MovementType::StayedInSector);
@@ -953,7 +962,7 @@ mod tests {
             boost_value: 0, // Minimum boost
         }];
         
-        let result = race.process_lap(actions).unwrap();
+        let result = race.process_lap(&actions).unwrap();
         
         // With current base value of 10, participant should stay in sector 2
         // (since 10 >= sector 2 min_value of 12 is false, it should move down)
@@ -984,14 +993,14 @@ mod tests {
             boost_value: 3,
         }];
         
-        let result1 = race.process_lap(actions.clone()).unwrap();
+        let result1 = race.process_lap(&actions).unwrap();
         assert_eq!(result1.lap, 1);
         
         // Lap characteristic might change for next lap
         let second_characteristic = race.lap_characteristic.clone();
         
         // Process second lap
-        let result2 = race.process_lap(actions.clone()).unwrap();
+        let result2 = race.process_lap(&actions).unwrap();
         assert_eq!(result2.lap, 2);
         
         // Verify lap characteristics are being tracked
@@ -1019,17 +1028,17 @@ mod tests {
         }];
         
         // Process lap 1
-        let result1 = race.process_lap(actions.clone()).unwrap();
+        let result1 = race.process_lap(&actions).unwrap();
         assert_eq!(result1.lap, 1);
         assert_eq!(race.status, RaceStatus::InProgress);
         
         // Process lap 2
-        let result2 = race.process_lap(actions.clone()).unwrap();
+        let result2 = race.process_lap(&actions).unwrap();
         assert_eq!(result2.lap, 2);
         assert_eq!(race.status, RaceStatus::InProgress);
         
         // Process lap 3 (should complete the race)
-        let result3 = race.process_lap(actions).unwrap();
+        let result3 = race.process_lap(&actions).unwrap();
         assert_eq!(result3.lap, 3);
         assert_eq!(race.status, RaceStatus::Finished);
         

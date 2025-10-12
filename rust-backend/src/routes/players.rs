@@ -113,7 +113,7 @@ pub async fn create_player(
     Json(payload): Json<CreatePlayerRequest>,
 ) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
     let wallet_address = if let Some(addr_str) = payload.wallet_address {
-        match WalletAddress::parse(addr_str) {
+        match WalletAddress::parse(&addr_str) {
             Ok(addr) => {
                 // Check if wallet is already connected to another player
                 if let Ok(existing) = get_player_by_wallet_address(&database, addr.as_ref()).await {
@@ -133,7 +133,7 @@ pub async fn create_player(
         None
     };
 
-    let team_name = match TeamName::parse(payload.team_name) {
+    let team_name = match TeamName::parse(&payload.team_name) {
         Ok(name) => name,
         Err(e) => {
             tracing::warn!("Invalid team name: {}", e);
@@ -301,7 +301,7 @@ pub async fn connect_wallet(
         }
     };
 
-    let wallet_address = match WalletAddress::parse(payload.wallet_address) {
+    let wallet_address = match WalletAddress::parse(&payload.wallet_address) {
         Ok(addr) => addr,
         Err(e) => {
             tracing::warn!("Invalid wallet address: {}", e);
@@ -412,7 +412,7 @@ pub async fn update_player_team_name(
         }
     };
 
-    let new_team_name = match TeamName::parse(payload.team_name) {
+    let new_team_name = match TeamName::parse(&payload.team_name) {
         Ok(name) => name,
         Err(e) => {
             tracing::warn!("Invalid team name: {}", e);
@@ -511,7 +511,7 @@ pub async fn add_car_to_player(
             return Err(StatusCode::BAD_REQUEST);
         }
     };
-    let car_name = match CarName::parse(payload.name) {
+    let car_name = match CarName::parse(&payload.name) {
         Ok(name) => name,
         Err(e) => {
             tracing::warn!("Invalid car name: {}", e);
@@ -534,8 +534,8 @@ pub async fn add_car_to_player(
 
     // Create performance based on stats (temporary implementation)
     let engine_stats = match crate::domain::EngineStats::new(
-        (car_stats.speed + car_stats.acceleration) / 2,  // straight value
-        (car_stats.handling + car_stats.durability) / 2, // curve value
+        u8::midpoint(car_stats.speed, car_stats.acceleration),  // straight value
+        u8::midpoint(car_stats.handling, car_stats.durability), // curve value
     ) {
         Ok(stats) => stats,
         Err(e) => {
@@ -545,8 +545,8 @@ pub async fn add_car_to_player(
     };
 
     let body_stats = match crate::domain::BodyStats::new(
-        (car_stats.speed + car_stats.durability) / 2,   // straight value
-        (car_stats.handling + car_stats.acceleration) / 2, // curve value
+        u8::midpoint(car_stats.speed, car_stats.durability),   // straight value
+        u8::midpoint(car_stats.handling, car_stats.acceleration), // curve value
     ) {
         Ok(stats) => stats,
         Err(e) => {
@@ -682,7 +682,7 @@ pub async fn add_pilot_to_player(
             return Err(StatusCode::BAD_REQUEST);
         }
     };
-    let pilot_name = match PilotName::parse(payload.name) {
+    let pilot_name = match PilotName::parse(&payload.name) {
         Ok(name) => name,
         Err(e) => {
             tracing::warn!("Invalid pilot name: {}", e);
@@ -705,8 +705,8 @@ pub async fn add_pilot_to_player(
 
     // Create performance based on skills (temporary implementation)
     let pilot_performance = match crate::domain::PilotPerformance::new(
-        (pilot_skills.reaction_time + pilot_skills.focus) / 2,    // straight value
-        (pilot_skills.precision + pilot_skills.stamina) / 2,     // curve value
+        u8::midpoint(pilot_skills.reaction_time, pilot_skills.focus),    // straight value
+        u8::midpoint(pilot_skills.precision, pilot_skills.stamina),     // curve value
     ) {
         Ok(performance) => performance,
         Err(e) => {

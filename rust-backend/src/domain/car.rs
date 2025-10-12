@@ -110,17 +110,21 @@ impl Car {
         Ok(())
     }
 
+    #[must_use]
     pub fn calculate_overall_rating(&self) -> u8 {
-        let total = self.stats.speed as u16 
-            + self.stats.acceleration as u16 
-            + self.stats.handling as u16 
-            + self.stats.durability as u16;
-        (total / 4) as u8
+        let total = u16::from(self.stats.speed)
+            + u16::from(self.stats.acceleration)
+            + u16::from(self.stats.handling)
+            + u16::from(self.stats.durability);
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            (total / 4) as u8
+        }
     }
 }
 
 impl CarName {
-    pub fn parse(s: String) -> Result<CarName, String> {
+    pub fn parse(s: &str) -> Result<CarName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 30;
         let is_too_short = s.graphemes(true).count() < 1;
@@ -227,6 +231,7 @@ impl BodyStats {
 }
 
 impl CarRarity {
+    #[must_use]
     pub fn get_stat_multiplier(&self) -> f32 {
         match self {
             CarRarity::Common => 1.0,
@@ -237,6 +242,7 @@ impl CarRarity {
         }
     }
 
+    #[must_use]
     pub fn get_max_stats(&self) -> u8 {
         match self {
             CarRarity::Common => 70,

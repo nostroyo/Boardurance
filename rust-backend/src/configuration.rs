@@ -29,6 +29,7 @@ pub struct DatabaseSettings {
 }
 
 impl DatabaseSettings {
+    #[must_use]
     pub fn without_db(&self) -> String {
         if self.require_ssl {
             format!(
@@ -49,6 +50,7 @@ impl DatabaseSettings {
         }
     }
 
+    #[must_use]
     pub fn with_db(&self) -> String {
         if self.require_ssl {
             format!(
@@ -72,6 +74,7 @@ impl DatabaseSettings {
     }
 
     // For local development without authentication
+    #[must_use]
     pub fn connection_string_without_auth(&self) -> String {
         format!("mongodb://{}:{}/{}", self.host, self.port, self.database_name)
     }
@@ -114,6 +117,7 @@ pub enum Environment {
 }
 
 impl Environment {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Environment::Local => "local",
@@ -132,8 +136,7 @@ impl TryFrom<String> for Environment {
             "test" => Ok(Self::Test),
             "production" => Ok(Self::Production),
             other => Err(format!(
-                "{} is not a supported environment. Use either `local`, `test`, or `production`.",
-                other
+                "{other} is not a supported environment. Use either `local`, `test`, or `production`."
             )),
         }
     }
