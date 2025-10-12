@@ -311,8 +311,8 @@ impl AsRef<str> for Email {
     }
 }
 
-pub fn parse(s: &str) -> Result<TeamName, String> {
-        impl TeamName {
+impl TeamName {
+    pub fn parse(s: &str) -> Result<TeamName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 50;
         let is_too_short = s.graphemes(true).count() < 2;
