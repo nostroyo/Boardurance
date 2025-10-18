@@ -51,6 +51,8 @@ function TeamPage() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -102,6 +104,135 @@ function TeamPage() {
   const getAvailableBodies = () => {
     const assignedBodyIds = player?.cars.map(car => car.body_uuid).filter(Boolean) || [];
     return player?.bodies.filter(body => !assignedBodyIds.includes(body.uuid)) || [];
+  };
+
+  // Component assignment functions
+  const assignEngineTocar = (carUuid: string, engineUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      // Remove engine from other cars first
+      updatedPlayer.cars.forEach(car => {
+        if (car.engine_uuid === engineUuid) {
+          car.engine_uuid = undefined;
+        }
+      });
+      // Assign to target car
+      updatedPlayer.cars[carIndex].engine_uuid = engineUuid;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  const assignBodyToCar = (carUuid: string, bodyUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      // Remove body from other cars first
+      updatedPlayer.cars.forEach(car => {
+        if (car.body_uuid === bodyUuid) {
+          car.body_uuid = undefined;
+        }
+      });
+      // Assign to target car
+      updatedPlayer.cars[carIndex].body_uuid = bodyUuid;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  const assignPilotToCar = (carUuid: string, pilotUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      // Remove pilot from other cars first
+      updatedPlayer.cars.forEach(car => {
+        if (car.pilot_uuid === pilotUuid) {
+          car.pilot_uuid = undefined;
+        }
+      });
+      // Assign to target car
+      updatedPlayer.cars[carIndex].pilot_uuid = pilotUuid;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  const removeEngineFromCar = (carUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      updatedPlayer.cars[carIndex].engine_uuid = undefined;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  const removeBodyFromCar = (carUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      updatedPlayer.cars[carIndex].body_uuid = undefined;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  const removePilotFromCar = (carUuid: string) => {
+    if (!player) return;
+    
+    const updatedPlayer = { ...player };
+    const carIndex = updatedPlayer.cars.findIndex(car => car.uuid === carUuid);
+    if (carIndex !== -1) {
+      updatedPlayer.cars[carIndex].pilot_uuid = undefined;
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+  };
+
+  // Save configuration to backend
+  const saveConfiguration = async () => {
+    if (!player || !hasChanges) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(`http://localhost:3000/api/v1/players/${player.uuid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          team_name: player.team_name,
+          cars: player.cars,
+          pilots: player.pilots,
+          engines: player.engines,
+          bodies: player.bodies
+        }),
+      });
+
+      if (response.ok) {
+        const updatedPlayer = await response.json();
+        localStorage.setItem('currentPlayer', JSON.stringify(updatedPlayer));
+        setHasChanges(false);
+        console.log('Configuration saved successfully');
+      } else {
+        console.error('Failed to save configuration');
+      }
+    } catch (err) {
+      console.error('Error saving configuration:', err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (loading) {
@@ -170,12 +301,38 @@ function TeamPage() {
               <span>{player?.pilots.length} Pilots</span>
             </div>
           </div>
-          <Link
-            to="/dashboard"
-            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"
-          >
-            ← Back to Dashboard
-          </Link>
+          <div className="flex space-x-4">
+            {hasChanges && (
+              <button
+                onClick={saveConfiguration}
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg flex items-center"
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Configuration
+                  </>
+                )}
+              </button>
+            )}
+            <Link
+              to="/dashboard"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"
+            >
+              ← Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -228,12 +385,17 @@ function TeamPage() {
                       </h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedEngine(car.engine_uuid) ? (
-                          <div className="text-sm text-center">
+                          <div 
+                            className="text-sm text-center cursor-pointer hover:bg-gray-600 p-2 rounded transition-colors"
+                            onClick={() => removeEngineFromCar(car.uuid)}
+                            title="Click to remove engine"
+                          >
                             <div className="font-medium text-white mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedEngine(car.engine_uuid)?.rarity} | 
                               S:{getAssignedEngine(car.engine_uuid)?.straight_value} C:{getAssignedEngine(car.engine_uuid)?.curve_value}
                             </div>
+                            <div className="text-red-400 text-xs mt-1">Click to remove</div>
                           </div>
                         ) : (
                           <div className="text-gray-500 text-sm text-center">No engine assigned</div>
@@ -254,12 +416,17 @@ function TeamPage() {
                       </h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedBody(car.body_uuid) ? (
-                          <div className="text-sm text-center">
+                          <div 
+                            className="text-sm text-center cursor-pointer hover:bg-gray-600 p-2 rounded transition-colors"
+                            onClick={() => removeBodyFromCar(car.uuid)}
+                            title="Click to remove body"
+                          >
                             <div className="font-medium text-white mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedBody(car.body_uuid)?.rarity} | 
                               S:{getAssignedBody(car.body_uuid)?.straight_value} C:{getAssignedBody(car.body_uuid)?.curve_value}
                             </div>
+                            <div className="text-red-400 text-xs mt-1">Click to remove</div>
                           </div>
                         ) : (
                           <div className="text-gray-500 text-sm text-center">No body assigned</div>
@@ -301,11 +468,16 @@ function TeamPage() {
                         {/* Pilot Info */}
                         <div className="flex-1 min-w-0">
                           {getAssignedPilot(car.pilot_uuid) ? (
-                            <div className="text-sm">
+                            <div 
+                              className="text-sm cursor-pointer hover:bg-gray-500 p-2 rounded transition-colors"
+                              onClick={() => removePilotFromCar(car.uuid)}
+                              title="Click to remove pilot"
+                            >
                               <div className="font-medium text-white truncate">{getAssignedPilot(car.pilot_uuid)?.name}</div>
                               <div className="text-gray-300 text-xs">
                                 {getAssignedPilot(car.pilot_uuid)?.pilot_class} | S:{getAssignedPilot(car.pilot_uuid)?.performance.straight_value} C:{getAssignedPilot(car.pilot_uuid)?.performance.curve_value}
                               </div>
+                              <div className="text-red-400 text-xs">Click to remove</div>
                             </div>
                           ) : (
                             <div className="text-gray-500 text-sm">No pilot assigned</div>
@@ -332,11 +504,26 @@ function TeamPage() {
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailablePilots().map((pilot) => (
-                  <div key={pilot.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                  <div key={pilot.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
                     <div className="font-medium text-sm text-white">{pilot.name}</div>
                     <div className="text-xs text-gray-300">{pilot.pilot_class} - {pilot.rarity}</div>
                     <div className="text-xs text-gray-400">
                       S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
+                    </div>
+                    <div className="text-green-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to assign to car
+                    </div>
+                    {/* Car assignment buttons */}
+                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {player?.cars.map((car, index) => (
+                        <button
+                          key={car.uuid}
+                          onClick={() => assignPilotToCar(car.uuid, pilot.uuid)}
+                          className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded"
+                        >
+                          Car {index + 1}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -359,11 +546,26 @@ function TeamPage() {
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableBodies().map((body) => (
-                  <div key={body.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                  <div key={body.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
                     <div className="font-medium text-sm text-white">{body.name}</div>
                     <div className="text-xs text-gray-300">{body.rarity}</div>
                     <div className="text-xs text-gray-400">
                       S:{body.straight_value} C:{body.curve_value}
+                    </div>
+                    <div className="text-blue-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to assign to car
+                    </div>
+                    {/* Car assignment buttons */}
+                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {player?.cars.map((car, index) => (
+                        <button
+                          key={car.uuid}
+                          onClick={() => assignBodyToCar(car.uuid, body.uuid)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
+                        >
+                          Car {index + 1}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -388,11 +590,26 @@ function TeamPage() {
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableEngines().map((engine) => (
-                  <div key={engine.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                  <div key={engine.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
                     <div className="font-medium text-sm text-white">{engine.name}</div>
                     <div className="text-xs text-gray-300">{engine.rarity}</div>
                     <div className="text-xs text-gray-400">
                       S:{engine.straight_value} C:{engine.curve_value}
+                    </div>
+                    <div className="text-orange-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                      Click to assign to car
+                    </div>
+                    {/* Car assignment buttons */}
+                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {player?.cars.map((car, index) => (
+                        <button
+                          key={car.uuid}
+                          onClick={() => assignEngineTocar(car.uuid, engine.uuid)}
+                          className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-2 py-1 rounded"
+                        >
+                          Car {index + 1}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 ))}
