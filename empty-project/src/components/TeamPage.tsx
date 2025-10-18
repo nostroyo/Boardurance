@@ -279,8 +279,13 @@ function TeamPage() {
                     {/* Engine Section */}
                     <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
                       <h3 className="text-orange-400 font-semibold mb-2 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <rect x="4" y="8" width="16" height="10" rx="2"/>
+                          <path d="M8 6v2M16 6v2"/>
+                          <path d="M6 12h2M16 12h2"/>
+                          <circle cx="8" cy="13" r="1"/>
+                          <circle cx="12" cy="13" r="1"/>
+                          <circle cx="16" cy="13" r="1"/>
                         </svg>
                         Engine
                       </h3>
@@ -302,8 +307,11 @@ function TeamPage() {
                     {/* Body Section */}
                     <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
                       <h3 className="text-blue-400 font-semibold mb-2 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M7 17h10l2-6H5l2 6z"/>
+                          <circle cx="7" cy="17" r="2"/>
+                          <circle cx="17" cy="17" r="2"/>
+                          <path d="M5 11V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/>
                         </svg>
                         Body
                       </h3>
@@ -409,8 +417,11 @@ function TeamPage() {
             {/* Inventory Bodies */}
             <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
               <h3 className="text-blue-400 font-bold text-lg mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path d="M7 17h10l2-6H5l2 6z"/>
+                  <circle cx="7" cy="17" r="2"/>
+                  <circle cx="17" cy="17" r="2"/>
+                  <path d="M5 11V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/>
                 </svg>
                 Inventory Bodies
               </h3>
@@ -433,8 +444,13 @@ function TeamPage() {
             {/* Inventory Engines */}
             <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
               <h3 className="text-orange-400 font-bold text-lg mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <rect x="4" y="8" width="16" height="10" rx="2"/>
+                  <path d="M8 6v2M16 6v2"/>
+                  <path d="M6 12h2M16 12h2"/>
+                  <circle cx="8" cy="13" r="1"/>
+                  <circle cx="12" cy="13" r="1"/>
+                  <circle cx="16" cy="13" r="1"/>
                 </svg>
                 Inventory Engines
               </h3>
