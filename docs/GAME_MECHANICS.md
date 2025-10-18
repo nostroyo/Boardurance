@@ -85,10 +85,56 @@ Where lap_characteristic is either "straight" or "curve"
 - Lap 1 (Straight): Base = Engine.straight + Body.straight + Pilot.straight
 - Lap 2 (Curve): Base = Engine.curve + Body.curve + Pilot.curve
 
-### Final Lap Value
+### Sector Performance Ceiling
+
+**CRITICAL MECHANIC**: Each sector has a maximum performance ceiling that limits car potential **BEFORE** boost is applied:
+
 ```
-Final Value = Base Value + Player Boost (0-5)
+Step 1: Capped Base Value = min(Base Value, current_sector.max_value)
+Step 2: Final Value = Capped Base Value + Player Boost (0-5)
 ```
+
+**The sector's max_value acts as a hard ceiling for the car's base performance, ensuring that cars cannot exceed their sector's performance potential without using boost.**
+
+**Example:**
+- Car Base Value: 10
+- Current Sector Max: 5
+- **Sector Cap Applied**: min(10, 5) = 5 ← Car's base value is capped to sector maximum
+- Player Boost: +3
+- **Final Value**: 5 + 3 = 8
+
+**Another Example:**
+- Car Base Value: 20
+- Current Sector Max: 15
+- **Sector Cap Applied**: min(20, 15) = 15 ← Car's base value is capped to sector maximum
+- Player Boost: +3
+- **Final Value**: 15 + 3 = 18
+
+**Key Point**: The sector ceiling **only affects the base value calculation**, not the final value after boost. This means:
+- A high-performance car in a low sector is limited by that sector's ceiling
+- Boost can push the final value beyond the sector ceiling (potentially triggering movement)
+- Cars must advance to higher sectors to unlock their full base performance potential
+
+### Strategic Implications
+
+**Performance Ceiling Effect:**
+- Cars cannot exceed their current sector's max_value **for base performance only**
+- The sector ceiling creates a **performance bottleneck** that limits car potential
+- Higher sectors unlock higher base performance potential
+- Sector advancement becomes crucial for competitive performance
+- **High-stat cars are "wasted" in low sectors** until they can advance
+
+**Boost Value Impact:**
+- When base value is capped by sector ceiling, **boost becomes proportionally more important**
+- Boost can push the final value beyond the sector ceiling (potentially triggering movement)
+- Strategic boost timing becomes critical for sector advancement
+- **Boost is the only way to exceed sector performance limits**
+
+**Sector Advancement Strategy:**
+- Cars with high base stats need to prioritize moving up sectors quickly
+- Lower sectors act as "performance traps" for high-stat cars
+- Players must balance boost usage between staying competitive and advancing sectors
+- **The sector ceiling mechanic creates natural progression gates**
 
 ## 🎮 Movement Mechanics
 
@@ -104,12 +150,11 @@ IF final_value < current_sector.min_value:
     Continue moving down until finding sector with available space
 ```
 
-#### Moving UP (Better Position)  
+#### Moving UP (Better Position)  apply to only one car
 ```
-IF final_value > current_sector.max_value:
+IF first car before rank == first_car after rank
     IF next_higher_sector has available space:
-        Move to next higher sector (Sector N → Sector N+1)
-        Position based on total accumulated value
+        move_up
     ELSE:
         Stay in current sector (blocked by capacity)
 ```
@@ -199,12 +244,11 @@ FOR each sector FROM highest_sector DOWN TO sector_0:
         
         IF final_value < sector.min_value:
             Handle MOVING DOWN
-        ELIF final_value > sector.max_value:
-            Handle MOVING UP
-        ELSE:
-            Car STAYS in current sector
+       
     
     Re-rank ALL cars remaining in this sector by total_value
+    IF FIRST_CAR_BFORE_RANK == FIRST_CAR_AFTER_RANK:
+        handle MOVING_UP for this car 
 ```
 
 #### Movement Handling Details:
