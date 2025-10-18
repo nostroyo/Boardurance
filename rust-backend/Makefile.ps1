@@ -9,6 +9,7 @@ switch ($Command.ToLower()) {
         Write-Host "Available commands:" -ForegroundColor Green
         Write-Host "  dev          - Start development environment with MongoDB" -ForegroundColor White
         Write-Host "  dev-ui       - Start development with MongoDB Express UI" -ForegroundColor White
+        Write-Host "  start-docker - Start Docker containers only (MongoDB)" -ForegroundColor White
         Write-Host "  test         - Run tests with test MongoDB" -ForegroundColor White
         Write-Host "  test-players - Test player management endpoints" -ForegroundColor White
         Write-Host "  test-uuid    - Test UUID-based player endpoints" -ForegroundColor White
@@ -38,6 +39,47 @@ switch ($Command.ToLower()) {
         Write-Host "`nStarting application..." -ForegroundColor Yellow
         $env:APP_ENVIRONMENT = "local"
         cargo run
+    }
+    
+    "start-docker" {
+        Write-Host "Starting Docker and containers..." -ForegroundColor Green
+        
+        # First ensure Docker Desktop is running
+        try {
+            docker version | Out-Null
+            Write-Host "✅ Docker is already running" -ForegroundColor Green
+        } catch {
+            Write-Host "🔄 Starting Docker Desktop..." -ForegroundColor Yellow
+            Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
+            
+            # Wait for Docker to be ready
+            $timeout = 60
+            $attempt = 0
+            do {
+                $attempt++
+                Start-Sleep -Seconds 2
+                try {
+                    docker version | Out-Null
+                    Write-Host "✅ Docker Desktop is now running!" -ForegroundColor Green
+                    break
+                } catch { }
+                
+                if ($attempt -eq $timeout) {
+                    Write-Host "❌ Docker Desktop failed to start" -ForegroundColor Red
+                    exit 1
+                }
+            } while ($attempt -lt $timeout)
+        }
+        
+        # Now start MongoDB containers
+        & .\scripts\start-mongodb.ps1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Docker containers started successfully!" -ForegroundColor Green
+            Write-Host "📊 MongoDB: localhost:27017" -ForegroundColor Cyan
+            Write-Host "🚀 Use '.\Makefile.ps1 dev' to start the Rust application" -ForegroundColor Yellow
+        } else {
+            Write-Host "❌ Failed to start Docker containers" -ForegroundColor Red
+        }
     }
     
     "test" {

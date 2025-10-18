@@ -7,6 +7,7 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Race {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub id: Option<mongodb::bson::oid::ObjectId>,
     #[serde(with = "uuid_as_string")]
     pub uuid: Uuid,
@@ -17,7 +18,9 @@ pub struct Race {
     pub current_lap: u32,
     pub total_laps: u32,
     pub status: RaceStatus,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

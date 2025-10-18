@@ -7,6 +7,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Pilot {
     #[serde(with = "uuid_as_string")]
+    #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: PilotName,
@@ -16,7 +17,9 @@ pub struct Pilot {
     pub performance: PilotPerformance,
     pub experience_level: u32,
     pub is_active: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

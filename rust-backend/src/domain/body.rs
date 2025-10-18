@@ -9,13 +9,16 @@ use super::engine::ComponentRarity;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Body {
     #[serde(with = "uuid_as_string")]
+    #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: BodyName,
     pub rarity: ComponentRarity,
     pub straight_value: u8,  // 1-100
     pub curve_value: u8,     // 1-100
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

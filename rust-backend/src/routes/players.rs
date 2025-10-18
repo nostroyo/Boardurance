@@ -18,12 +18,6 @@ use crate::domain::{
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePlayerRequest {
-    pub wallet_address: Option<String>,
-    pub team_name: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct CreatePlayerWithAssetsRequest {
     pub email: String,
     pub team_name: String,
 }
@@ -70,7 +64,6 @@ pub struct PlayerResponse {
 pub fn routes() -> Router<Database> {
     Router::new()
         .route("/players", post(create_player))
-        .route("/players/create-with-assets", post(create_player_with_assets))
         .route("/players", get(get_all_players))
         .route("/players/:player_uuid", get(get_player_by_uuid))
         .route("/players/:player_uuid", put(update_player_team_name))
@@ -85,78 +78,11 @@ pub fn routes() -> Router<Database> {
         .route("/players/by-email/:email", get(get_player_by_email))
 }
 
-/// Create a new player
+/// Create a new player with starter assets
 #[utoipa::path(
     post,
     path = "/api/v1/players",
     request_body = CreatePlayerRequest,
-    responses(
-        (status = 201, description = "Player created successfully", body = PlayerResponse),
-        (status = 400, description = "Bad request"),
-        (status = 409, description = "Player already exists"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(
-    name = "Creating a new player",
-    skip(database, payload),
-    fields(
-        wallet_address = payload.wallet_address.as_deref().unwrap_or("None"),
-        team_name = %payload.team_name
-    )
-)]
-pub async fn create_player(
-    State(database): State<Database>,
-    Json(payload): Json<CreatePlayerRequest>,
-) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
-    // For now, we'll ignore the wallet_address in the old create_player endpoint
-    // Users should use the new create-with-assets endpoint
-    if payload.wallet_address.is_some() {
-        tracing::warn!("Wallet address provided to old endpoint - use create-with-assets instead");
-    }
-
-    let team_name = match TeamName::parse(&payload.team_name) {
-        Ok(name) => name,
-        Err(e) => {
-            tracing::warn!("Invalid team name: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    // Create player with empty cars and pilots initially (using temporary email)
-    let temp_email = Email::parse("temp@example.com").unwrap();
-    let player = match Player::new(temp_email, team_name, vec![], vec![]) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!("Failed to create player: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    match insert_player(&database, &player).await {
-        Ok(created_player) => {
-            tracing::info!("Player created successfully with UUID: {}", created_player.uuid);
-            Ok((
-                StatusCode::CREATED,
-                Json(PlayerResponse {
-                    player: created_player,
-                    message: "Player created successfully".to_string(),
-                }),
-            ))
-        }
-        Err(e) => {
-            tracing::error!("Failed to create player: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-/// Create a new player with starter assets
-#[utoipa::path(
-    post,
-    path = "/api/v1/players/create-with-assets",
-    request_body = CreatePlayerWithAssetsRequest,
     responses(
         (status = 201, description = "Player created successfully with assets", body = PlayerResponse),
         (status = 400, description = "Bad request"),
@@ -173,9 +99,9 @@ pub async fn create_player(
         team_name = %payload.team_name
     )
 )]
-pub async fn create_player_with_assets(
+pub async fn create_player(
     State(database): State<Database>,
-    Json(payload): Json<CreatePlayerWithAssetsRequest>,
+    Json(payload): Json<CreatePlayerRequest>,
 ) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
     let email = match Email::parse(&payload.email) {
         Ok(email) => {

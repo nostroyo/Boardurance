@@ -6,11 +6,14 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct TestItem {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub id: Option<mongodb::bson::oid::ObjectId>,
     pub uuid: Uuid,
     pub name: TestItemName,
     pub description: Option<TestItemDescription>,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

@@ -7,14 +7,20 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Car {
     #[serde(with = "uuid_as_string")]
+    #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: CarName,
+    #[schema(value_type = Option<String>, format = "uuid")]
     pub pilot_uuid: Option<Uuid>,  // Assigned pilot
+    #[schema(value_type = Option<String>, format = "uuid")]
     pub engine_uuid: Option<Uuid>, // Assigned engine
+    #[schema(value_type = Option<String>, format = "uuid")]
     pub body_uuid: Option<Uuid>,   // Assigned body
     pub is_equipped: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

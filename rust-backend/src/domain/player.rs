@@ -9,8 +9,10 @@ use super::{Car, Pilot, Engine, Body};
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Player {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub id: Option<mongodb::bson::oid::ObjectId>,
     #[serde(with = "uuid_as_string")]
+    #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub email: Email,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -20,7 +22,9 @@ pub struct Player {
     pub pilots: Vec<Pilot>,
     pub engines: Vec<Engine>,
     pub bodies: Vec<Body>,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
 }
 

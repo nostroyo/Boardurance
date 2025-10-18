@@ -100,12 +100,21 @@ impl Application {
             crate::domain::LapResult,
             crate::domain::ParticipantMovement,
             crate::domain::MovementType,
+            // Domain value objects
+            crate::domain::Email,
+            crate::domain::TeamName,
+            crate::domain::WalletAddress,
+            crate::domain::CarName,
+            crate::domain::PilotName,
+            crate::domain::EngineName,
+            crate::domain::BodyName,
+            crate::domain::PilotPerformance,
+            // Route DTOs
             crate::routes::test_items::CreateTestItemRequest,
             crate::routes::players::CreatePlayerRequest,
             crate::routes::players::ConnectWalletRequest,
             crate::routes::players::UpdateTeamNameRequest,
             crate::routes::players::AddCarRequest,
-
             crate::routes::players::AddPilotRequest,
             crate::routes::players::PilotSkillsRequest,
             crate::routes::players::PlayerResponse,

@@ -1,12 +1,50 @@
 # Start MongoDB for development
 Write-Host "🚀 Starting MongoDB for development..." -ForegroundColor Green
 
-# Check if Docker is running
+# Check if Docker is running, start it if not
 try {
     docker version | Out-Null
+    Write-Host "✅ Docker is already running" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Docker is not running. Please start Docker Desktop first." -ForegroundColor Red
-    exit 1
+    Write-Host "🔄 Docker is not running. Starting Docker Desktop..." -ForegroundColor Yellow
+    
+    # Try to start Docker Desktop
+    try {
+        Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
+        Write-Host "⏳ Waiting for Docker Desktop to start..." -ForegroundColor Yellow
+        
+        # Wait for Docker to be ready (up to 60 seconds)
+        $dockerTimeout = 60
+        $dockerAttempt = 0
+        
+        do {
+            $dockerAttempt++
+            Start-Sleep -Seconds 2
+            
+            try {
+                docker version | Out-Null
+                Write-Host "✅ Docker Desktop is now running!" -ForegroundColor Green
+                break
+            } catch {
+                # Continue waiting
+            }
+            
+            if ($dockerAttempt -eq $dockerTimeout) {
+                Write-Host "❌ Docker Desktop failed to start within timeout" -ForegroundColor Red
+                Write-Host "Please start Docker Desktop manually and try again." -ForegroundColor Yellow
+                exit 1
+            }
+            
+            if ($dockerAttempt % 5 -eq 0) {
+                Write-Host "  Still waiting for Docker Desktop... ($dockerAttempt/$dockerTimeout)" -ForegroundColor Gray
+            }
+        } while ($dockerAttempt -lt $dockerTimeout)
+        
+    } catch {
+        Write-Host "❌ Failed to start Docker Desktop automatically." -ForegroundColor Red
+        Write-Host "Please start Docker Desktop manually and try again." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Start MongoDB with Docker Compose
