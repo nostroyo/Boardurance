@@ -279,14 +279,20 @@ function TeamPage() {
                     {/* Engine Section */}
                     <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
                       <h3 className="text-orange-400 font-semibold mb-2 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
                         </svg>
                         Engine
                       </h3>
-                      <div className="flex-1 flex flex-col justify-center">
+                      <div className="flex-1 flex flex-col justify-center items-center">
                         {getAssignedEngine(car.engine_uuid) ? (
                           <div className="text-sm text-center">
+                            {/* Engine Icon */}
+                            <div className="mb-2 flex justify-center">
+                              <svg className="w-8 h-8 text-orange-400" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
+                              </svg>
+                            </div>
                             <div className="font-medium text-white mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedEngine(car.engine_uuid)?.rarity} | 
@@ -294,7 +300,14 @@ function TeamPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-gray-500 text-sm text-center">No engine assigned</div>
+                          <div className="text-gray-500 text-sm text-center">
+                            <div className="mb-2 flex justify-center">
+                              <svg className="w-8 h-8 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
+                              </svg>
+                            </div>
+                            No engine assigned
+                          </div>
                         )}
                       </div>
                     </div>
@@ -302,14 +315,20 @@ function TeamPage() {
                     {/* Body Section */}
                     <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
                       <h3 className="text-blue-400 font-semibold mb-2 text-sm flex items-center">
-                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
                         </svg>
                         Body
                       </h3>
-                      <div className="flex-1 flex flex-col justify-center">
+                      <div className="flex-1 flex flex-col justify-center items-center">
                         {getAssignedBody(car.body_uuid) ? (
                           <div className="text-sm text-center">
+                            {/* Body/Chassis Icon */}
+                            <div className="mb-2 flex justify-center">
+                              <svg className="w-8 h-8 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
+                              </svg>
+                            </div>
                             <div className="font-medium text-white mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedBody(car.body_uuid)?.rarity} | 
@@ -317,7 +336,14 @@ function TeamPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-gray-500 text-sm text-center">No body assigned</div>
+                          <div className="text-gray-500 text-sm text-center">
+                            <div className="mb-2 flex justify-center">
+                              <svg className="w-8 h-8 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
+                              </svg>
+                            </div>
+                            No body assigned
+                          </div>
                         )}
                       </div>
                     </div>
@@ -326,8 +352,8 @@ function TeamPage() {
                   {/* Right Side - Pilots Section (full height) */}
                   <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-60 flex flex-col shadow-lg">
                     <h3 className="text-green-400 font-semibold mb-3 text-sm flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C8.69 2 6 4.69 6 8V9H5C4.45 9 4 9.45 4 10V14C4 14.55 4.45 15 5 15H6V16C6 19.31 8.69 22 12 22S18 19.31 18 16V15H19C19.55 15 20 14.55 20 14V10C20 9.45 19.55 9 19 9H18V8C18 4.69 15.31 2 12 2M12 4C14.21 4 16 5.79 16 8V16C16 18.21 14.21 20 12 20S8 18.21 8 16V8C8 5.79 9.79 4 12 4M10 7V9H14V7H10M9 11C8.45 11 8 11.45 8 12S8.45 13 9 13 10 12.55 10 12 9.55 11 9 11M15 11C14.45 11 14 11.45 14 12S14.45 13 15 13 16 12.55 16 12 15.55 11 15 11Z"/>
                       </svg>
                       Pilots (3 max)
                     </h3>
@@ -341,15 +367,15 @@ function TeamPage() {
                               ? 'border-green-500 bg-gray-600 shadow-md' 
                               : 'border-gray-500 bg-gray-800 border-dashed'
                           }`}>
-                            {/* Helmet Icon */}
+                            {/* Racing Helmet Icon */}
                             <div className="w-8 h-8 flex-shrink-0">
                               {pilot ? (
-                                <svg className="w-8 h-8 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                <svg className="w-8 h-8 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 2C8.69 2 6 4.69 6 8V9H5C4.45 9 4 9.45 4 10V14C4 14.55 4.45 15 5 15H6V16C6 19.31 8.69 22 12 22S18 19.31 18 16V15H19C19.55 15 20 14.55 20 14V10C20 9.45 19.55 9 19 9H18V8C18 4.69 15.31 2 12 2M12 4C14.21 4 16 5.79 16 8V16C16 18.21 14.21 20 12 20S8 18.21 8 16V8C8 5.79 9.79 4 12 4M10 7V9H14V7H10M9 11C8.45 11 8 11.45 8 12S8.45 13 9 13 10 12.55 10 12 9.55 11 9 11M15 11C14.45 11 14 11.45 14 12S14.45 13 15 13 16 12.55 16 12 15.55 11 15 11Z"/>
                                 </svg>
                               ) : (
-                                <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M12 2C8.69 2 6 4.69 6 8V9H5C4.45 9 4 9.45 4 10V14C4 14.55 4.45 15 5 15H6V16C6 19.31 8.69 22 12 22S18 19.31 18 16V15H19C19.55 15 20 14.55 20 14V10C20 9.45 19.55 9 19 9H18V8C18 4.69 15.31 2 12 2M12 4C14.21 4 16 5.79 16 8V16C16 18.21 14.21 20 12 20S8 18.21 8 16V8C8 5.79 9.79 4 12 4M10 7V9H14V7H10M9 11C8.45 11 8 11.45 8 12S8.45 13 9 13 10 12.55 10 12 9.55 11 9 11M15 11C14.45 11 14 11.45 14 12S14.45 13 15 13 16 12.55 16 12 15.55 11 15 11Z"/>
                                 </svg>
                               )}
                             </div>
@@ -381,8 +407,8 @@ function TeamPage() {
             {/* Inventory Pilots */}
             <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
               <h3 className="text-green-400 font-bold text-lg mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C8.69 2 6 4.69 6 8V9H5C4.45 9 4 9.45 4 10V14C4 14.55 4.45 15 5 15H6V16C6 19.31 8.69 22 12 22S18 19.31 18 16V15H19C19.55 15 20 14.55 20 14V10C20 9.45 19.55 9 19 9H18V8C18 4.69 15.31 2 12 2M12 4C14.21 4 16 5.79 16 8V16C16 18.21 14.21 20 12 20S8 18.21 8 16V8C8 5.79 9.79 4 12 4M10 7V9H14V7H10M9 11C8.45 11 8 11.45 8 12S8.45 13 9 13 10 12.55 10 12 9.55 11 9 11M15 11C14.45 11 14 11.45 14 12S14.45 13 15 13 16 12.55 16 12 15.55 11 15 11Z"/>
                 </svg>
                 INVENTORY PILOTS
               </h3>
@@ -405,8 +431,8 @@ function TeamPage() {
             {/* Inventory Bodies */}
             <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
               <h3 className="text-blue-400 font-bold text-lg mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H6.5C5.84 5 5.28 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01M6.5 16C5.67 16 5 15.33 5 14.5S5.67 13 6.5 13 8 13.67 8 14.5 7.33 16 6.5 16M17.5 16C16.67 16 16 15.33 16 14.5S16.67 13 17.5 13 19 13.67 19 14.5 18.33 16 17.5 16M5.81 10L6.5 7H17.5L18.19 10H5.81Z"/>
                 </svg>
                 Inventory Bodies
               </h3>
@@ -429,8 +455,8 @@ function TeamPage() {
             {/* Inventory Engines */}
             <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
               <h3 className="text-orange-400 font-bold text-lg mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2L13.09 8.26L22 9L13.09 9.74L12 16L10.91 9.74L2 9L10.91 8.26L12 2M12 4.5L11.5 7.5L8.5 8L11.5 8.5L12 11.5L12.5 8.5L15.5 8L12.5 7.5L12 4.5M7 18C7 16.9 6.1 16 5 16S3 16.9 3 18 3.9 20 5 20 7 19.1 7 18M21 18C21 16.9 20.1 16 19 16S17 16.9 17 18 17.9 20 19 20 21 19.1 21 18Z"/>
                 </svg>
                 Inventory Engines
               </h3>
