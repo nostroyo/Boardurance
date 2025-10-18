@@ -210,43 +210,63 @@ function TeamPage() {
                   CAR{index + 1}: {car.name}
                 </h2>
                 
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Engine Section */}
-                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-48 flex flex-col">
-                    <h3 className="text-gray-700 font-semibold mb-3 text-sm">Engine</h3>
-                    <div className="flex-1 flex flex-col justify-center">
-                      {getAssignedEngine(car.engine_uuid) ? (
-                        <div className="text-sm text-center">
-                          <div className="font-medium text-gray-800 mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
-                          <div className="text-gray-600 text-xs mb-1">Rarity: {getAssignedEngine(car.engine_uuid)?.rarity}</div>
-                          <div className="text-gray-600 text-xs">
-                            S: {getAssignedEngine(car.engine_uuid)?.straight_value} | 
-                            C: {getAssignedEngine(car.engine_uuid)?.curve_value}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Left Side - Engine and Body stacked */}
+                  <div className="space-y-4">
+                    {/* Engine Section */}
+                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-24 flex flex-col">
+                      <h3 className="text-gray-700 font-semibold mb-2 text-sm">Engine</h3>
+                      <div className="flex-1 flex flex-col justify-center">
+                        {getAssignedEngine(car.engine_uuid) ? (
+                          <div className="text-sm text-center">
+                            <div className="font-medium text-gray-800 mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
+                            <div className="text-gray-600 text-xs">
+                              {getAssignedEngine(car.engine_uuid)?.rarity} | 
+                              S:{getAssignedEngine(car.engine_uuid)?.straight_value} C:{getAssignedEngine(car.engine_uuid)?.curve_value}
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-sm text-center">No engine assigned</div>
-                      )}
+                        ) : (
+                          <div className="text-gray-400 text-sm text-center">No engine assigned</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Body Section */}
+                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-24 flex flex-col">
+                      <h3 className="text-gray-700 font-semibold mb-2 text-sm">Body</h3>
+                      <div className="flex-1 flex flex-col justify-center">
+                        {getAssignedBody(car.body_uuid) ? (
+                          <div className="text-sm text-center">
+                            <div className="font-medium text-gray-800 mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
+                            <div className="text-gray-600 text-xs">
+                              {getAssignedBody(car.body_uuid)?.rarity} | 
+                              S:{getAssignedBody(car.body_uuid)?.straight_value} C:{getAssignedBody(car.body_uuid)?.curve_value}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-gray-400 text-sm text-center">No body assigned</div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Pilots Section */}
-                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-48 flex flex-col">
+                  {/* Right Side - Pilots Section (full height) */}
+                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-56 flex flex-col">
                     <h3 className="text-gray-700 font-semibold mb-3 text-sm">Pilots (3 max)</h3>
-                    <div className="flex-1 flex flex-col justify-center space-y-2">
+                    <div className="flex-1 flex flex-col justify-center space-y-3">
                       {[0, 1, 2].map((slotIndex) => {
                         const assignedPilots = getAssignedPilots(car.pilot_uuids);
                         const pilot = assignedPilots[slotIndex];
                         return (
-                          <div key={slotIndex} className="flex items-center space-x-2 h-10 border border-gray-200 rounded px-2 bg-white">
+                          <div key={slotIndex} className="flex items-center space-x-3 h-12 border border-gray-200 rounded px-3 bg-white">
                             {/* Helmet Icon */}
-                            <div className="w-6 h-6 flex-shrink-0">
+                            <div className="w-8 h-8 flex-shrink-0">
                               {pilot ? (
-                                <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-8 h-8 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                 </svg>
                               ) : (
-                                <svg className="w-6 h-6 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -254,36 +274,19 @@ function TeamPage() {
                             {/* Pilot Info */}
                             <div className="flex-1 min-w-0">
                               {pilot ? (
-                                <div className="text-xs">
+                                <div className="text-sm">
                                   <div className="font-medium text-gray-800 truncate">{pilot.name}</div>
-                                  <div className="text-gray-500">S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}</div>
+                                  <div className="text-gray-500 text-xs">
+                                    {pilot.pilot_class} | S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
+                                  </div>
                                 </div>
                               ) : (
-                                <div className="text-gray-400 text-xs">Empty slot</div>
+                                <div className="text-gray-400 text-sm">Empty pilot slot</div>
                               )}
                             </div>
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {/* Body Section */}
-                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-48 flex flex-col">
-                    <h3 className="text-gray-700 font-semibold mb-3 text-sm">Body</h3>
-                    <div className="flex-1 flex flex-col justify-center">
-                      {getAssignedBody(car.body_uuid) ? (
-                        <div className="text-sm text-center">
-                          <div className="font-medium text-gray-800 mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
-                          <div className="text-gray-600 text-xs mb-1">Rarity: {getAssignedBody(car.body_uuid)?.rarity}</div>
-                          <div className="text-gray-600 text-xs">
-                            S: {getAssignedBody(car.body_uuid)?.straight_value} | 
-                            C: {getAssignedBody(car.body_uuid)?.curve_value}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-gray-400 text-sm text-center">No body assigned</div>
-                      )}
                     </div>
                   </div>
                 </div>
