@@ -61,6 +61,7 @@ impl Application {
         crate::routes::players::get_all_players,
         crate::routes::players::get_player_by_uuid,
         crate::routes::players::get_player_by_wallet,
+        crate::routes::players::get_player_by_email,
         crate::routes::players::connect_wallet,
         crate::routes::players::disconnect_wallet,
         crate::routes::players::update_player_team_name,
