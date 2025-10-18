@@ -14,7 +14,7 @@ function LoginPage() {
 
     try {
       // Call backend to get player by email
-      const response = await fetch(`http://localhost:3000/api/v1/players/email/${encodeURIComponent(email)}`, {
+      const response = await fetch(`http://localhost:3000/api/v1/players/by-email/${encodeURIComponent(email)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
