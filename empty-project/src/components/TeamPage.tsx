@@ -184,20 +184,60 @@ function TeamPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-900 p-6 relative overflow-hidden">
+      {/* Racing Background Pattern */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-10 left-10 transform rotate-12">
+          <svg width="200" height="80" viewBox="0 0 200 80" className="text-gray-600">
+            <path d="M20 40 L40 20 L160 20 L180 40 L160 60 L40 60 Z" fill="currentColor" />
+            <circle cx="50" cy="40" r="15" fill="none" stroke="currentColor" strokeWidth="2" />
+            <circle cx="150" cy="40" r="15" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </div>
+        <div className="absolute top-32 right-20 transform -rotate-6">
+          <svg width="150" height="60" viewBox="0 0 150 60" className="text-gray-600">
+            <path d="M15 30 L30 15 L120 15 L135 30 L120 45 L30 45 Z" fill="currentColor" />
+            <circle cx="40" cy="30" r="12" fill="none" stroke="currentColor" strokeWidth="2" />
+            <circle cx="110" cy="30" r="12" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </div>
+        <div className="absolute bottom-20 left-1/3 transform rotate-3">
+          <svg width="180" height="70" viewBox="0 0 180 70" className="text-gray-600">
+            <path d="M18 35 L36 18 L144 18 L162 35 L144 52 L36 52 Z" fill="currentColor" />
+            <circle cx="48" cy="35" r="14" fill="none" stroke="currentColor" strokeWidth="2" />
+            <circle cx="132" cy="35" r="14" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        </div>
+      </div>
+      
+      {/* Racing stripes decoration */}
+      <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-red-600 opacity-20"></div>
+      <div className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-red-600 opacity-20"></div>
+      <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">
+            <h1 className="text-3xl font-bold text-white mb-2">
               TEAM: {player?.team_name}
             </h1>
+            <div className="flex items-center space-x-4 text-gray-300 text-sm">
+              <span className="flex items-center">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Active Team
+              </span>
+              <span>•</span>
+              <span>{player?.cars.length}/2 Cars</span>
+              <span>•</span>
+              <span>{player?.pilots.length} Pilots</span>
+            </div>
           </div>
           <Link
             to="/dashboard"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"
           >
-            Back to Dashboard
+            ← Back to Dashboard
           </Link>
         </div>
 
@@ -205,68 +245,110 @@ function TeamPage() {
           {/* Left Side - Cars */}
           <div className="lg:col-span-2 space-y-6">
             {player?.cars.map((car, index) => (
-              <div key={car.uuid} className="bg-white rounded-lg shadow-lg p-6 border-2 border-gray-300">
-                <h2 className="text-xl font-bold text-red-600 mb-4">
-                  CAR{index + 1}: {car.name}
-                </h2>
+              <div key={car.uuid} className="bg-gray-800 rounded-lg shadow-2xl p-6 border-2 border-gray-600 relative overflow-hidden">
+                {/* Car header with racing number */}
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold text-white flex items-center">
+                    <span className="bg-red-600 text-white px-3 py-1 rounded-full text-lg font-bold mr-3">
+                      {index + 1}
+                    </span>
+                    {car.name}
+                  </h2>
+                  <div className="text-gray-400 text-sm">
+                    {car.is_equipped ? (
+                      <span className="text-green-400 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Ready to Race
+                      </span>
+                    ) : (
+                      <span className="text-yellow-400 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Needs Setup
+                      </span>
+                    )}
+                  </div>
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   {/* Left Side - Engine and Body stacked */}
                   <div className="space-y-4">
                     {/* Engine Section */}
-                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-28 flex flex-col">
-                      <h3 className="text-gray-700 font-semibold mb-2 text-sm">Engine</h3>
+                    <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
+                      <h3 className="text-orange-400 font-semibold mb-2 text-sm flex items-center">
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                        </svg>
+                        Engine
+                      </h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedEngine(car.engine_uuid) ? (
                           <div className="text-sm text-center">
-                            <div className="font-medium text-gray-800 mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
-                            <div className="text-gray-600 text-xs">
+                            <div className="font-medium text-white mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
+                            <div className="text-gray-300 text-xs">
                               {getAssignedEngine(car.engine_uuid)?.rarity} | 
                               S:{getAssignedEngine(car.engine_uuid)?.straight_value} C:{getAssignedEngine(car.engine_uuid)?.curve_value}
                             </div>
                           </div>
                         ) : (
-                          <div className="text-gray-400 text-sm text-center">No engine assigned</div>
+                          <div className="text-gray-500 text-sm text-center">No engine assigned</div>
                         )}
                       </div>
                     </div>
 
                     {/* Body Section */}
-                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-28 flex flex-col">
-                      <h3 className="text-gray-700 font-semibold mb-2 text-sm">Body</h3>
+                    <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
+                      <h3 className="text-blue-400 font-semibold mb-2 text-sm flex items-center">
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                        </svg>
+                        Body
+                      </h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedBody(car.body_uuid) ? (
                           <div className="text-sm text-center">
-                            <div className="font-medium text-gray-800 mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
-                            <div className="text-gray-600 text-xs">
+                            <div className="font-medium text-white mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
+                            <div className="text-gray-300 text-xs">
                               {getAssignedBody(car.body_uuid)?.rarity} | 
                               S:{getAssignedBody(car.body_uuid)?.straight_value} C:{getAssignedBody(car.body_uuid)?.curve_value}
                             </div>
                           </div>
                         ) : (
-                          <div className="text-gray-400 text-sm text-center">No body assigned</div>
+                          <div className="text-gray-500 text-sm text-center">No body assigned</div>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Right Side - Pilots Section (full height) */}
-                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-60 flex flex-col">
-                    <h3 className="text-gray-700 font-semibold mb-3 text-sm">Pilots (3 max)</h3>
+                  <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-60 flex flex-col shadow-lg">
+                    <h3 className="text-green-400 font-semibold mb-3 text-sm flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                      </svg>
+                      Pilots (3 max)
+                    </h3>
                     <div className="flex-1 flex flex-col justify-center space-y-3">
                       {[0, 1, 2].map((slotIndex) => {
                         const assignedPilots = getAssignedPilots(car.pilot_uuids);
                         const pilot = assignedPilots[slotIndex];
                         return (
-                          <div key={slotIndex} className="flex items-center space-x-3 h-12 border border-gray-200 rounded px-3 bg-white">
+                          <div key={slotIndex} className={`flex items-center space-x-3 h-12 border rounded px-3 transition-all duration-200 ${
+                            pilot 
+                              ? 'border-green-500 bg-gray-600 shadow-md' 
+                              : 'border-gray-500 bg-gray-800 border-dashed'
+                          }`}>
                             {/* Helmet Icon */}
                             <div className="w-8 h-8 flex-shrink-0">
                               {pilot ? (
-                                <svg className="w-8 h-8 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-8 h-8 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                 </svg>
                               ) : (
-                                <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -275,13 +357,13 @@ function TeamPage() {
                             <div className="flex-1 min-w-0">
                               {pilot ? (
                                 <div className="text-sm">
-                                  <div className="font-medium text-gray-800 truncate">{pilot.name}</div>
-                                  <div className="text-gray-500 text-xs">
+                                  <div className="font-medium text-white truncate">{pilot.name}</div>
+                                  <div className="text-gray-300 text-xs">
                                     {pilot.pilot_class} | S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
                                   </div>
                                 </div>
                               ) : (
-                                <div className="text-gray-400 text-sm">Empty pilot slot</div>
+                                <div className="text-gray-500 text-sm">Empty pilot slot</div>
                               )}
                             </div>
                           </div>
@@ -297,58 +379,73 @@ function TeamPage() {
           {/* Right Side - Inventory */}
           <div className="space-y-4">
             {/* Inventory Pilots */}
-            <div className="bg-white rounded-lg shadow-lg p-4 border-2 border-gray-300 h-64">
-              <h3 className="text-gray-700 font-bold text-lg mb-4">INVENTORY PILOTS</h3>
+            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+              <h3 className="text-green-400 font-bold text-lg mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                INVENTORY PILOTS
+              </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailablePilots().map((pilot) => (
-                  <div key={pilot.uuid} className="border border-gray-300 rounded p-3 bg-gray-50 h-16 flex flex-col justify-center">
-                    <div className="font-medium text-sm text-gray-800">{pilot.name}</div>
-                    <div className="text-xs text-gray-600">{pilot.pilot_class} - {pilot.rarity}</div>
-                    <div className="text-xs text-gray-500">
+                  <div key={pilot.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                    <div className="font-medium text-sm text-white">{pilot.name}</div>
+                    <div className="text-xs text-gray-300">{pilot.pilot_class} - {pilot.rarity}</div>
+                    <div className="text-xs text-gray-400">
                       S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
                     </div>
                   </div>
                 ))}
                 {getAvailablePilots().length === 0 && (
-                  <div className="text-gray-400 text-sm text-center h-16 flex items-center justify-center">All pilots assigned</div>
+                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All pilots assigned</div>
                 )}
               </div>
             </div>
 
             {/* Inventory Bodies */}
-            <div className="bg-white rounded-lg shadow-lg p-4 border-2 border-gray-300 h-64">
-              <h3 className="text-gray-700 font-bold text-lg mb-4">Inventory Bodies</h3>
+            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+              <h3 className="text-blue-400 font-bold text-lg mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                </svg>
+                Inventory Bodies
+              </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableBodies().map((body) => (
-                  <div key={body.uuid} className="border border-gray-300 rounded p-3 bg-gray-50 h-16 flex flex-col justify-center">
-                    <div className="font-medium text-sm text-gray-800">{body.name}</div>
-                    <div className="text-xs text-gray-600">{body.rarity}</div>
-                    <div className="text-xs text-gray-500">
+                  <div key={body.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                    <div className="font-medium text-sm text-white">{body.name}</div>
+                    <div className="text-xs text-gray-300">{body.rarity}</div>
+                    <div className="text-xs text-gray-400">
                       S:{body.straight_value} C:{body.curve_value}
                     </div>
                   </div>
                 ))}
                 {getAvailableBodies().length === 0 && (
-                  <div className="text-gray-400 text-sm text-center h-16 flex items-center justify-center">All bodies assigned</div>
+                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All bodies assigned</div>
                 )}
               </div>
             </div>
 
             {/* Inventory Engines */}
-            <div className="bg-white rounded-lg shadow-lg p-4 border-2 border-gray-300 h-64">
-              <h3 className="text-gray-700 font-bold text-lg mb-4">Inventory Engines</h3>
+            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+              <h3 className="text-orange-400 font-bold text-lg mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                </svg>
+                Inventory Engines
+              </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableEngines().map((engine) => (
-                  <div key={engine.uuid} className="border border-gray-300 rounded p-3 bg-gray-50 h-16 flex flex-col justify-center">
-                    <div className="font-medium text-sm text-gray-800">{engine.name}</div>
-                    <div className="text-xs text-gray-600">{engine.rarity}</div>
-                    <div className="text-xs text-gray-500">
+                  <div key={engine.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer">
+                    <div className="font-medium text-sm text-white">{engine.name}</div>
+                    <div className="text-xs text-gray-300">{engine.rarity}</div>
+                    <div className="text-xs text-gray-400">
                       S:{engine.straight_value} C:{engine.curve_value}
                     </div>
                   </div>
                 ))}
                 {getAvailableEngines().length === 0 && (
-                  <div className="text-gray-400 text-sm text-center h-16 flex items-center justify-center">All engines assigned</div>
+                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All engines assigned</div>
                 )}
               </div>
             </div>
