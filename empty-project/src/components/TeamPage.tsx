@@ -214,7 +214,7 @@ function TeamPage() {
                   {/* Left Side - Engine and Body stacked */}
                   <div className="space-y-4">
                     {/* Engine Section */}
-                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-24 flex flex-col">
+                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-28 flex flex-col">
                       <h3 className="text-gray-700 font-semibold mb-2 text-sm">Engine</h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedEngine(car.engine_uuid) ? (
@@ -232,7 +232,7 @@ function TeamPage() {
                     </div>
 
                     {/* Body Section */}
-                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-24 flex flex-col">
+                    <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-28 flex flex-col">
                       <h3 className="text-gray-700 font-semibold mb-2 text-sm">Body</h3>
                       <div className="flex-1 flex flex-col justify-center">
                         {getAssignedBody(car.body_uuid) ? (
@@ -251,7 +251,7 @@ function TeamPage() {
                   </div>
 
                   {/* Right Side - Pilots Section (full height) */}
-                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-56 flex flex-col">
+                  <div className="border-2 border-gray-300 rounded-lg p-4 bg-gray-50 h-60 flex flex-col">
                     <h3 className="text-gray-700 font-semibold mb-3 text-sm">Pilots (3 max)</h3>
                     <div className="flex-1 flex flex-col justify-center space-y-3">
                       {[0, 1, 2].map((slotIndex) => {
