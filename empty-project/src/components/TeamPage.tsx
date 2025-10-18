@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface Player {
   uuid: string;
@@ -14,7 +14,7 @@ interface Player {
 interface Car {
   uuid: string;
   name: string;
-  pilot_uuids: string[]; // Array of up to 3 pilots
+  pilot_uuid?: string; // Single pilot assignment (backend structure)
   engine_uuid?: string;
   body_uuid?: string;
   is_equipped: boolean;
@@ -50,98 +50,35 @@ interface Body {
 function TeamPage() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // For demo purposes, we'll use mock data
-    // In a real app, you'd fetch this from your API
-    const mockPlayer: Player = {
-      uuid: "player-123",
-      email: "player@example.com",
-      team_name: "Lightning Racers",
-      cars: [
-        {
-          uuid: "car-1",
-          name: "Thunder Bolt",
-          pilot_uuids: ["pilot-1", "pilot-2"],
-          engine_uuid: "engine-1",
-          body_uuid: "body-1",
-          is_equipped: true
-        },
-        {
-          uuid: "car-2", 
-          name: "Speed Demon",
-          pilot_uuids: [],
-          engine_uuid: undefined,
-          body_uuid: undefined,
-          is_equipped: false
+    const fetchPlayerData = async () => {
+      try {
+        // Try to get player from localStorage first (from login)
+        const storedPlayer = localStorage.getItem('currentPlayer');
+        if (storedPlayer) {
+          const playerData = JSON.parse(storedPlayer);
+          setPlayer(playerData);
+          setLoading(false);
+          return;
         }
-      ],
-      pilots: [
-        {
-          uuid: "pilot-1",
-          name: "Alex Thunder",
-          pilot_class: "Speedster",
-          rarity: "Rare",
-          performance: { straight_value: 85, curve_value: 70 }
-        },
-        {
-          uuid: "pilot-2",
-          name: "Sarah Velocity",
-          pilot_class: "Technician", 
-          rarity: "Epic",
-          performance: { straight_value: 75, curve_value: 90 }
-        },
-        {
-          uuid: "pilot-3",
-          name: "Mike Drift",
-          pilot_class: "Racer",
-          rarity: "Common",
-          performance: { straight_value: 70, curve_value: 80 }
-        }
-      ],
-      engines: [
-        {
-          uuid: "engine-1",
-          name: "Turbo V8",
-          rarity: "Rare",
-          straight_value: 90,
-          curve_value: 60
-        },
-        {
-          uuid: "engine-2", 
-          name: "Electric Motor",
-          rarity: "Epic",
-          straight_value: 85,
-          curve_value: 85
-        }
-      ],
-      bodies: [
-        {
-          uuid: "body-1",
-          name: "Aerodynamic Frame",
-          rarity: "Rare", 
-          straight_value: 70,
-          curve_value: 95
-        },
-        {
-          uuid: "body-2",
-          name: "Heavy Chassis",
-          rarity: "Common",
-          straight_value: 85,
-          curve_value: 65
-        }
-      ]
+
+        // If no stored player, redirect to login
+        navigate('/login');
+      } catch (err) {
+        console.error('Error loading player data:', err);
+        setError('Failed to load player data');
+        setLoading(false);
+      }
     };
 
-    setTimeout(() => {
-      setPlayer(mockPlayer);
-      setLoading(false);
-    }, 500);
+    fetchPlayerData();
   }, []);
 
-  const getAssignedPilots = (pilotUuids: string[]) => {
-    return pilotUuids.map(uuid => player?.pilots.find(p => p.uuid === uuid)).filter(Boolean) as Pilot[];
+  const getAssignedPilot = (pilotUuid?: string) => {
+    return pilotUuid ? player?.pilots.find(p => p.uuid === pilotUuid) : undefined;
   };
 
   const getAssignedEngine = (engineUuid?: string) => {
@@ -153,7 +90,7 @@ function TeamPage() {
   };
 
   const getAvailablePilots = () => {
-    const assignedPilotIds = player?.cars.flatMap(car => car.pilot_uuids) || [];
+    const assignedPilotIds = player?.cars.map(car => car.pilot_uuid).filter(Boolean) || [];
     return player?.pilots.filter(pilot => !assignedPilotIds.includes(pilot.uuid)) || [];
   };
 
@@ -338,48 +275,43 @@ function TeamPage() {
                         <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
                         <path d="M9 10h6"/>
                       </svg>
-                      Pilots (3 max)
+                      Pilot
                     </h3>
-                    <div className="flex-1 flex flex-col justify-center space-y-3">
-                      {[0, 1, 2].map((slotIndex) => {
-                        const assignedPilots = getAssignedPilots(car.pilot_uuids);
-                        const pilot = assignedPilots[slotIndex];
-                        return (
-                          <div key={slotIndex} className={`flex items-center space-x-3 h-12 border rounded px-3 transition-all duration-200 ${
-                            pilot 
-                              ? 'border-green-500 bg-gray-600 shadow-md' 
-                              : 'border-gray-500 bg-gray-800 border-dashed'
-                          }`}>
-                            {/* Simple Helmet Icon */}
-                            <div className="w-6 h-6 flex-shrink-0">
-                              {pilot ? (
-                                <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                  <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
-                                  <path d="M9 10h6"/>
-                                </svg>
-                              ) : (
-                                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                  <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
-                                  <path d="M9 10h6"/>
-                                </svg>
-                              )}
+                    <div className="flex-1 flex flex-col justify-center">
+                      {/* Single Pilot Slot */}
+                      <div className={`flex items-center space-x-3 h-16 border rounded px-3 transition-all duration-200 ${
+                        getAssignedPilot(car.pilot_uuid)
+                          ? 'border-green-500 bg-gray-600 shadow-md' 
+                          : 'border-gray-500 bg-gray-800 border-dashed'
+                      }`}>
+                        {/* Simple Helmet Icon */}
+                        <div className="w-8 h-8 flex-shrink-0">
+                          {getAssignedPilot(car.pilot_uuid) ? (
+                            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
+                              <path d="M9 10h6"/>
+                            </svg>
+                          ) : (
+                            <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
+                              <path d="M9 10h6"/>
+                            </svg>
+                          )}
+                        </div>
+                        {/* Pilot Info */}
+                        <div className="flex-1 min-w-0">
+                          {getAssignedPilot(car.pilot_uuid) ? (
+                            <div className="text-sm">
+                              <div className="font-medium text-white truncate">{getAssignedPilot(car.pilot_uuid)?.name}</div>
+                              <div className="text-gray-300 text-xs">
+                                {getAssignedPilot(car.pilot_uuid)?.pilot_class} | S:{getAssignedPilot(car.pilot_uuid)?.performance.straight_value} C:{getAssignedPilot(car.pilot_uuid)?.performance.curve_value}
+                              </div>
                             </div>
-                            {/* Pilot Info */}
-                            <div className="flex-1 min-w-0">
-                              {pilot ? (
-                                <div className="text-sm">
-                                  <div className="font-medium text-white truncate">{pilot.name}</div>
-                                  <div className="text-gray-300 text-xs">
-                                    {pilot.pilot_class} | S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-gray-500 text-sm">Empty pilot slot</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                          ) : (
+                            <div className="text-gray-500 text-sm">No pilot assigned</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
