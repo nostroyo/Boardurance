@@ -6,6 +6,32 @@ use secrecy::{ExposeSecret, Secret};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// User roles for authorization
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+pub enum UserRole {
+    Player,
+    Admin,
+    SuperAdmin,
+}
+
+impl UserRole {
+    /// Check if this role has admin privileges
+    pub fn is_admin(&self) -> bool {
+        matches!(self, UserRole::Admin | UserRole::SuperAdmin)
+    }
+    
+    /// Check if this role can access any resource
+    pub fn can_access_any_resource(&self) -> bool {
+        self.is_admin()
+    }
+}
+
+impl Default for UserRole {
+    fn default() -> Self {
+        UserRole::Player
+    }
+}
+
 /// A secure password wrapper that prevents accidental exposure
 #[derive(Debug, Clone)]
 pub struct Password(Secret<String>);

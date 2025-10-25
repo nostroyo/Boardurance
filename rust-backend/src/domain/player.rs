@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Car, Pilot, Engine, Body, HashedPassword, Password};
+use super::{Car, Pilot, Engine, Body, HashedPassword, Password, UserRole};
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Player {
@@ -19,6 +19,7 @@ pub struct Player {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
+    pub role: UserRole,
     pub cars: Vec<Car>,
     pub pilots: Vec<Pilot>,
     pub engines: Vec<Engine>,
@@ -74,6 +75,7 @@ impl Player {
             password_hash,
             wallet_address: None,
             team_name,
+            role: UserRole::default(),
             cars,
             pilots,
             engines: vec![],
@@ -100,6 +102,7 @@ impl Player {
             password_hash,
             wallet_address: None,
             team_name,
+            role: UserRole::default(),
             cars,
             pilots,
             engines,
@@ -251,6 +254,22 @@ impl Player {
     /// Update the password hash
     pub fn update_password(&mut self, new_password_hash: HashedPassword) {
         self.password_hash = new_password_hash;
+        self.updated_at = Utc::now();
+    }
+
+    /// Check if this player has admin privileges
+    pub fn is_admin(&self) -> bool {
+        self.role.is_admin()
+    }
+
+    /// Check if this player can access a resource owned by another player
+    pub fn can_access_resource(&self, resource_owner_uuid: Uuid) -> bool {
+        self.is_admin() || self.uuid == resource_owner_uuid
+    }
+
+    /// Update the player's role (admin operation)
+    pub fn update_role(&mut self, new_role: UserRole) {
+        self.role = new_role;
         self.updated_at = Utc::now();
     }
 }
