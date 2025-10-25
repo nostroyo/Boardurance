@@ -9,6 +9,7 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use mongodb::bson::doc;
 use serde_json::{json, Value};
 use time::Duration as TimeDuration;
+use uuid;
 
 use crate::app_state::AppState;
 use crate::domain::{
@@ -21,6 +22,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))
+        .route("/auth/logout", post(logout_user))
+        .route("/auth/refresh", post(refresh_token))
 }
 
 // Helper function to create starter assets for new players
@@ -341,4 +344,201 @@ pub async fn login_user(
             }
         }))
     ))
+}
+
+/// Logout user
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    responses(
+        (status = 200, description = "Logout successful", body = Value),
+        (status = 401, description = "Not authenticated", body = Value),
+        (status = 500, description = "Internal server error", body = Value)
+    ),
+    tag = "Authentication"
+)]
+pub async fn logout_user(
+    State(app_state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, [(String, String); 2], ResponseJson<Value>), (StatusCode, ResponseJson<Value>)> {
+    // Extract token from cookie or header
+    let token = extract_token_from_headers(&headers);
+    
+    if let Some(token) = token {
+        // Try to invalidate the session
+        if let Err(e) = app_state.session_manager.invalidate_session(&token, "user_logout").await {
+            tracing::warn!("Failed to invalidate session during logout: {}", e);
+            // Continue with logout even if session invalidation fails
+        }
+    }
+
+    // Clear cookies regardless of session invalidation result
+    let clear_access = Cookie::build(("access_token", ""))
+        .http_only(true)
+        .secure(false)
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(0))
+        .path("/")
+        .build();
+
+    let clear_refresh = Cookie::build(("refresh_token", ""))
+        .http_only(true)
+        .secure(false)
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(0))
+        .path("/auth/refresh")
+        .build();
+
+    Ok((
+        StatusCode::OK,
+        [
+            (SET_COOKIE.to_string(), clear_access.to_string()),
+            (SET_COOKIE.to_string(), clear_refresh.to_string()),
+        ],
+        ResponseJson(json!({
+            "message": "Logout successful"
+        }))
+    ))
+}
+
+/// Refresh access token
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    responses(
+        (status = 200, description = "Token refreshed successfully", body = Value),
+        (status = 401, description = "Invalid refresh token", body = Value),
+        (status = 500, description = "Internal server error", body = Value)
+    ),
+    tag = "Authentication"
+)]
+pub async fn refresh_token(
+    State(app_state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, [(String, String); 1], ResponseJson<Value>), (StatusCode, ResponseJson<Value>)> {
+    // Extract refresh token from cookie
+    let refresh_token = extract_refresh_token_from_headers(&headers)
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "Refresh token not found"}))))?;
+
+    // Validate refresh token
+    let claims = app_state.jwt_service.validate_token(&refresh_token)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "Invalid refresh token"}))))?;
+
+    // Check if token is blacklisted
+    let is_blacklisted = app_state.session_manager.is_token_blacklisted(&claims.jti).await
+        .map_err(|e| {
+            tracing::error!("Failed to check token blacklist: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Authentication error"})))
+        })?;
+
+    if is_blacklisted {
+        return Err((StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "Token has been revoked"}))));
+    }
+
+    // Get user from database to generate new token
+    let collection = app_state.database.collection::<Player>("players");
+    let user_uuid = uuid::Uuid::parse_str(&claims.sub)
+        .map_err(|_| (StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "Invalid token"}))))?;
+
+    let user = collection
+        .find_one(doc! {"uuid": user_uuid.to_string()}, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding user: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Database error"})))
+        })?
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "User not found"}))))?;
+
+    // Generate new access token
+    let new_access_token = app_state.jwt_service.generate_access_token(&user)
+        .map_err(|e| {
+            tracing::error!("Failed to generate new access token: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Token generation failed"})))
+        })?;
+
+    // Invalidate old refresh token and create new session
+    if let Err(e) = app_state.session_manager.invalidate_session(&claims.jti, "token_refresh").await {
+        tracing::warn!("Failed to invalidate old session during refresh: {}", e);
+    }
+
+    // Extract new token ID and create new session
+    let new_claims = app_state.jwt_service.validate_token(&new_access_token)
+        .map_err(|e| {
+            tracing::error!("Failed to validate new token: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Token validation error"})))
+        })?;
+
+    let session_metadata = SessionMetadata {
+        ip_address: headers
+            .get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+        user_agent: headers
+            .get("user-agent")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+    };
+
+    if let Err(e) = app_state.session_manager.create_session(user.uuid, new_claims.jti, session_metadata).await {
+        tracing::error!("Failed to create new session: {}", e);
+        // Continue anyway, as the token is still valid
+    }
+
+    // Create new access token cookie
+    let access_cookie = Cookie::build(("access_token", new_access_token))
+        .http_only(true)
+        .secure(false)
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(30 * 60)) // 30 minutes
+        .path("/")
+        .build();
+
+    Ok((
+        StatusCode::OK,
+        [(SET_COOKIE.to_string(), access_cookie.to_string())],
+        ResponseJson(json!({
+            "message": "Token refreshed successfully"
+        }))
+    ))
+}
+
+// Helper functions
+fn extract_token_from_headers(headers: &HeaderMap) -> Option<String> {
+    // Try Authorization header first
+    if let Some(auth_header) = headers.get("authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Bearer ") {
+                return Some(auth_str[7..].to_string());
+            }
+        }
+    }
+
+    // Try cookie
+    if let Some(cookie_header) = headers.get("cookie") {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("access_token=") {
+                    return Some(cookie[13..].to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn extract_refresh_token_from_headers(headers: &HeaderMap) -> Option<String> {
+    if let Some(cookie_header) = headers.get("cookie") {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let cookie = cookie.trim();
+                if cookie.starts_with("refresh_token=") {
+                    return Some(cookie[14..].to_string());
+                }
+            }
+        }
+    }
+    None
 }
