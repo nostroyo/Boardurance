@@ -1,30 +1,22 @@
 use axum::{
-    extract::State,
+    extract::{Json, State},
     http::StatusCode,
-    response::Json,
-    routing::{post},
+    response::Json as ResponseJson,
+    routing::post,
     Router,
 };
 use mongodb::{bson::doc, Database};
 use serde_json::{json, Value};
-use utoipa::OpenApi;
 
 use crate::domain::{
     Email, TeamName, Player, Password, UserRegistration, UserCredentials,
     Car, CarName, Engine, EngineName, Body, BodyName, ComponentRarity
 };
 
-#[derive(OpenApi)]
-#[openapi(
-    paths(register_user, login_user),
-    components(schemas(UserRegistration, UserCredentials))
-)]
-pub struct AuthApiDoc;
-
-pub fn auth_routes() -> Router<Database> {
+pub fn routes() -> Router<Database> {
     Router::new()
-        .route("/register", post(register_user))
-        .route("/login", post(login_user))
+        .route("/auth/register", post(register_user))
+        .route("/auth/login", post(login_user))
 }
 
 // Helper function to create starter assets for new players
@@ -93,22 +85,23 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
 pub async fn register_user(
     State(db): State<Database>,
     Json(registration): Json<UserRegistration>,
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> Result<ResponseJson<Value>, (StatusCode, ResponseJson<Value>)> {
     let collection = db.collection::<Player>("players");
+    
     // Validate email format
     let email = Email::parse(&registration.email)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Validate team name
     let team_name = TeamName::parse(&registration.team_name)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Validate and hash password
     let password = Password::new(registration.password)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
     
     let password_hash = password.hash()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": e}))))?;
 
     // Check if user already exists
     let existing_user = collection
@@ -116,19 +109,19 @@ pub async fn register_user(
         .await
         .map_err(|e| {
             tracing::error!("Database error checking existing user: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Database error"})))
         })?;
 
     if existing_user.is_some() {
         return Err((
             StatusCode::CONFLICT,
-            Json(json!({"error": "User with this email already exists"}))
+            ResponseJson(json!({"error": "User with this email already exists"}))
         ));
     }
 
     // Create starter assets for new player
     let (starter_cars, starter_engines, starter_bodies) = create_starter_assets()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": e}))))?;
 
     // Create new player with starter assets
     let player = Player::new_with_assets(
@@ -139,25 +132,26 @@ pub async fn register_user(
         vec![], // No pilots initially - players can recruit them later
         starter_engines,
         starter_bodies,
-    ).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+    ).map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Insert into database
-    let result = collection.insert_one(&player, None).await
+    let _result = collection.insert_one(&player, None).await
         .map_err(|e| {
             tracing::error!("Database error inserting user: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Failed to create user"})))
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Failed to create user"})))
         })?;
 
     tracing::info!("User registered successfully: {}", player.uuid);
 
-    Ok((
-        StatusCode::CREATED,
-        Json(json!({
-            "message": "User registered successfully",
-            "user_id": result.inserted_id,
-            "uuid": player.uuid
-        }))
-    ))
+    Ok(ResponseJson(json!({
+        "message": "User registered successfully",
+        "user": {
+            "uuid": player.uuid,
+            "email": player.email.as_ref(),
+            "team_name": player.team_name.as_ref(),
+            "role": player.role
+        }
+    })))
 }
 
 /// Login user
@@ -176,15 +170,16 @@ pub async fn register_user(
 pub async fn login_user(
     State(db): State<Database>,
     Json(credentials): Json<UserCredentials>,
-) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
+) -> Result<ResponseJson<Value>, (StatusCode, ResponseJson<Value>)> {
     let collection = db.collection::<Player>("players");
+    
     // Validate email format
     let email = Email::parse(&credentials.email)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Validate password format
     let password = Password::new(credentials.password)
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+        .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Find user by email
     let user = collection
@@ -192,38 +187,36 @@ pub async fn login_user(
         .await
         .map_err(|e| {
             tracing::error!("Database error finding user: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Database error"})))
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Database error"})))
         })?;
 
     let user = user.ok_or_else(|| {
-        (StatusCode::UNAUTHORIZED, Json(json!({"error": "Invalid credentials"})))
+        (StatusCode::UNAUTHORIZED, ResponseJson(json!({"error": "Invalid credentials"})))
     })?;
 
     // Verify password
     let is_valid = user.verify_password(&password)
         .map_err(|e| {
             tracing::error!("Password verification error: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "Authentication error"})))
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Authentication error"})))
         })?;
 
     if !is_valid {
         return Err((
             StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid credentials"}))
+            ResponseJson(json!({"error": "Invalid credentials"}))
         ));
     }
 
     tracing::info!("User logged in successfully: {}", user.uuid);
 
-    // TODO: Generate and return JWT token or session
-    Ok((
-        StatusCode::OK,
-        Json(json!({
-            "message": "Login successful",
-            "user_id": user.id,
+    Ok(ResponseJson(json!({
+        "message": "Login successful",
+        "user": {
             "uuid": user.uuid,
             "email": user.email.as_ref(),
-            "team_name": user.team_name.as_ref()
-        }))
-    ))
+            "team_name": user.team_name.as_ref(),
+            "role": user.role
+        }
+    })))
 }

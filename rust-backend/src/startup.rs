@@ -155,7 +155,7 @@ pub async fn run(
         .nest("/api/v1", test_items::routes())
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
-        .nest("/api/v1/auth", auth::auth_routes())
+        .nest("/api/v1", auth::routes())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
