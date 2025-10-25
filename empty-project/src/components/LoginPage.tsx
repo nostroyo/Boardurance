@@ -1,11 +1,23 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authUtils, apiUtils } from '../utils/auth';
 
 function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,30 +25,25 @@ function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Call backend to get player by email
-      const response = await fetch(`http://localhost:3000/api/v1/players/by-email/${encodeURIComponent(email)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const player = await response.json();
-        console.log('Player found:', player);
+      const result = await apiUtils.login(formData.email, formData.password);
+      
+      if (result.success && result.data) {
+        console.log('Login successful:', result.data);
         
-        // Store player data in localStorage for the team page
-        localStorage.setItem('currentPlayer', JSON.stringify(player));
+        // Store authentication data using auth utility
+        authUtils.setCurrentUser({
+          uuid: result.data.uuid,
+          email: result.data.email,
+          team_name: result.data.team_name
+        });
         
         // Navigate to team page
         navigate('/team');
-      } else if (response.status === 404) {
-        setError('No account found with this email. Please register first.');
       } else {
-        setError('Failed to login. Please try again.');
+        setError(result.error || 'Login failed. Please try again.');
       }
     } catch (err) {
-      setError('Network error. Please check your connection and try again.');
+      setError('An unexpected error occurred. Please try again.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
@@ -70,10 +77,26 @@ function LoginPage() {
               type="email"
               id="email"
               name="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={formData.email}
+              onChange={handleInputChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your registered email"
+              required
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your password"
               required
             />
           </div>

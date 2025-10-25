@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authUtils, apiUtils } from '../utils/auth';
 
 interface Player {
   uuid: string;
@@ -59,26 +60,31 @@ function TeamPage() {
   useEffect(() => {
     const fetchPlayerData = async () => {
       try {
-        // Try to get player from localStorage first (from login)
-        const storedPlayer = localStorage.getItem('currentPlayer');
-        if (storedPlayer) {
-          const playerData = JSON.parse(storedPlayer);
-          setPlayer(playerData);
-          setLoading(false);
+        // Check if user is authenticated
+        const currentUser = authUtils.getCurrentUser();
+        if (!currentUser) {
+          navigate('/login');
           return;
         }
 
-        // If no stored player, redirect to login
-        navigate('/login');
+        // Fetch complete player data from backend using UUID
+        const result = await apiUtils.getPlayer(currentUser.uuid);
+        
+        if (result.success && result.data) {
+          setPlayer(result.data);
+        } else {
+          setError(result.error || 'Failed to load player data');
+        }
       } catch (err) {
         console.error('Error loading player data:', err);
         setError('Failed to load player data');
+      } finally {
         setLoading(false);
       }
     };
 
     fetchPlayerData();
-  }, []);
+  }, [navigate]);
 
   const getAssignedPilot = (pilotUuid?: string) => {
     return pilotUuid ? player?.pilots.find(p => p.uuid === pilotUuid) : undefined;
@@ -272,28 +278,19 @@ function TeamPage() {
     
     setIsSaving(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/players/${player.uuid}/configuration`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          team_name: player.team_name,
-          cars: player.cars
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        const updatedPlayer = result.player;
-        localStorage.setItem('currentPlayer', JSON.stringify(updatedPlayer));
+      const result = await apiUtils.updatePlayerTeamName(player.uuid, player.team_name);
+      
+      if (result.success && result.data) {
+        const updatedPlayer = result.data.player;
+        
+        // Update stored user data
+        authUtils.updateUser({ team_name: updatedPlayer.team_name });
+        
         setPlayer(updatedPlayer);
         setHasChanges(false);
         console.log('Configuration saved successfully');
       } else {
-        const errorText = await response.text();
-        console.error('Failed to save configuration:', errorText);
-        setError('Failed to save configuration');
+        setError(result.error || 'Failed to save configuration');
       }
     } catch (err) {
       console.error('Error saving configuration:', err);
@@ -396,10 +393,19 @@ function TeamPage() {
             )}
             <Link
               to="/dashboard"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"
+            >
+              ← Dashboard
+            </Link>
+            <button
+              onClick={() => {
+                authUtils.logout();
+                navigate('/login');
+              }}
               className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"
             >
-              ← Back to Dashboard
-            </Link>
+              Logout
+            </button>
           </div>
         </div>
 

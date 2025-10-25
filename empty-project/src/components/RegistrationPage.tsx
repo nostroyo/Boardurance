@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authUtils, apiUtils } from '../utils/auth';
 
 function RegistrationPage() {
   const [formData, setFormData] = useState({
@@ -32,32 +33,22 @@ function RegistrationPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/players', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const result = await apiUtils.register(formData.email, formData.password, formData.teamName);
+      
+      if (result.success && result.data) {
+        console.log('User registered successfully:', result.data);
+        
+        // Store user data using auth utility
+        authUtils.setCurrentUser({
+          uuid: result.data.uuid,
           email: formData.email,
           team_name: formData.teamName
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Player created successfully:', result);
-        // Navigate to success page or dashboard
-        navigate('/dashboard'); // You'll need to create this route
+        });
+        
+        // Navigate to team page
+        navigate('/team');
       } else {
-        const errorData = await response.text();
-        if (response.status === 409) {
-          setError('Email is already registered. Please use a different email.');
-        } else if (response.status === 400) {
-          setError('Invalid email or team name. Please check your input.');
-        } else {
-          setError('Failed to create account. Please try again.');
-        }
-        console.error('Registration failed:', errorData);
+        setError(result.error || 'Failed to create account. Please try again.');
       }
     } catch (err) {
       setError('Network error. Please check your connection and try again.');
@@ -116,6 +107,9 @@ function RegistrationPage() {
               placeholder="Enter your password"
               required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Password must be at least 8 characters with uppercase, lowercase, and a number
+            </p>
           </div>
 
           <div>
