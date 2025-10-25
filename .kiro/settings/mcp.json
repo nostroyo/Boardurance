@@ -1,4 +1,25 @@
 {
   "mcpServers": {
+    "Dart": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.dartai.com/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer dsa_80fd46aad9d8bc981cdc0716da4be4fa90a74c88757060a3777058212d18c5ce"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "list_tasks",
+        "get_task",
+        "create_doc",
+        "add_task_comment",
+        "update_task"
+      ]
+    }
   }
 }

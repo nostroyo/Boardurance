@@ -33,6 +33,12 @@ pub struct UpdateTeamNameRequest {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePlayerConfigurationRequest {
+    pub team_name: String,
+    pub cars: Vec<Car>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AddCarRequest {
     pub name: String,
     pub nft_mint_address: Option<String>,
@@ -67,6 +73,7 @@ pub fn routes() -> Router<Database> {
         .route("/players", get(get_all_players))
         .route("/players/:player_uuid", get(get_player_by_uuid))
         .route("/players/:player_uuid", put(update_player_team_name))
+        .route("/players/:player_uuid/configuration", put(update_player_configuration))
         .route("/players/:player_uuid", delete(delete_player))
         .route("/players/:player_uuid/wallet", post(connect_wallet))
         .route("/players/:player_uuid/wallet", delete(disconnect_wallet))
@@ -487,6 +494,63 @@ pub async fn disconnect_wallet(
         }
         Err(e) => {
             tracing::error!("Failed to disconnect wallet: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Update player configuration (cars and inventory)
+#[utoipa::path(
+    put,
+    path = "/api/v1/players/{player_uuid}/configuration",
+    params(
+        ("player_uuid" = String, Path, description = "Player's UUID")
+    ),
+    request_body = UpdatePlayerConfigurationRequest,
+    responses(
+        (status = 200, description = "Configuration updated successfully", body = PlayerResponse),
+        (status = 400, description = "Bad request"),
+        (status = 404, description = "Player not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "players"
+)]
+#[tracing::instrument(name = "Updating player configuration", skip(database, payload))]
+pub async fn update_player_configuration(
+    State(database): State<Database>,
+    Path(player_uuid_str): Path<String>,
+    Json(payload): Json<UpdatePlayerConfigurationRequest>,
+) -> Result<Json<PlayerResponse>, StatusCode> {
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let new_team_name = match TeamName::parse(&payload.team_name) {
+        Ok(name) => name,
+        Err(e) => {
+            tracing::warn!("Invalid team name: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    match update_player_configuration_by_uuid(&database, player_uuid, new_team_name, payload.cars).await {
+        Ok(Some(updated_player)) => {
+            tracing::info!("Configuration updated successfully for player: {}", player_uuid);
+            Ok(Json(PlayerResponse {
+                player: updated_player,
+                message: "Configuration updated successfully".to_string(),
+            }))
+        }
+        Ok(None) => {
+            tracing::warn!("Player not found for UUID: {}", player_uuid);
+            Err(StatusCode::NOT_FOUND)
+        }
+        Err(e) => {
+            tracing::error!("Failed to update configuration: {:?}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -1144,4 +1208,27 @@ pub async fn remove_pilot_from_player_by_uuid(
     };
     
     collection.find_one_and_update(filter, update, None).await
+}
+#[tracing::instrument(name = "Updating player configuration by UUID in the database", skip(database, new_team_name, cars))]
+pub async fn update_player_configuration_by_uuid(
+    database: &Database,
+    player_uuid: Uuid,
+    new_team_name: TeamName,
+    cars: Vec<Car>,
+) -> Result<Option<Player>, mongodb::error::Error> {
+    let collection = database.collection::<Player>("players");
+    let filter = doc! { "uuid": player_uuid.to_string() };
+    let update = doc! { 
+        "$set": { 
+            "team_name": new_team_name.as_ref(),
+            "cars": mongodb::bson::to_bson(&cars)?,
+            "updated_at": BsonDateTime::now()
+        } 
+    };
+    
+    let options = mongodb::options::FindOneAndUpdateOptions::builder()
+        .return_document(mongodb::options::ReturnDocument::After)
+        .build();
+    
+    collection.find_one_and_update(filter, update, options).await
 }

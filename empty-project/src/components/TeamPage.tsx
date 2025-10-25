@@ -53,6 +53,7 @@ function TeamPage() {
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [draggedItem, setDraggedItem] = useState<{type: 'engine' | 'body' | 'pilot', uuid: string} | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -200,36 +201,103 @@ function TeamPage() {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, type: 'engine' | 'body' | 'pilot', uuid: string) => {
+    setDraggedItem({ type, uuid });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDropOnCar = (e: React.DragEvent, carUuid: string, slotType: 'engine' | 'body' | 'pilot') => {
+    e.preventDefault();
+    
+    if (!draggedItem || draggedItem.type !== slotType) return;
+
+    switch (slotType) {
+      case 'engine':
+        assignEngineTocar(carUuid, draggedItem.uuid);
+        break;
+      case 'body':
+        assignBodyToCar(carUuid, draggedItem.uuid);
+        break;
+      case 'pilot':
+        assignPilotToCar(carUuid, draggedItem.uuid);
+        break;
+    }
+    
+    setDraggedItem(null);
+  };
+
+  const handleDropOnInventory = (e: React.DragEvent) => {
+    e.preventDefault();
+    
+    if (!draggedItem) return;
+
+    // Find which car has this component and remove it
+    if (player) {
+      const updatedPlayer = { ...player };
+      updatedPlayer.cars.forEach(car => {
+        switch (draggedItem.type) {
+          case 'engine':
+            if (car.engine_uuid === draggedItem.uuid) {
+              car.engine_uuid = undefined;
+            }
+            break;
+          case 'body':
+            if (car.body_uuid === draggedItem.uuid) {
+              car.body_uuid = undefined;
+            }
+            break;
+          case 'pilot':
+            if (car.pilot_uuid === draggedItem.uuid) {
+              car.pilot_uuid = undefined;
+            }
+            break;
+        }
+      });
+      setPlayer(updatedPlayer);
+      setHasChanges(true);
+    }
+    
+    setDraggedItem(null);
+  };
+
   // Save configuration to backend
   const saveConfiguration = async () => {
     if (!player || !hasChanges) return;
     
     setIsSaving(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/v1/players/${player.uuid}`, {
+      const response = await fetch(`http://localhost:8000/api/v1/players/${player.uuid}/configuration`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           team_name: player.team_name,
-          cars: player.cars,
-          pilots: player.pilots,
-          engines: player.engines,
-          bodies: player.bodies
+          cars: player.cars
         }),
       });
 
       if (response.ok) {
-        const updatedPlayer = await response.json();
+        const result = await response.json();
+        const updatedPlayer = result.player;
         localStorage.setItem('currentPlayer', JSON.stringify(updatedPlayer));
+        setPlayer(updatedPlayer);
         setHasChanges(false);
         console.log('Configuration saved successfully');
       } else {
-        console.error('Failed to save configuration');
+        const errorText = await response.text();
+        console.error('Failed to save configuration:', errorText);
+        setError('Failed to save configuration');
       }
     } catch (err) {
       console.error('Error saving configuration:', err);
+      setError('Error saving configuration');
     } finally {
       setIsSaving(false);
     }
@@ -371,7 +439,11 @@ function TeamPage() {
                   {/* Left Side - Engine and Body stacked */}
                   <div className="space-y-4">
                     {/* Engine Section */}
-                    <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
+                    <div 
+                      className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg transition-all duration-200"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDropOnCar(e, car.uuid, 'engine')}
+                    >
                       <h3 className="text-orange-400 font-semibold mb-2 text-sm flex items-center">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <rect x="4" y="8" width="16" height="10" rx="2"/>
@@ -387,24 +459,32 @@ function TeamPage() {
                         {getAssignedEngine(car.engine_uuid) ? (
                           <div 
                             className="text-sm text-center cursor-pointer hover:bg-gray-600 p-2 rounded transition-colors"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'engine', car.engine_uuid!)}
                             onClick={() => removeEngineFromCar(car.uuid)}
-                            title="Click to remove engine"
+                            title="Drag to move or click to remove engine"
                           >
                             <div className="font-medium text-white mb-1">{getAssignedEngine(car.engine_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedEngine(car.engine_uuid)?.rarity} | 
                               S:{getAssignedEngine(car.engine_uuid)?.straight_value} C:{getAssignedEngine(car.engine_uuid)?.curve_value}
                             </div>
-                            <div className="text-red-400 text-xs mt-1">Click to remove</div>
+                            <div className="text-orange-400 text-xs mt-1">Drag to move • Click to remove</div>
                           </div>
                         ) : (
-                          <div className="text-gray-500 text-sm text-center">No engine assigned</div>
+                          <div className="text-gray-500 text-sm text-center border-2 border-dashed border-gray-500 rounded p-2">
+                            Drop engine here
+                          </div>
                         )}
                       </div>
                     </div>
 
                     {/* Body Section */}
-                    <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg">
+                    <div 
+                      className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-28 flex flex-col shadow-lg transition-all duration-200"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDropOnCar(e, car.uuid, 'body')}
+                    >
                       <h3 className="text-blue-400 font-semibold mb-2 text-sm flex items-center">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path d="M7 17h10l2-6H5l2 6z"/>
@@ -418,72 +498,81 @@ function TeamPage() {
                         {getAssignedBody(car.body_uuid) ? (
                           <div 
                             className="text-sm text-center cursor-pointer hover:bg-gray-600 p-2 rounded transition-colors"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'body', car.body_uuid!)}
                             onClick={() => removeBodyFromCar(car.uuid)}
-                            title="Click to remove body"
+                            title="Drag to move or click to remove body"
                           >
                             <div className="font-medium text-white mb-1">{getAssignedBody(car.body_uuid)?.name}</div>
                             <div className="text-gray-300 text-xs">
                               {getAssignedBody(car.body_uuid)?.rarity} | 
                               S:{getAssignedBody(car.body_uuid)?.straight_value} C:{getAssignedBody(car.body_uuid)?.curve_value}
                             </div>
-                            <div className="text-red-400 text-xs mt-1">Click to remove</div>
+                            <div className="text-blue-400 text-xs mt-1">Drag to move • Click to remove</div>
                           </div>
                         ) : (
-                          <div className="text-gray-500 text-sm text-center">No body assigned</div>
+                          <div className="text-gray-500 text-sm text-center border-2 border-dashed border-gray-500 rounded p-2">
+                            Drop body here
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Side - Pilots Section (full height) */}
-                  <div className="border-2 border-gray-600 rounded-lg p-4 bg-gray-700 h-60 flex flex-col shadow-lg">
-                    <h3 className="text-green-400 font-semibold mb-3 text-sm flex items-center">
+                  {/* Right Side - Pilots Section (3 slots) */}
+                  <div className="border-2 border-gray-600 rounded-lg p-3 bg-gray-700 h-60 flex flex-col shadow-lg">
+                    <h3 className="text-green-400 font-semibold mb-2 text-sm flex items-center">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
                         <path d="M9 10h6"/>
                       </svg>
-                      Pilot
+                      Pilots (3 Required)
                     </h3>
-                    <div className="flex-1 flex flex-col justify-center">
-                      {/* Single Pilot Slot */}
-                      <div className={`flex items-center space-x-3 h-16 border rounded px-3 transition-all duration-200 ${
-                        getAssignedPilot(car.pilot_uuid)
-                          ? 'border-green-500 bg-gray-600 shadow-md' 
-                          : 'border-gray-500 bg-gray-800 border-dashed'
-                      }`}>
-                        {/* Simple Helmet Icon */}
-                        <div className="w-8 h-8 flex-shrink-0">
-                          {getAssignedPilot(car.pilot_uuid) ? (
-                            <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
-                              <path d="M9 10h6"/>
-                            </svg>
-                          ) : (
-                            <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
-                              <path d="M9 10h6"/>
-                            </svg>
-                          )}
-                        </div>
-                        {/* Pilot Info */}
-                        <div className="flex-1 min-w-0">
-                          {getAssignedPilot(car.pilot_uuid) ? (
-                            <div 
-                              className="text-sm cursor-pointer hover:bg-gray-500 p-2 rounded transition-colors"
-                              onClick={() => removePilotFromCar(car.uuid)}
-                              title="Click to remove pilot"
-                            >
-                              <div className="font-medium text-white truncate">{getAssignedPilot(car.pilot_uuid)?.name}</div>
-                              <div className="text-gray-300 text-xs">
-                                {getAssignedPilot(car.pilot_uuid)?.pilot_class} | S:{getAssignedPilot(car.pilot_uuid)?.performance.straight_value} C:{getAssignedPilot(car.pilot_uuid)?.performance.curve_value}
-                              </div>
-                              <div className="text-red-400 text-xs">Click to remove</div>
+                    <div className="flex-1 space-y-2">
+                      {[0, 1, 2].map((slotIndex) => {
+                        const availablePilots = getAvailablePilots();
+                        const assignedPilot = slotIndex === 0 ? getAssignedPilot(car.pilot_uuid) : null;
+                        const pilot = assignedPilot || availablePilots[slotIndex - (assignedPilot ? 1 : 0)];
+                        
+                        return (
+                          <div 
+                            key={slotIndex}
+                            className={`flex items-center space-x-2 h-12 border rounded px-2 transition-all duration-200 ${
+                              pilot 
+                                ? 'border-green-500 bg-gray-600 shadow-md' 
+                                : 'border-gray-500 bg-gray-800 border-dashed'
+                            }`}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDropOnCar(e, car.uuid, 'pilot')}
+                          >
+                            {/* Pilot Number */}
+                            <div className="w-6 h-6 flex-shrink-0 bg-green-600 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                              {slotIndex + 1}
                             </div>
-                          ) : (
-                            <div className="text-gray-500 text-sm">No pilot assigned</div>
-                          )}
-                        </div>
-                      </div>
+                            
+                            {/* Pilot Content */}
+                            <div className="flex-1 min-w-0">
+                              {pilot ? (
+                                <div 
+                                  className="cursor-move hover:bg-gray-500 p-1 rounded transition-colors"
+                                  draggable
+                                  onDragStart={(e) => handleDragStart(e, 'pilot', pilot.uuid)}
+                                  onClick={() => slotIndex === 0 && assignedPilot ? removePilotFromCar(car.uuid) : null}
+                                  title={slotIndex === 0 && assignedPilot ? "Drag to move or click to remove pilot" : "Drag to assign pilot"}
+                                >
+                                  <div className="font-medium text-xs text-white truncate">{pilot.name}</div>
+                                  <div className="text-xs text-gray-300">{pilot.pilot_class}</div>
+                                </div>
+                              ) : (
+                                <div className="text-gray-500 text-xs">
+                                  <div>Empty Slot</div>
+                                  <div className="text-xs">Drop pilot here</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -494,7 +583,11 @@ function TeamPage() {
           {/* Right Side - Inventory */}
           <div className="space-y-4">
             {/* Inventory Pilots */}
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+            <div 
+              className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64"
+              onDragOver={handleDragOver}
+              onDrop={handleDropOnInventory}
+            >
               <h3 className="text-green-400 font-bold text-lg mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path d="M12 3C8.5 3 6 5.5 6 9v3c0 1.5.5 3 1.5 4H7c-.5 0-1 .5-1 1v2c0 .5.5 1 1 1h10c.5 0 1-.5 1-1v-2c0-.5-.5-1-1-1h-.5c1-.5 1.5-2.5 1.5-4V9c0-3.5-2.5-6-6-6z"/>
@@ -504,37 +597,32 @@ function TeamPage() {
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailablePilots().map((pilot) => (
-                  <div key={pilot.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
-                    <div className="font-medium text-sm text-white">{pilot.name}</div>
-                    <div className="text-xs text-gray-300">{pilot.pilot_class} - {pilot.rarity}</div>
-                    <div className="text-xs text-gray-400">
-                      S:{pilot.performance.straight_value} C:{pilot.performance.curve_value}
+                  <div 
+                    key={pilot.uuid} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, 'pilot', pilot.uuid)}
+                    className="border border-gray-600 rounded px-2 py-1 bg-gray-700 h-8 flex items-center hover:bg-gray-600 transition-colors cursor-move group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-xs text-white truncate">{pilot.name}</div>
                     </div>
-                    <div className="text-green-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                      Click to assign to car
-                    </div>
-                    {/* Car assignment buttons */}
-                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {player?.cars.map((car, index) => (
-                        <button
-                          key={car.uuid}
-                          onClick={() => assignPilotToCar(car.uuid, pilot.uuid)}
-                          className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded"
-                        >
-                          Car {index + 1}
-                        </button>
-                      ))}
-                    </div>
+                    <div className="text-xs text-gray-400 ml-1">S:{pilot.performance.straight_value}</div>
                   </div>
                 ))}
                 {getAvailablePilots().length === 0 && (
-                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All pilots assigned</div>
+                  <div className="text-gray-500 text-xs text-center h-8 flex items-center justify-center border-2 border-dashed border-gray-500 rounded">
+                    No pilots available • Drop here to unassign
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Inventory Bodies */}
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+            <div 
+              className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64"
+              onDragOver={handleDragOver}
+              onDrop={handleDropOnInventory}
+            >
               <h3 className="text-blue-400 font-bold text-lg mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path d="M7 17h10l2-6H5l2 6z"/>
@@ -542,41 +630,36 @@ function TeamPage() {
                   <circle cx="17" cy="17" r="2"/>
                   <path d="M5 11V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/>
                 </svg>
-                Inventory Bodies
+                INVENTORY BODIES
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableBodies().map((body) => (
-                  <div key={body.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
-                    <div className="font-medium text-sm text-white">{body.name}</div>
-                    <div className="text-xs text-gray-300">{body.rarity}</div>
-                    <div className="text-xs text-gray-400">
-                      S:{body.straight_value} C:{body.curve_value}
+                  <div 
+                    key={body.uuid} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, 'body', body.uuid)}
+                    className="border border-gray-600 rounded px-2 py-1 bg-gray-700 h-8 flex items-center hover:bg-gray-600 transition-colors cursor-move group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-xs text-white truncate">{body.name}</div>
                     </div>
-                    <div className="text-blue-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                      Click to assign to car
-                    </div>
-                    {/* Car assignment buttons */}
-                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {player?.cars.map((car, index) => (
-                        <button
-                          key={car.uuid}
-                          onClick={() => assignBodyToCar(car.uuid, body.uuid)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
-                        >
-                          Car {index + 1}
-                        </button>
-                      ))}
-                    </div>
+                    <div className="text-xs text-gray-400 ml-1">S:{body.straight_value}</div>
                   </div>
                 ))}
                 {getAvailableBodies().length === 0 && (
-                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All bodies assigned</div>
+                  <div className="text-gray-500 text-xs text-center h-8 flex items-center justify-center border-2 border-dashed border-gray-500 rounded">
+                    All bodies assigned • Drop here to unassign
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Inventory Engines */}
-            <div className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64">
+            <div 
+              className="bg-gray-800 rounded-lg shadow-2xl p-4 border-2 border-gray-600 h-64"
+              onDragOver={handleDragOver}
+              onDrop={handleDropOnInventory}
+            >
               <h3 className="text-orange-400 font-bold text-lg mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <rect x="4" y="8" width="16" height="10" rx="2"/>
@@ -586,35 +669,26 @@ function TeamPage() {
                   <circle cx="12" cy="13" r="1"/>
                   <circle cx="16" cy="13" r="1"/>
                 </svg>
-                Inventory Engines
+                INVENTORY ENGINES
               </h3>
               <div className="space-y-2 h-48 overflow-y-auto">
                 {getAvailableEngines().map((engine) => (
-                  <div key={engine.uuid} className="border border-gray-600 rounded p-3 bg-gray-700 h-16 flex flex-col justify-center hover:bg-gray-600 transition-colors cursor-pointer group">
-                    <div className="font-medium text-sm text-white">{engine.name}</div>
-                    <div className="text-xs text-gray-300">{engine.rarity}</div>
-                    <div className="text-xs text-gray-400">
-                      S:{engine.straight_value} C:{engine.curve_value}
+                  <div 
+                    key={engine.uuid} 
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, 'engine', engine.uuid)}
+                    className="border border-gray-600 rounded px-2 py-1 bg-gray-700 h-8 flex items-center hover:bg-gray-600 transition-colors cursor-move group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-xs text-white truncate">{engine.name}</div>
                     </div>
-                    <div className="text-orange-400 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                      Click to assign to car
-                    </div>
-                    {/* Car assignment buttons */}
-                    <div className="flex space-x-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {player?.cars.map((car, index) => (
-                        <button
-                          key={car.uuid}
-                          onClick={() => assignEngineTocar(car.uuid, engine.uuid)}
-                          className="bg-orange-600 hover:bg-orange-700 text-white text-xs px-2 py-1 rounded"
-                        >
-                          Car {index + 1}
-                        </button>
-                      ))}
-                    </div>
+                    <div className="text-xs text-gray-400 ml-1">S:{engine.straight_value}</div>
                   </div>
                 ))}
                 {getAvailableEngines().length === 0 && (
-                  <div className="text-gray-500 text-sm text-center h-16 flex items-center justify-center">All engines assigned</div>
+                  <div className="text-gray-500 text-xs text-center h-8 flex items-center justify-center border-2 border-dashed border-gray-500 rounded">
+                    All engines assigned • Drop here to unassign
+                  </div>
                 )}
               </div>
             </div>

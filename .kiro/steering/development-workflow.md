@@ -63,3 +63,7 @@ Only consult user when:
 - Autonomous diagnosis and correction of failures
 - System-wide consistency maintenance
 - Continuous improvement and learning
+
+## GENERAL rules
+- Always update documentation before coding
+- always commit after changes (changes must pass all tests)
