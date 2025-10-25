@@ -10,7 +10,8 @@ use serde_json::{json, Value};
 use utoipa::OpenApi;
 
 use crate::domain::{
-    Email, TeamName, Player, Password, UserRegistration, UserCredentials
+    Email, TeamName, Player, Password, UserRegistration, UserCredentials,
+    Car, CarName, Engine, EngineName, Body, BodyName, ComponentRarity
 };
 
 #[derive(OpenApi)]
@@ -24,6 +25,56 @@ pub fn auth_routes() -> Router<Database> {
     Router::new()
         .route("/register", post(register_user))
         .route("/login", post(login_user))
+}
+
+// Helper function to create starter assets for new players
+fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String> {
+    // Create 2 starter cars
+    let car1 = Car::new(CarName::parse("Starter Car 1").unwrap(), None)
+        .map_err(|e| format!("Failed to create starter car 1: {}", e))?;
+    
+    let car2 = Car::new(CarName::parse("Starter Car 2").unwrap(), None)
+        .map_err(|e| format!("Failed to create starter car 2: {}", e))?;
+
+    // Create 2 starter engines with different characteristics
+    let engine1 = Engine::new(
+        EngineName::parse("Rookie Engine").unwrap(),
+        ComponentRarity::Common,
+        35, // straight_value - good for straights
+        25, // curve_value
+        None,
+    ).map_err(|e| format!("Failed to create starter engine 1: {}", e))?;
+
+    let engine2 = Engine::new(
+        EngineName::parse("Balanced Engine").unwrap(),
+        ComponentRarity::Common,
+        30, // straight_value
+        30, // curve_value - balanced
+        None,
+    ).map_err(|e| format!("Failed to create starter engine 2: {}", e))?;
+
+    // Create 2 starter bodies with different characteristics
+    let body1 = Body::new(
+        BodyName::parse("Lightweight Frame").unwrap(),
+        ComponentRarity::Common,
+        25, // straight_value
+        35, // curve_value - good for curves
+        None,
+    ).map_err(|e| format!("Failed to create starter body 1: {}", e))?;
+
+    let body2 = Body::new(
+        BodyName::parse("Sturdy Frame").unwrap(),
+        ComponentRarity::Common,
+        35, // straight_value - good for straights
+        25, // curve_value
+        None,
+    ).map_err(|e| format!("Failed to create starter body 2: {}", e))?;
+
+    Ok((
+        vec![car1, car2],
+        vec![engine1, engine2],
+        vec![body1, body2],
+    ))
 }
 
 /// Register a new user
@@ -75,9 +126,20 @@ pub async fn register_user(
         ));
     }
 
-    // Create new player with empty assets
-    let player = Player::new(email, password_hash, team_name, vec![], vec![])
-        .map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
+    // Create starter assets for new player
+    let (starter_cars, starter_engines, starter_bodies) = create_starter_assets()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e}))))?;
+
+    // Create new player with starter assets
+    let player = Player::new_with_assets(
+        email, 
+        password_hash, 
+        team_name, 
+        starter_cars,
+        vec![], // No pilots initially - players can recruit them later
+        starter_engines,
+        starter_bodies,
+    ).map_err(|e| (StatusCode::BAD_REQUEST, Json(json!({"error": e}))))?;
 
     // Insert into database
     let result = collection.insert_one(&player, None).await

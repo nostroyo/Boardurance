@@ -15,7 +15,6 @@ pub struct Player {
     #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub email: Email,
-    #[serde(skip_serializing)]
     pub password_hash: HashedPassword,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<WalletAddress>,
