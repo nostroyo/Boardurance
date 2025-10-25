@@ -5,6 +5,7 @@ mod pilot;
 mod race;
 mod engine;
 mod body;
+mod auth;
 
 pub use test_item::*;
 pub use player::*;
@@ -13,3 +14,4 @@ pub use pilot::*;
 pub use race::*;
 pub use engine::*;
 pub use body::*;
+pub use auth::*;

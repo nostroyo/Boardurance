@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Car, Pilot, Engine, Body};
+use super::{Car, Pilot, Engine, Body, HashedPassword, Password};
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Player {
@@ -15,6 +15,8 @@ pub struct Player {
     #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
     pub email: Email,
+    #[serde(skip_serializing)]
+    pub password_hash: HashedPassword,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
@@ -60,6 +62,7 @@ pub struct TeamName(String);
 impl Player {
     pub fn new(
         email: Email,
+        password_hash: HashedPassword,
         team_name: TeamName,
         cars: Vec<Car>,
         pilots: Vec<Pilot>,
@@ -69,6 +72,7 @@ impl Player {
             id: None,
             uuid: Uuid::new_v4(),
             email,
+            password_hash,
             wallet_address: None,
             team_name,
             cars,
@@ -82,6 +86,7 @@ impl Player {
 
     pub fn new_with_assets(
         email: Email,
+        password_hash: HashedPassword,
         team_name: TeamName,
         cars: Vec<Car>,
         pilots: Vec<Pilot>,
@@ -93,6 +98,7 @@ impl Player {
             id: None,
             uuid: Uuid::new_v4(),
             email,
+            password_hash,
             wallet_address: None,
             team_name,
             cars,
@@ -236,6 +242,17 @@ impl Player {
 
     pub fn get_pilot(&self, pilot_uuid: Uuid) -> Option<&Pilot> {
         self.pilots.iter().find(|pilot| pilot.uuid == pilot_uuid)
+    }
+
+    /// Verify a password against the stored hash
+    pub fn verify_password(&self, password: &Password) -> Result<bool, String> {
+        self.password_hash.verify(password)
+    }
+
+    /// Update the password hash
+    pub fn update_password(&mut self, new_password_hash: HashedPassword) {
+        self.password_hash = new_password_hash;
+        self.updated_at = Utc::now();
     }
 }
 

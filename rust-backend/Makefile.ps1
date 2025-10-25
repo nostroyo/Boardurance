@@ -11,8 +11,9 @@ switch ($Command.ToLower()) {
         Write-Host "  dev-ui       - Start development with MongoDB Express UI" -ForegroundColor White
         Write-Host "  start-docker - Start Docker containers only (MongoDB)" -ForegroundColor White
         Write-Host "  test         - Run tests with test MongoDB" -ForegroundColor White
-        Write-Host "  test-players - Test player management endpoints" -ForegroundColor White
-        Write-Host "  test-uuid    - Test UUID-based player endpoints" -ForegroundColor White
+        Write-Host "  test-all     - Run all test suites" -ForegroundColor White
+        Write-Host "  test-api     - Test API endpoints only" -ForegroundColor White
+        Write-Host "  test-infra   - Test infrastructure only" -ForegroundColor White
         Write-Host "  build        - Build the application" -ForegroundColor White
         Write-Host "  check        - Check code compilation" -ForegroundColor White
         Write-Host "  clean        - Clean build artifacts and stop containers" -ForegroundColor White
@@ -83,18 +84,23 @@ switch ($Command.ToLower()) {
     }
     
     "test" {
-        Write-Host "Running tests..." -ForegroundColor Green
-        & .\scripts\test-with-mongodb.ps1
+        Write-Host "Running comprehensive test suite..." -ForegroundColor Green
+        & .\tests\run-all-tests.ps1
     }
     
-    "test-players" {
-        Write-Host "Testing player endpoints..." -ForegroundColor Green
-        & .\test-player-endpoints.ps1
+    "test-all" {
+        Write-Host "Running all test suites..." -ForegroundColor Green
+        & .\tests\run-all-tests.ps1 -TestSuite "all" -Verbose
     }
     
-    "test-uuid" {
-        Write-Host "Testing UUID-based player endpoints..." -ForegroundColor Green
-        & .\test-player-uuid-endpoints.ps1
+    "test-api" {
+        Write-Host "Testing API endpoints..." -ForegroundColor Green
+        & .\tests\run-all-tests.ps1 -TestSuite "api" -Verbose
+    }
+    
+    "test-infra" {
+        Write-Host "Testing infrastructure..." -ForegroundColor Green
+        & .\tests\run-all-tests.ps1 -TestSuite "infrastructure" -Verbose
     }
     
     "build" {

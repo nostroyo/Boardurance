@@ -49,6 +49,7 @@ cd rust-backend
 
 # Or start with MongoDB Express UI
 .\Makefile.ps1 dev-ui
+.\Makefile.ps1 dev-ui
 ```
 
 The server will start on `http://localhost:3000`
@@ -139,16 +140,28 @@ configuration/
 
 ### Running Tests
 
-```bash
-# Check compilation
-cargo check
+```powershell
+# Run all tests (infrastructure + API + unit)
+.\Makefile.ps1 test
 
-# Run tests
+# Run specific test suites
+.\tests\run-all-tests.ps1 -TestSuite api        # API tests only
+.\tests\run-all-tests.ps1 -TestSuite infrastructure  # Infrastructure only
+.\tests\run-all-tests.ps1 -TestSuite unit       # Unit tests only
+
+# Individual test categories
+.\tests\api\test-auth-endpoints.ps1             # Authentication tests
+.\tests\api\test-player-endpoints.ps1           # Player management tests
+.\tests\infrastructure\test-with-mongodb.ps1    # MongoDB integration
+
+# Rust unit tests
 cargo test
-
-# Run with logging
-RUST_LOG=debug cargo run
 ```
+
+#### Test Structure
+- `tests/api/` - API endpoint tests (requires running server)
+- `tests/infrastructure/` - Docker, MongoDB, project structure tests
+- `tests/run-all-tests.ps1` - Comprehensive test runner with reporting
 
 ### Building for Production
 

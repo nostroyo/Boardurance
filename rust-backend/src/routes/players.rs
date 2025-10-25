@@ -14,6 +14,7 @@ use crate::domain::{
     Player, WalletAddress, TeamName, Email, Car, CarName,
     Pilot, PilotName, PilotClass, PilotRarity, PilotSkills,
     Engine, EngineName, Body, BodyName, ComponentRarity,
+    Password,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -216,9 +217,17 @@ pub async fn create_player(
         }
     };
 
+    // Create a default password hash for testing purposes
+    // In production, users should register through the auth endpoints
+    let default_password = Password::new("TempPassword123".to_string())
+        .expect("Default password should be valid");
+    let password_hash = default_password.hash()
+        .expect("Password hashing should work");
+
     // Create player with assets
     let player = match Player::new_with_assets(
         email,
+        password_hash,
         team_name,
         vec![car1, car2],
         vec![], // Empty pilots as requested

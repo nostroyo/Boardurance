@@ -1,7 +1,7 @@
 #![allow(clippy::needless_for_each)]
 
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::routes::{health_check, test_items, players, races};
+use crate::routes::{health_check, test_items, players, races, auth};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
 
@@ -77,6 +77,8 @@ impl Application {
         crate::routes::races::start_race,
         crate::routes::races::process_turn,
         crate::routes::races::get_race_status,
+        crate::routes::auth::register_user,
+        crate::routes::auth::login_user,
     ),
     components(
         schemas(
@@ -126,14 +128,18 @@ impl Application {
             crate::routes::races::LapActionRequest,
             crate::routes::races::RaceResponse,
             crate::routes::races::LapResultResponse,
-            crate::routes::HealthResponse
+            crate::routes::HealthResponse,
+            crate::domain::UserRegistration,
+            crate::domain::UserCredentials,
+            crate::domain::HashedPassword
         )
     ),
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "test", description = "Test endpoints"),
         (name = "players", description = "Player management endpoints"),
-        (name = "races", description = "Race management and gameplay endpoints")
+        (name = "races", description = "Race management and gameplay endpoints"),
+        (name = "Authentication", description = "User authentication endpoints")
     )
 )]
 struct ApiDoc;
@@ -149,6 +155,7 @@ pub async fn run(
         .nest("/api/v1", test_items::routes())
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
+        .nest("/api/v1/auth", auth::auth_routes())
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
