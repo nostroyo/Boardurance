@@ -1,9 +1,12 @@
 #![allow(clippy::needless_for_each)]
 
+use crate::app_state::AppState;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::routes::{health_check, test_items, players, races, auth};
+use crate::services::{JwtService, JwtConfig, SessionManager, SessionConfig};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
+use std::sync::Arc;
 
 use tokio::net::TcpListener as TokioTcpListener;
 use tower_http::cors::CorsLayer;
@@ -150,12 +153,34 @@ pub async fn run(
     db_pool: Database,
     _base_url: String,
 ) -> Result<axum::serve::Serve<Router, Router>, anyhow::Error> {
+    // Initialize JWT service
+    let jwt_config = JwtConfig {
+        secret: std::env::var("JWT_SECRET")
+            .unwrap_or_else(|_| "your-super-secret-jwt-key-change-this-in-production".to_string()),
+        access_token_expiry: std::time::Duration::from_secs(30 * 60), // 30 minutes
+        refresh_token_expiry: std::time::Duration::from_secs(30 * 24 * 60 * 60), // 30 days
+        issuer: "racing-game-api".to_string(),
+        audience: "racing-game-client".to_string(),
+    };
+    let jwt_service = Arc::new(JwtService::new(jwt_config));
+    
+    // Initialize session manager
+    let session_config = SessionConfig::default();
+    let session_manager = Arc::new(SessionManager::new(Arc::new(db_pool.clone()), session_config));
+    
+    // Create application state for auth routes
+    let app_state = AppState::new(db_pool.clone(), jwt_service, session_manager);
+
+    // Create auth routes with AppState
+    let auth_routes = auth::routes().with_state(app_state);
+
+    // Create main app with Database state for other routes
     let app = Router::new()
         .route("/health_check", get(health_check))
         .nest("/api/v1", test_items::routes())
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
-        .nest("/api/v1", auth::routes())
+        .merge(auth_routes) // Merge the auth routes that already have their state
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

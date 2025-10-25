@@ -1,19 +1,23 @@
 use axum::{
     extract::{Json, State},
-    http::StatusCode,
+    http::{header::SET_COOKIE, HeaderMap, StatusCode},
     response::Json as ResponseJson,
     routing::post,
     Router,
 };
-use mongodb::{bson::doc, Database};
+use axum_extra::extract::cookie::{Cookie, SameSite};
+use mongodb::bson::doc;
 use serde_json::{json, Value};
+use time::Duration as TimeDuration;
 
+use crate::app_state::AppState;
 use crate::domain::{
     Email, TeamName, Player, Password, UserRegistration, UserCredentials,
     Car, CarName, Engine, EngineName, Body, BodyName, ComponentRarity
 };
+use crate::services::session::SessionMetadata;
 
-pub fn routes() -> Router<Database> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))
@@ -83,10 +87,11 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
     tag = "Authentication"
 )]
 pub async fn register_user(
-    State(db): State<Database>,
+    State(app_state): State<AppState>,
+    headers: HeaderMap,
     Json(registration): Json<UserRegistration>,
-) -> Result<ResponseJson<Value>, (StatusCode, ResponseJson<Value>)> {
-    let collection = db.collection::<Player>("players");
+) -> Result<(StatusCode, [(String, String); 2], ResponseJson<Value>), (StatusCode, ResponseJson<Value>)> {
+    let collection = app_state.database.collection::<Player>("players");
     
     // Validate email format
     let email = Email::parse(&registration.email)
@@ -141,17 +146,75 @@ pub async fn register_user(
             (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Failed to create user"})))
         })?;
 
+    // Generate JWT tokens
+    let token_pair = app_state.jwt_service.generate_token_pair(&player)
+        .map_err(|e| {
+            tracing::error!("Failed to generate tokens: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Failed to generate authentication tokens"})))
+        })?;
+
+    // Extract token ID from access token for session management
+    let access_claims = app_state.jwt_service.validate_token(&token_pair.access_token)
+        .map_err(|e| {
+            tracing::error!("Failed to validate generated token: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Token generation error"})))
+        })?;
+
+    // Create session metadata
+    let session_metadata = SessionMetadata {
+        ip_address: headers
+            .get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+        user_agent: headers
+            .get("user-agent")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+    };
+
+    // Create session
+    app_state.session_manager.create_session(player.uuid, access_claims.jti.clone(), session_metadata).await
+        .map_err(|e| {
+            tracing::error!("Failed to create session: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Session creation failed"})))
+        })?;
+
+    // Create secure cookies
+    let access_cookie = Cookie::build(("access_token", token_pair.access_token))
+        .http_only(true)
+        .secure(false) // TODO: Make this configurable for development
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(token_pair.expires_in as i64))
+        .path("/")
+        .build();
+
+    let refresh_cookie = Cookie::build(("refresh_token", token_pair.refresh_token))
+        .http_only(true)
+        .secure(false) // TODO: Make this configurable for development
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(30 * 24 * 60 * 60)) // 30 days
+        .path("/auth/refresh")
+        .build();
+
     tracing::info!("User registered successfully: {}", player.uuid);
 
-    Ok(ResponseJson(json!({
-        "message": "User registered successfully",
-        "user": {
-            "uuid": player.uuid,
-            "email": player.email.as_ref(),
-            "team_name": player.team_name.as_ref(),
-            "role": player.role
-        }
-    })))
+    Ok((
+        StatusCode::CREATED,
+        [
+            (SET_COOKIE.to_string(), access_cookie.to_string()),
+            (SET_COOKIE.to_string(), refresh_cookie.to_string()),
+        ],
+        ResponseJson(json!({
+            "message": "User registered successfully",
+            "user": {
+                "uuid": player.uuid,
+                "email": player.email.as_ref(),
+                "team_name": player.team_name.as_ref(),
+                "role": player.role
+            }
+        }))
+    ))
 }
 
 /// Login user
@@ -168,10 +231,11 @@ pub async fn register_user(
     tag = "Authentication"
 )]
 pub async fn login_user(
-    State(db): State<Database>,
+    State(app_state): State<AppState>,
+    headers: HeaderMap,
     Json(credentials): Json<UserCredentials>,
-) -> Result<ResponseJson<Value>, (StatusCode, ResponseJson<Value>)> {
-    let collection = db.collection::<Player>("players");
+) -> Result<(StatusCode, [(String, String); 2], ResponseJson<Value>), (StatusCode, ResponseJson<Value>)> {
+    let collection = app_state.database.collection::<Player>("players");
     
     // Validate email format
     let email = Email::parse(&credentials.email)
@@ -208,15 +272,73 @@ pub async fn login_user(
         ));
     }
 
+    // Generate JWT tokens
+    let token_pair = app_state.jwt_service.generate_token_pair(&user)
+        .map_err(|e| {
+            tracing::error!("Failed to generate tokens: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Failed to generate authentication tokens"})))
+        })?;
+
+    // Extract token ID from access token for session management
+    let access_claims = app_state.jwt_service.validate_token(&token_pair.access_token)
+        .map_err(|e| {
+            tracing::error!("Failed to validate generated token: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Token generation error"})))
+        })?;
+
+    // Create session metadata
+    let session_metadata = SessionMetadata {
+        ip_address: headers
+            .get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+        user_agent: headers
+            .get("user-agent")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string()),
+    };
+
+    // Create session
+    app_state.session_manager.create_session(user.uuid, access_claims.jti.clone(), session_metadata).await
+        .map_err(|e| {
+            tracing::error!("Failed to create session: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": "Session creation failed"})))
+        })?;
+
+    // Create secure cookies
+    let access_cookie = Cookie::build(("access_token", token_pair.access_token))
+        .http_only(true)
+        .secure(false) // TODO: Make this configurable for development
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(token_pair.expires_in as i64))
+        .path("/")
+        .build();
+
+    let refresh_cookie = Cookie::build(("refresh_token", token_pair.refresh_token))
+        .http_only(true)
+        .secure(false) // TODO: Make this configurable for development
+        .same_site(SameSite::Strict)
+        .max_age(TimeDuration::seconds(30 * 24 * 60 * 60)) // 30 days
+        .path("/auth/refresh")
+        .build();
+
     tracing::info!("User logged in successfully: {}", user.uuid);
 
-    Ok(ResponseJson(json!({
-        "message": "Login successful",
-        "user": {
-            "uuid": user.uuid,
-            "email": user.email.as_ref(),
-            "team_name": user.team_name.as_ref(),
-            "role": user.role
-        }
-    })))
+    Ok((
+        StatusCode::OK,
+        [
+            (SET_COOKIE.to_string(), access_cookie.to_string()),
+            (SET_COOKIE.to_string(), refresh_cookie.to_string()),
+        ],
+        ResponseJson(json!({
+            "message": "Login successful",
+            "user": {
+                "uuid": user.uuid,
+                "email": user.email.as_ref(),
+                "team_name": user.team_name.as_ref(),
+                "role": user.role
+            }
+        }))
+    ))
 }

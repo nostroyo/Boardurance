@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::services::{JwtService, SessionManager};
 
-/// Shared application state containing all services
+/// Application state that holds shared services
 #[derive(Clone)]
 pub struct AppState {
     pub database: Database,
