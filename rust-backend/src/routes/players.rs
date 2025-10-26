@@ -71,10 +71,16 @@ pub struct PlayerResponse {
 pub fn routes() -> Router<Database> {
     Router::new()
         // Public routes (no authentication required)
-        .route("/players", post(create_player))
-        .route("/players", get(get_all_players))
-        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet))
-        .route("/players/by-email/:email", get(get_player_by_email))
+        .route("/players", post(create_player))  // User registration
+        
+        // Admin-only routes - These should be protected with AuthMiddleware + RequireRole::admin
+        // TODO: Apply middleware layers in startup.rs:
+        // 1. AuthMiddleware to validate JWT tokens and extract UserContext  
+        // 2. RequireRole::admin to ensure only admins can access
+        // SECURITY: These routes expose sensitive user information
+        .route("/players", get(get_all_players))                              // Admin: view all players
+        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet)) // Admin: lookup by wallet
+        .route("/players/by-email/:email", get(get_player_by_email))           // Admin: lookup by email
         
         // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
         // TODO: Apply middleware layers in startup.rs:
