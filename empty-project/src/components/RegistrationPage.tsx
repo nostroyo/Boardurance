@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authUtils, apiUtils } from '../utils/auth';
+import { useAuthContext } from '../contexts/AuthContext';
 
 function RegistrationPage() {
   const [formData, setFormData] = useState({
@@ -9,9 +9,16 @@ function RegistrationPage() {
     teamName: '',
     terms: false
   });
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { register, isLoading, isAuthenticated } = useAuthContext();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/team');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -30,31 +37,24 @@ function RegistrationPage() {
       return;
     }
 
-    setIsLoading(true);
+    // Basic password validation
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
 
     try {
-      const result = await apiUtils.register(formData.email, formData.password, formData.teamName);
+      const result = await register(formData.email, formData.password, formData.teamName);
       
-      if (result.success && result.data) {
-        console.log('User registered successfully:', result.data);
-        
-        // Store user data using auth utility
-        authUtils.setCurrentUser({
-          uuid: result.data.uuid,
-          email: formData.email,
-          team_name: formData.teamName
-        });
-        
-        // Navigate to team page
-        navigate('/team');
+      if (result.success) {
+        console.log('User registered successfully');
+        // Navigation will happen automatically via useEffect when isAuthenticated becomes true
       } else {
         setError(result.error || 'Failed to create account. Please try again.');
       }
     } catch (err) {
       setError('Network error. Please check your connection and try again.');
       console.error('Network error:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 

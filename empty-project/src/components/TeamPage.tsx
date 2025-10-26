@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authUtils, apiUtils } from '../utils/auth';
+import { useAuthContext } from '../contexts/AuthContext';
+import { apiUtils } from '../utils/auth';
 
 interface Player {
   uuid: string;
@@ -56,19 +57,25 @@ function TeamPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [draggedItem, setDraggedItem] = useState<{type: 'engine' | 'body' | 'pilot', uuid: string} | null>(null);
   const navigate = useNavigate();
+  const { user, isAuthenticated, logout, updateUser } = useAuthContext();
 
   useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
     const fetchPlayerData = async () => {
       try {
-        // Check if user is authenticated
-        const currentUser = authUtils.getCurrentUser();
-        if (!currentUser) {
-          navigate('/login');
+        if (!user) {
+          setError('No user data available');
+          setLoading(false);
           return;
         }
 
         // Fetch complete player data from backend using UUID
-        const result = await apiUtils.getPlayer(currentUser.uuid);
+        const result = await apiUtils.getPlayer(user.uuid);
         
         if (result.success && result.data) {
           setPlayer(result.data);
@@ -84,7 +91,7 @@ function TeamPage() {
     };
 
     fetchPlayerData();
-  }, [navigate]);
+  }, [isAuthenticated, user, navigate]);
 
   const getAssignedPilot = (pilotUuid?: string) => {
     return pilotUuid ? player?.pilots.find(p => p.uuid === pilotUuid) : undefined;
@@ -284,7 +291,7 @@ function TeamPage() {
         const updatedPlayer = result.data.player;
         
         // Update stored user data
-        authUtils.updateUser({ team_name: updatedPlayer.team_name });
+        updateUser({ team_name: updatedPlayer.team_name });
         
         setPlayer(updatedPlayer);
         setHasChanges(false);
@@ -398,8 +405,8 @@ function TeamPage() {
               ← Dashboard
             </Link>
             <button
-              onClick={() => {
-                authUtils.logout();
+              onClick={async () => {
+                await logout();
                 navigate('/login');
               }}
               className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-200 shadow-lg"

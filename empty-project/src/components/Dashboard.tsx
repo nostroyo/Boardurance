@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { useAuthContext } from '../contexts/AuthContext';
 
 function Dashboard() {
+  const { user, logout } = useAuthContext();
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4">
@@ -13,10 +15,13 @@ function Dashboard() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Welcome to Web3 Racing Game!
+            Welcome back, {user?.team_name || 'Racer'}!
           </h1>
-          <p className="text-gray-600 mb-6">
-            Your account has been created successfully. You're now ready to start your racing journey!
+          <p className="text-gray-600 mb-2">
+            Ready to dominate the track? Your racing empire awaits!
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            Logged in as: {user?.email}
           </p>
         </div>
         
@@ -58,6 +63,17 @@ function Dashboard() {
           >
             Start Racing
           </Link>
+        </div>
+        
+        <div className="mt-6 text-center">
+          <button
+            onClick={async () => {
+              await logout();
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </div>

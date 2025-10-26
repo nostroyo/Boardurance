@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authUtils, apiUtils } from '../utils/auth';
+import { useAuthContext } from '../contexts/AuthContext';
 
 function LoginPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login, isLoading, isAuthenticated } = useAuthContext();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/team');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -22,31 +29,19 @@ function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
 
     try {
-      const result = await apiUtils.login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
       
-      if (result.success && result.data) {
-        console.log('Login successful:', result.data);
-        
-        // Store authentication data using auth utility
-        authUtils.setCurrentUser({
-          uuid: result.data.uuid,
-          email: result.data.email,
-          team_name: result.data.team_name
-        });
-        
-        // Navigate to team page
-        navigate('/team');
+      if (result.success) {
+        console.log('Login successful');
+        // Navigation will happen automatically via useEffect when isAuthenticated becomes true
       } else {
         setError(result.error || 'Login failed. Please try again.');
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
       console.error('Login error:', err);
-    } finally {
-      setIsLoading(false);
     }
   };
 

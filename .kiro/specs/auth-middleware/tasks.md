@@ -136,26 +136,36 @@
     - Implement token refresh and logout endpoints
     - _Requirements: 1.5, 4.2_
 
-- [ ] 6.5 Complete JWT integration with authentication routes
-  - [ ] 6.5.1 Update application state to include JWT and session services
+- [x] 6.5 Complete JWT integration with authentication routes
+
+
+  - [x] 6.5.1 Update application state to include JWT and session services
+
+
     - Modify startup.rs to initialize JWT service and session manager
     - Update auth routes to accept the new state structure
     - Configure JWT secret from environment/config
     - _Requirements: 1.1, 3.1_
 
-  - [ ] 6.5.2 Enhance registration endpoint with JWT tokens
+  - [x] 6.5.2 Enhance registration endpoint with JWT tokens
+
+
     - Generate access and refresh tokens on successful registration
     - Set secure HTTP-only cookies for token storage
     - Create user session in session manager
     - _Requirements: 1.1, 3.1, 4.2_
 
-  - [ ] 6.5.3 Enhance login endpoint with JWT tokens
+  - [x] 6.5.3 Enhance login endpoint with JWT tokens
+
+
     - Generate access and refresh tokens on successful login
     - Set secure HTTP-only cookies for token storage
     - Create user session in session manager
     - _Requirements: 1.1, 3.1, 4.2_
 
-  - [ ] 6.5.4 Add logout and refresh token endpoints
+  - [x] 6.5.4 Add logout and refresh token endpoints
+
+
     - Implement logout endpoint with session invalidation
     - Implement token refresh endpoint
     - Clear cookies on logout
@@ -167,26 +177,36 @@
     - Test basic authentication workflow
     - _Requirements: 1.1, 1.5, 3.1_
 
-- [ ] 7. Apply middleware to existing routes with ownership protection
-  - [ ] 7.1 Protect player routes with ownership validation
+- [x] 7. Apply middleware to existing routes with ownership protection
+
+
+  - [x] 7.1 Protect player routes with ownership validation
+
+
     - Apply RequireOwnership::player middleware to player endpoints
     - Remove manual ownership checks from player handlers
     - Update handlers to use guaranteed-valid UserContext
     - _Requirements: 2.1, 2.2, 2.5_
 
-  - [ ] 7.2 Protect race routes with participation validation
+  - [x] 7.2 Protect race routes with participation validation
+
+
     - Apply custom ownership validation for race endpoints
     - Implement race participation checking logic
     - Add admin bypass for race management endpoints
     - _Requirements: 2.1, 2.2, 2.5_
 
-  - [ ] 7.3 Add admin-only routes protection
+  - [x] 7.3 Add admin-only routes protection
+
+
     - Apply RequireRole::admin to administrative endpoints
     - Create admin route group with centralized protection
     - Update route organization for clear security boundaries
     - _Requirements: 2.1, 2.3_
 
-  - [ ] 7.4 Write integration tests for protected routes
+  - [x] 7.4 Write integration tests for protected routes
+
+
     - Test player accessing own resources (allowed)
     - Test player accessing other player resources (blocked)
     - Test admin accessing any resources (allowed)
@@ -212,17 +232,44 @@
     - _Requirements: 2.1, 2.3_
 
 - [ ] 9. Create comprehensive integration tests
-  - [ ] 9.1 Test complete authentication flow
+
+
+
+
+
+  - [x] 9.1 Test complete authentication flow
+
+
+
+
+
     - Test registration → login → protected route access
     - Test token refresh and session management
     - Test logout and session cleanup
+
+
+
     - _Requirements: 1.1, 1.5, 3.1_
 
-  - [ ] 9.2 Test authorization scenarios
+
+
+
+  - [x] 9.2 Test authorization scenarios
+
+
+
     - Test ownership validation across different endpoints
     - Test role-based access control
     - Test admin privileges and bypasses
+
+
+
+
+
     - _Requirements: 2.1, 2.2, 2.3_
+
+
+
 
   - [ ] 9.3 Test security edge cases
     - Test token tampering and invalid signatures
