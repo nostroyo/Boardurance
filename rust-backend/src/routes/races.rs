@@ -64,13 +64,23 @@ pub struct LapResultResponse {
 
 pub fn routes() -> Router<Database> {
     Router::new()
-        .route("/races", post(create_race))
+        // Public routes (no authentication required)
         .route("/races", get(get_all_races))
         .route("/races/:race_uuid", get(get_race))
-        .route("/races/:race_uuid/join", post(join_race))
-        .route("/races/:race_uuid/start", post(start_race))
-        .route("/races/:race_uuid/turn", post(process_turn))
         .route("/races/:race_uuid/status", get(get_race_status))
+        
+        // Protected routes - These should be protected with AuthMiddleware
+        // TODO: Apply middleware layers in startup.rs:
+        // 1. AuthMiddleware to validate JWT tokens and extract UserContext
+        // 2. Custom validation for race participation/ownership
+        
+        // Routes that require authentication:
+        .route("/races", post(create_race))              // Any authenticated user can create
+        .route("/races/:race_uuid/join", post(join_race)) // Any authenticated user can join
+        
+        // Routes that require race ownership or admin role:
+        .route("/races/:race_uuid/start", post(start_race))    // Race creator or admin
+        .route("/races/:race_uuid/turn", post(process_turn))   // Race participants or admin
 }
 
 /// Create a new race

@@ -70,8 +70,17 @@ pub struct PlayerResponse {
 
 pub fn routes() -> Router<Database> {
     Router::new()
+        // Public routes (no authentication required)
         .route("/players", post(create_player))
         .route("/players", get(get_all_players))
+        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet))
+        .route("/players/by-email/:email", get(get_player_by_email))
+        
+        // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
+        // TODO: Apply middleware layers in startup.rs:
+        // 1. AuthMiddleware to validate JWT tokens and extract UserContext
+        // 2. RequireOwnership::player("player_uuid") to validate ownership
+        // Routes that require player ownership or admin role:
         .route("/players/:player_uuid", get(get_player_by_uuid))
         .route("/players/:player_uuid", put(update_player_team_name))
         .route("/players/:player_uuid/configuration", put(update_player_configuration))
@@ -82,8 +91,6 @@ pub fn routes() -> Router<Database> {
         .route("/players/:player_uuid/cars/:car_uuid", delete(remove_car_from_player))
         .route("/players/:player_uuid/pilots", post(add_pilot_to_player))
         .route("/players/:player_uuid/pilots/:pilot_uuid", delete(remove_pilot_from_player))
-        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet))
-        .route("/players/by-email/:email", get(get_player_by_email))
 }
 
 /// Create a new player with starter assets
