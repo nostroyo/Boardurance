@@ -1,0 +1,303 @@
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import type { 
+  PlayerGameState, 
+  Race, 
+  RaceParticipant, 
+  LocalRaceView,
+  AnimationState,
+  APIResponse,
+  TurnPhase
+} from '../types';
+import { raceAPI } from '../utils/raceAPI';
+
+// Context type definition
+interface PlayerGameContextType {
+  state: PlayerGameState;
+  actions: {
+    initializeRace: (raceUuid: string, playerUuid: string) => Promise<void>;
+    updateRaceData: () => Promise<void>;
+    selectBoost: (boost: number) => void;
+    submitBoostAction: () => Promise<void>;
+    setError: (error: string | null) => void;
+    clearError: () => void;
+    setAnimationState: (animationState: AnimationState) => void;
+  };
+}
+
+// Initial state
+const initialState: PlayerGameState = {
+  race: null,
+  localView: {
+    centerSector: 0,
+    visibleSectors: [],
+    visibleParticipants: []
+  },
+  playerUuid: '',
+  playerParticipant: null,
+  currentTurnPhase: 'WaitingForPlayers',
+  selectedBoost: 0,
+  hasSubmittedAction: false,
+  isLoading: false,
+  error: null,
+  animationState: {
+    isAnimating: false,
+    movements: [],
+    duration: 0
+  }
+};
+
+// Action types
+type PlayerGameAction =
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_RACE_DATA'; payload: Race }
+  | { type: 'SET_PLAYER_UUID'; payload: string }
+  | { type: 'SET_PLAYER_PARTICIPANT'; payload: RaceParticipant | null }
+  | { type: 'SET_LOCAL_VIEW'; payload: LocalRaceView }
+  | { type: 'SET_TURN_PHASE'; payload: TurnPhase }
+  | { type: 'SET_SELECTED_BOOST'; payload: number }
+  | { type: 'SET_HAS_SUBMITTED'; payload: boolean }
+  | { type: 'SET_ANIMATION_STATE'; payload: AnimationState }
+  | { type: 'RESET_STATE' };
+
+// Reducer function
+function playerGameReducer(state: PlayerGameState, action: PlayerGameAction): PlayerGameState {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    
+    case 'SET_ERROR':
+      return { ...state, error: action.payload, isLoading: false };
+    
+    case 'SET_RACE_DATA':
+      return { ...state, race: action.payload };
+    
+    case 'SET_PLAYER_UUID':
+      return { ...state, playerUuid: action.payload };
+    
+    case 'SET_PLAYER_PARTICIPANT':
+      return { ...state, playerParticipant: action.payload };
+    
+    case 'SET_LOCAL_VIEW':
+      return { ...state, localView: action.payload };
+    
+    case 'SET_TURN_PHASE':
+      return { ...state, currentTurnPhase: action.payload };
+    
+    case 'SET_SELECTED_BOOST':
+      return { ...state, selectedBoost: action.payload };
+    
+    case 'SET_HAS_SUBMITTED':
+      return { ...state, hasSubmittedAction: action.payload };
+    
+    case 'SET_ANIMATION_STATE':
+      return { ...state, animationState: action.payload };
+    
+    case 'RESET_STATE':
+      return { ...initialState };
+    
+    default:
+      return state;
+  }
+}
+
+// Utility function to calculate local view
+function calculateLocalView(race: Race, playerParticipant: RaceParticipant | null): LocalRaceView {
+  if (!race || !playerParticipant) {
+    return {
+      centerSector: 0,
+      visibleSectors: [],
+      visibleParticipants: []
+    };
+  }
+
+  const centerSector = playerParticipant.current_sector;
+  const allSectors = race.track.sectors;
+  
+  // Get 5 sectors: center ±2
+  const startIndex = Math.max(0, centerSector - 2);
+  const endIndex = Math.min(allSectors.length - 1, centerSector + 2);
+  const visibleSectors = allSectors.slice(startIndex, endIndex + 1);
+  
+  // Get participants in visible sectors
+  const visibleSectorIds = visibleSectors.map(s => s.id);
+  const visibleParticipants = race.participants.filter(p => 
+    visibleSectorIds.includes(p.current_sector)
+  );
+
+  return {
+    centerSector,
+    visibleSectors,
+    visibleParticipants
+  };
+}
+
+// Context creation
+const PlayerGameContext = createContext<PlayerGameContextType | undefined>(undefined);
+
+// Custom hook to use the context
+export const usePlayerGameContext = () => {
+  const context = useContext(PlayerGameContext);
+  if (context === undefined) {
+    throw new Error('usePlayerGameContext must be used within a PlayerGameProvider');
+  }
+  return context;
+};
+
+// Provider component
+interface PlayerGameProviderProps {
+  children: React.ReactNode;
+}
+
+export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children }) => {
+  const [state, dispatch] = useReducer(playerGameReducer, initialState);
+
+  // Initialize race data
+  const initializeRace = useCallback(async (raceUuid: string, playerUuid: string) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+    dispatch({ type: 'SET_PLAYER_UUID', payload: playerUuid });
+
+    try {
+      const response: APIResponse<Race> = await raceAPI.getRace(raceUuid);
+      
+      if (response.success && response.data) {
+        const race = response.data;
+        dispatch({ type: 'SET_RACE_DATA', payload: race });
+        
+        // Find player participant
+        const playerParticipant = race.participants.find(p => p.player_uuid === playerUuid) || null;
+        dispatch({ type: 'SET_PLAYER_PARTICIPANT', payload: playerParticipant });
+        
+        // Calculate local view
+        const localView = calculateLocalView(race, playerParticipant);
+        dispatch({ type: 'SET_LOCAL_VIEW', payload: localView });
+        
+        // Determine turn phase based on race status
+        let turnPhase: TurnPhase = 'WaitingForPlayers';
+        if (race.status === 'InProgress') {
+          turnPhase = 'WaitingForPlayers'; // Default to waiting for players
+        } else if (race.status === 'Finished') {
+          turnPhase = 'Complete';
+        }
+        dispatch({ type: 'SET_TURN_PHASE', payload: turnPhase });
+        
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load race data' });
+      }
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: 'Network error while loading race data' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
+  // Update race data (for polling)
+  const updateRaceData = useCallback(async () => {
+    if (!state.race) return;
+
+    try {
+      const response: APIResponse<Race> = await raceAPI.getRace(state.race.uuid);
+      
+      if (response.success && response.data) {
+        const race = response.data;
+        dispatch({ type: 'SET_RACE_DATA', payload: race });
+        
+        // Update player participant
+        const playerParticipant = race.participants.find(p => p.player_uuid === state.playerUuid) || null;
+        dispatch({ type: 'SET_PLAYER_PARTICIPANT', payload: playerParticipant });
+        
+        // Recalculate local view
+        const localView = calculateLocalView(race, playerParticipant);
+        dispatch({ type: 'SET_LOCAL_VIEW', payload: localView });
+      }
+    } catch (error) {
+      console.error('Failed to update race data:', error);
+      // Don't set error for polling failures to avoid disrupting UI
+    }
+  }, [state.race, state.playerUuid]);
+
+  // Select boost value
+  const selectBoost = useCallback((boost: number) => {
+    if (boost >= 0 && boost <= 5) {
+      dispatch({ type: 'SET_SELECTED_BOOST', payload: boost });
+    }
+  }, []);
+
+  // Submit boost action
+  const submitBoostAction = useCallback(async () => {
+    if (!state.race || !state.playerParticipant || state.hasSubmittedAction) {
+      return;
+    }
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+
+    try {
+      const actions = [{
+        player_uuid: state.playerUuid,
+        boost_value: state.selectedBoost
+      }];
+
+      const response = await raceAPI.processRaceTurn(state.race.uuid, actions);
+      
+      if (response.success) {
+        dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
+        dispatch({ type: 'SET_TURN_PHASE', payload: 'AllSubmitted' });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to submit action' });
+      }
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: 'Network error while submitting action' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [state.race, state.playerParticipant, state.playerUuid, state.selectedBoost, state.hasSubmittedAction]);
+
+  // Set error
+  const setError = useCallback((error: string | null) => {
+    dispatch({ type: 'SET_ERROR', payload: error });
+  }, []);
+
+  // Clear error
+  const clearError = useCallback(() => {
+    dispatch({ type: 'SET_ERROR', payload: null });
+  }, []);
+
+  // Set animation state
+  const setAnimationState = useCallback((animationState: AnimationState) => {
+    dispatch({ type: 'SET_ANIMATION_STATE', payload: animationState });
+  }, []);
+
+  // Polling effect for race updates
+  useEffect(() => {
+    if (!state.race || state.race.status === 'Finished') {
+      return;
+    }
+
+    const pollInterval = setInterval(() => {
+      updateRaceData();
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [state.race, updateRaceData]);
+
+  const contextValue: PlayerGameContextType = {
+    state,
+    actions: {
+      initializeRace,
+      updateRaceData,
+      selectBoost,
+      submitBoostAction,
+      setError,
+      clearError,
+      setAnimationState
+    }
+  };
+
+  return (
+    <PlayerGameContext.Provider value={contextValue}>
+      {children}
+    </PlayerGameContext.Provider>
+  );
+};
