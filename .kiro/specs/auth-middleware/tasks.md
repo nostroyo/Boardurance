@@ -130,7 +130,8 @@
     - Return user information on successful login
     - _Requirements: 1.1, 4.2_
 
-  - [ ] 6.3 Integrate JWT tokens with auth routes (TODO)
+  - [x] 6.3 Integrate JWT tokens with auth routes (TODO)
+
     - Add JWT token generation to login/register endpoints
     - Set secure HTTP-only cookies for web clients
     - Implement token refresh and logout endpoints
@@ -271,22 +272,26 @@
 
 
 
+
   - [ ] 9.3 Test security edge cases
     - Test token tampering and invalid signatures
     - Test expired token handling
     - Test blacklisted token rejection
     - _Requirements: 1.3, 3.2, 4.3_
 
+
 - [ ] 10. Frontend authentication integration
   - [ ] 10.1 Update frontend auth service for cookie-based authentication
     - Modify login/logout functions to work with cookies
     - Implement automatic token refresh on 401 responses
     - Add proper error handling for authentication failures
+
     - _Requirements: 1.1, 1.5, 5.1_
 
   - [ ] 10.2 Update frontend components to use new auth flow
     - Update login and registration components
     - Add authentication state management
+
     - Implement protected route components
     - _Requirements: 1.1, 5.1_
 
