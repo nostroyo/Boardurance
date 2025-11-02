@@ -4,6 +4,7 @@ use axum::{
     response::Json,
     routing::{get, post, put, delete},
     Router,
+    middleware,
 };
 use mongodb::{bson::{doc, DateTime as BsonDateTime}, Database};
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use crate::domain::{
     Engine, EngineName, Body, BodyName, ComponentRarity,
     Password,
 };
+use crate::middleware::{AuthMiddleware, RequireRole};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePlayerRequest {
@@ -73,15 +75,6 @@ pub fn routes() -> Router<Database> {
         // Public routes (no authentication required)
         .route("/players", post(create_player))  // User registration
         
-        // Admin-only routes - These should be protected with AuthMiddleware + RequireRole::admin
-        // TODO: Apply middleware layers in startup.rs:
-        // 1. AuthMiddleware to validate JWT tokens and extract UserContext  
-        // 2. RequireRole::admin to ensure only admins can access
-        // SECURITY: These routes expose sensitive user information
-        .route("/players", get(get_all_players))                              // Admin: view all players
-        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet)) // Admin: lookup by wallet
-        .route("/players/by-email/:email", get(get_player_by_email))           // Admin: lookup by email
-        
         // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
         // TODO: Apply middleware layers in startup.rs:
         // 1. AuthMiddleware to validate JWT tokens and extract UserContext
@@ -97,6 +90,18 @@ pub fn routes() -> Router<Database> {
         .route("/players/:player_uuid/cars/:car_uuid", delete(remove_car_from_player))
         .route("/players/:player_uuid/pilots", post(add_pilot_to_player))
         .route("/players/:player_uuid/pilots/:pilot_uuid", delete(remove_pilot_from_player))
+}
+
+/// Admin-only routes that require authentication and admin role
+pub fn admin_routes() -> Router<crate::app_state::AppState> {
+    use crate::app_state::AppState;
+    
+    Router::new()
+        // Admin-only routes - Protected with AuthMiddleware + RequireRole::admin
+        // SECURITY: These routes expose sensitive user information
+        .route("/players", get(get_all_players_admin))                              // Admin: view all players
+        .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet_admin)) // Admin: lookup by wallet
+        .route("/players/by-email/:email", get(get_player_by_email_admin))           // Admin: lookup by email
 }
 
 /// Create a new player with starter assets
@@ -1253,4 +1258,216 @@ pub async fn update_player_configuration_by_uuid(
         .build();
     
     collection.find_one_and_update(filter, update, options).await
+}
+// A
+dmin-only handler functions that work with AppState
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/players",
+    responses(
+        (status = 200, description = "List of all players", body = [PlayerResponse])
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "admin"
+)]
+pub async fn get_all_players_admin(
+    State(app_state): State<crate::app_state::AppState>,
+) -> Result<Json<Vec<PlayerResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    let db = app_state.database();
+    get_all_players_impl(db).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/players/by-wallet/{wallet_address}",
+    responses(
+        (status = 200, description = "Player found", body = PlayerResponse),
+        (status = 404, description = "Player not found")
+    ),
+    params(
+        ("wallet_address" = String, Path, description = "Wallet address to search for")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "admin"
+)]
+pub async fn get_player_by_wallet_admin(
+    Path(wallet_address): Path<String>,
+    State(app_state): State<crate::app_state::AppState>,
+) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let db = app_state.database();
+    get_player_by_wallet_impl(db, wallet_address).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/admin/players/by-email/{email}",
+    responses(
+        (status = 200, description = "Player found", body = PlayerResponse),
+        (status = 404, description = "Player not found")
+    ),
+    params(
+        ("email" = String, Path, description = "Email address to search for")
+    ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    tag = "admin"
+)]
+pub async fn get_player_by_email_admin(
+    Path(email): Path<String>,
+    State(app_state): State<crate::app_state::AppState>,
+) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let db = app_state.database();
+    get_player_by_email_impl(db, email).await
+}
+
+// Implementation functions that can be shared between regular and admin handlers
+async fn get_all_players_impl(
+    db: &mongodb::Database,
+) -> Result<Json<Vec<PlayerResponse>>, (StatusCode, Json<serde_json::Value>)> {
+    tracing::info!("[FETCHING ALL PLAYERS - START]");
+    let start_time = std::time::Instant::now();
+
+    match get_all_players_from_database(db).await {
+        Ok(players) => {
+            let response: Vec<PlayerResponse> = players
+                .into_iter()
+                .map(|player| PlayerResponse {
+                    player,
+                    message: "Player retrieved successfully".to_string(),
+                })
+                .collect();
+
+            tracing::info!(
+                "[FETCHING ALL PLAYERS - END]",
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Ok(Json(response))
+        }
+        Err(e) => {
+            tracing::error!("[FETCHING ALL PLAYERS - EVENT] Failed to fetch players: {}", e);
+            tracing::info!(
+                "[FETCHING ALL PLAYERS - END]",
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to fetch players"})),
+            ))
+        }
+    }
+}
+
+async fn get_player_by_wallet_impl(
+    db: &mongodb::Database,
+    wallet_address: String,
+) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
+    tracing::info!("[FETCHING PLAYER BY WALLET - START]", wallet_address = %wallet_address);
+    let start_time = std::time::Instant::now();
+
+    match get_player_by_wallet_from_database(db, &wallet_address).await {
+        Ok(Some(player)) => {
+            let response = PlayerResponse {
+                player,
+                message: "Player retrieved successfully".to_string(),
+            };
+
+            tracing::info!(
+                "[FETCHING PLAYER BY WALLET - END]",
+                wallet_address = %wallet_address,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Ok(Json(response))
+        }
+        Ok(None) => {
+            tracing::info!(
+                "[FETCHING PLAYER BY WALLET - EVENT] Player not found",
+                wallet_address = %wallet_address
+            );
+            tracing::info!(
+                "[FETCHING PLAYER BY WALLET - END]",
+                wallet_address = %wallet_address,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Err((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Player not found"})),
+            ))
+        }
+        Err(e) => {
+            tracing::error!(
+                "[FETCHING PLAYER BY WALLET - EVENT] Failed to fetch player: {}",
+                e,
+                wallet_address = %wallet_address
+            );
+            tracing::info!(
+                "[FETCHING PLAYER BY WALLET - END]",
+                wallet_address = %wallet_address,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to fetch player"})),
+            ))
+        }
+    }
+}
+
+async fn get_player_by_email_impl(
+    db: &mongodb::Database,
+    email: String,
+) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
+    tracing::info!("[FETCHING PLAYER BY EMAIL - START]", email = %email);
+    let start_time = std::time::Instant::now();
+
+    match get_player_by_email_from_database(db, &email).await {
+        Ok(Some(player)) => {
+            let response = PlayerResponse {
+                player,
+                message: "Player retrieved successfully".to_string(),
+            };
+
+            tracing::info!(
+                "[FETCHING PLAYER BY EMAIL - END]",
+                email = %email,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Ok(Json(response))
+        }
+        Ok(None) => {
+            tracing::info!(
+                "[FETCHING PLAYER BY EMAIL - EVENT] Player not found",
+                email = %email
+            );
+            tracing::info!(
+                "[FETCHING PLAYER BY EMAIL - END]",
+                email = %email,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Err((
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Player not found"})),
+            ))
+        }
+        Err(e) => {
+            tracing::error!(
+                "[FETCHING PLAYER BY EMAIL - EVENT] Failed to fetch player: {}",
+                e,
+                email = %email
+            );
+            tracing::info!(
+                "[FETCHING PLAYER BY EMAIL - END]",
+                email = %email,
+                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
+            );
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Failed to fetch player"})),
+            ))
+        }
+    }
 }

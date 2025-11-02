@@ -104,13 +104,13 @@ export const authUtils = {
 // API utility functions with cookie-based authentication
 export const apiUtils = {
   // Base API URL
-  baseUrl: 'http://localhost:3000/api/v1',
+  baseUrl: 'http://localhost:3000',
 
   // Default fetch options for authenticated requests
   getAuthenticatedFetchOptions(options: RequestInit = {}): RequestInit {
     return {
       ...options,
-      credentials: 'include', // Include cookies in requests
+      // credentials: 'include', // Include cookies in requests - temporarily disabled for CORS testing
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -172,10 +172,11 @@ export const apiUtils = {
 
   // Register new user
   async register(email: string, password: string, teamName: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    console.log('Attempting registration with URL:', `${this.baseUrl}/auth/register`);
     try {
       const response = await fetch(`${this.baseUrl}/auth/register`, {
         method: 'POST',
-        credentials: 'include', // Include cookies for auth tokens
+        // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
           'Content-Type': 'application/json',
         },
@@ -186,7 +187,9 @@ export const apiUtils = {
         }),
       });
 
+      console.log('Registration response status:', response.status);
       const data = await response.json();
+      console.log('Registration response data:', data);
 
       if (response.ok) {
         // Registration successful, user is automatically logged in
@@ -205,7 +208,7 @@ export const apiUtils = {
     try {
       const response = await fetch(`${this.baseUrl}/auth/login`, {
         method: 'POST',
-        credentials: 'include', // Include cookies for auth tokens
+        // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
           'Content-Type': 'application/json',
         },
@@ -234,7 +237,7 @@ export const apiUtils = {
     try {
       const response = await fetch(`${this.baseUrl}/auth/logout`, {
         method: 'POST',
-        credentials: 'include', // Include cookies for auth tokens
+        // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
           'Content-Type': 'application/json',
         },
@@ -256,7 +259,7 @@ export const apiUtils = {
     try {
       const response = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: 'POST',
-        credentials: 'include', // Include cookies for refresh token
+        // credentials: 'include', // Include cookies for refresh token - temporarily disabled for CORS testing
         headers: {
           'Content-Type': 'application/json',
         },
@@ -275,14 +278,14 @@ export const apiUtils = {
 
   // Get player data by UUID
   async getPlayer(uuid: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    return await this.makeAuthenticatedRequest(`${this.baseUrl}/players/${uuid}`, {
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/api/v1/players/${uuid}`, {
       method: 'GET',
     });
   },
 
   // Update player team name
   async updatePlayerTeamName(uuid: string, teamName: string): Promise<{ success: boolean; data?: any; error?: string }> {
-    return await this.makeAuthenticatedRequest(`${this.baseUrl}/players/${uuid}`, {
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/api/v1/players/${uuid}`, {
       method: 'PUT',
       body: JSON.stringify({
         team_name: teamName
@@ -292,30 +295,38 @@ export const apiUtils = {
 
   // Get all players (admin only)
   async getAllPlayers(): Promise<{ success: boolean; data?: any; error?: string }> {
-    return await this.makeAuthenticatedRequest(`${this.baseUrl}/players`, {
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/api/v1/players`, {
       method: 'GET',
     });
   },
 
   // Check authentication status by making a test request
   async checkAuthStatus(): Promise<{ success: boolean; user?: User; error?: string }> {
+    console.log('checkAuthStatus called');
     try {
       // Try to get current user's data to verify authentication
       const currentUser = authUtils.getCurrentUser();
+      console.log('Current user from local state:', currentUser);
       if (!currentUser) {
+        console.log('No user in local state, returning false');
         return { success: false, error: 'No user in local state' };
       }
 
-      const result = await this.getPlayer(currentUser.uuid);
-      if (result.success) {
-        // Update user data in case it changed on the server
-        authUtils.setCurrentUser(result.data);
-        return { success: true, user: result.data };
-      } else {
-        // Authentication failed
-        authUtils.clearCurrentUser();
-        return { success: false, error: result.error };
-      }
+      // Since we're not using cookies/sessions temporarily, just return success if user exists in local state
+      console.log('User exists in local state, returning success');
+      return { success: true, user: currentUser };
+
+      // TODO: Re-enable server-side auth check when credentials are restored
+      // const result = await this.getPlayer(currentUser.uuid);
+      // if (result.success) {
+      //   // Update user data in case it changed on the server
+      //   authUtils.setCurrentUser(result.data);
+      //   return { success: true, user: result.data };
+      // } else {
+      //   // Authentication failed
+      //   authUtils.clearCurrentUser();
+      //   return { success: false, error: result.error };
+      // }
     } catch (error) {
       authUtils.clearCurrentUser();
       return { success: false, error: 'Authentication check failed' };

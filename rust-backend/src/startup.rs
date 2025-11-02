@@ -4,7 +4,8 @@ use crate::app_state::AppState;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::routes::{health_check, test_items, players, races, auth};
 use crate::services::{JwtService, JwtConfig, SessionManager, SessionConfig};
-use axum::{routing::get, Router};
+use crate::middleware::{AuthMiddleware, RequireRole};
+use axum::{routing::get, Router, middleware};
 use mongodb::{Client, Database};
 use std::sync::Arc;
 
@@ -172,7 +173,13 @@ pub async fn run(
     let app_state = AppState::new(db_pool.clone(), jwt_service, session_manager);
 
     // Create auth routes with AppState
-    let auth_routes = auth::routes().with_state(app_state);
+    let auth_routes = auth::routes().with_state(app_state.clone());
+
+    // Create admin-protected routes with AppState and middleware
+    let admin_routes = players::admin_routes()
+        .layer(RequireRole::admin())
+        .layer(AuthMiddleware::new())
+        .with_state(app_state.clone());
 
     // Create main app with Database state for other routes
     let app = Router::new()
@@ -181,10 +188,18 @@ pub async fn run(
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
         .merge(auth_routes) // Merge the auth routes that already have their state
+        .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(db_pool);
+
+    // TODO: Add admin-only routes with proper authentication middleware
+    // Examples:
+    // - GET /api/v1/admin/system/stats (system statistics)
+    // - POST /api/v1/admin/races/:uuid/force-start (force start any race)
+    // - DELETE /api/v1/admin/players/:uuid (delete any player)
+    // - GET /api/v1/admin/dashboard (administrative dashboard with sensitive data)
 
     let server = axum::serve(listener, app);
     Ok(server)

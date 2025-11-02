@@ -39,8 +39,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthState(newState);
     });
 
-    // Check authentication status on mount
-    checkAuthStatus();
+    // Force loading to false since we disabled auth check
+    authUtils.setLoading(false);
+
+    // Check authentication status on mount - temporarily disabled
+    // checkAuthStatus();
 
     return unsubscribe;
   }, []);
@@ -109,11 +112,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const checkAuthStatus = async (): Promise<void> => {
+    console.log('Starting auth status check...');
     setError(null);
     authUtils.setLoading(true);
     
     try {
       const result = await apiUtils.checkAuthStatus();
+      console.log('Auth status check result:', result);
       
       if (!result.success) {
         // Clear auth state if check failed
@@ -128,6 +133,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       authUtils.clearCurrentUser();
       setError('Authentication check failed');
     } finally {
+      console.log('Auth status check completed, setting loading to false');
       authUtils.setLoading(false);
     }
   };

@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 function ErrorNotification() {
-  const { error, clearError } = useAuthContext();
+  // Add safety check for context
+  let error = null;
+  let clearError = () => {};
+  
+  try {
+    const context = useAuthContext();
+    error = context.error;
+    clearError = context.clearError;
+  } catch (e) {
+    // Context not available yet, return null
+    return null;
+  }
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {

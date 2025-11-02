@@ -48,10 +48,31 @@ switch ($Command.ToLower()) {
         # First ensure Docker Desktop is running
         try {
             docker version | Out-Null
-            Write-Host "✅ Docker is already running" -ForegroundColor Green
+            Write-Host "Docker is already running" -ForegroundColor Green
         } catch {
-            Write-Host "🔄 Starting Docker Desktop..." -ForegroundColor Yellow
-            Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -WindowStyle Hidden
+            Write-Host "Starting Docker Desktop..." -ForegroundColor Yellow
+            
+            # Try multiple common Docker Desktop paths
+            $dockerPaths = @(
+                "C:\Program Files\Docker\Docker\Docker Desktop.exe",
+                "$env:LOCALAPPDATA\Docker\Docker Desktop.exe",
+                "$env:PROGRAMFILES\Docker\Docker\Docker Desktop.exe"
+            )
+            
+            $dockerStarted = $false
+            foreach ($dockerPath in $dockerPaths) {
+                if (Test-Path $dockerPath) {
+                    Start-Process $dockerPath -WindowStyle Hidden
+                    $dockerStarted = $true
+                    break
+                }
+            }
+            
+            if (-not $dockerStarted) {
+                Write-Host "Docker Desktop not found. Please install Docker Desktop or start it manually." -ForegroundColor Red
+                Write-Host "Download from: https://www.docker.com/products/docker-desktop" -ForegroundColor Yellow
+                exit 1
+            }
             
             # Wait for Docker to be ready
             $timeout = 60
@@ -61,13 +82,18 @@ switch ($Command.ToLower()) {
                 Start-Sleep -Seconds 2
                 try {
                     docker version | Out-Null
-                    Write-Host "✅ Docker Desktop is now running!" -ForegroundColor Green
+                    Write-Host "Docker Desktop is now running!" -ForegroundColor Green
                     break
                 } catch { }
                 
                 if ($attempt -eq $timeout) {
-                    Write-Host "❌ Docker Desktop failed to start" -ForegroundColor Red
+                    Write-Host "Docker Desktop failed to start within $timeout seconds" -ForegroundColor Red
+                    Write-Host "Please start Docker Desktop manually and try again" -ForegroundColor Yellow
                     exit 1
+                }
+                
+                if ($attempt % 10 -eq 0) {
+                    Write-Host "Still waiting for Docker Desktop... ($attempt/$timeout)" -ForegroundColor Gray
                 }
             } while ($attempt -lt $timeout)
         }
@@ -75,11 +101,12 @@ switch ($Command.ToLower()) {
         # Now start MongoDB containers
         & .\scripts\start-mongodb.ps1
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Docker containers started successfully!" -ForegroundColor Green
-            Write-Host "📊 MongoDB: localhost:27017" -ForegroundColor Cyan
-            Write-Host "🚀 Use '.\Makefile.ps1 dev' to start the Rust application" -ForegroundColor Yellow
+            Write-Host "Docker containers started successfully!" -ForegroundColor Green
+            Write-Host "MongoDB: localhost:27017" -ForegroundColor Cyan
+            Write-Host "Use '.\Makefile.ps1 dev' to start the Rust application" -ForegroundColor Yellow
         } else {
-            Write-Host "❌ Failed to start Docker containers" -ForegroundColor Red
+            Write-Host "Failed to start Docker containers" -ForegroundColor Red
+            Write-Host "Try running: docker-compose up -d" -ForegroundColor Yellow
         }
     }
     
