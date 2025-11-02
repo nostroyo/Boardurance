@@ -42,8 +42,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Force loading to false since we disabled auth check
     authUtils.setLoading(false);
 
-    // Check authentication status on mount - temporarily disabled
-    // checkAuthStatus();
+    // Check authentication status on mount
+    checkAuthStatus();
 
     return unsubscribe;
   }, []);

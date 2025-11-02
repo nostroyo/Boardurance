@@ -14,11 +14,28 @@ export interface AuthState {
 }
 
 // Global auth state management
-let authState: AuthState = {
-  user: null,
-  isAuthenticated: false,
-  isLoading: false
+const loadAuthStateFromStorage = (): AuthState => {
+  try {
+    const stored = localStorage.getItem('authState');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        user: parsed.user,
+        isAuthenticated: !!parsed.user,
+        isLoading: false
+      };
+    }
+  } catch (error) {
+    console.error('Failed to load auth state from storage:', error);
+  }
+  return {
+    user: null,
+    isAuthenticated: false,
+    isLoading: false
+  };
 };
+
+let authState: AuthState = loadAuthStateFromStorage();
 
 // Auth state listeners for reactive updates
 type AuthStateListener = (state: AuthState) => void;
@@ -44,6 +61,15 @@ export const authUtils = {
   // Update auth state and notify listeners
   updateAuthState(updates: Partial<AuthState>): void {
     authState = { ...authState, ...updates };
+    // Save to localStorage
+    try {
+      localStorage.setItem('authState', JSON.stringify({
+        user: authState.user,
+        isAuthenticated: authState.isAuthenticated
+      }));
+    } catch (error) {
+      console.error('Failed to save auth state to storage:', error);
+    }
     authStateListeners.forEach(listener => listener(authState));
   },
 
@@ -58,6 +84,12 @@ export const authUtils = {
 
   // Clear current user (logout)
   clearCurrentUser(): void {
+    // Remove from localStorage
+    try {
+      localStorage.removeItem('authState');
+    } catch (error) {
+      console.error('Failed to remove auth state from storage:', error);
+    }
     this.updateAuthState({
       user: null,
       isAuthenticated: false,
