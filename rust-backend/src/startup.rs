@@ -5,7 +5,7 @@ use crate::configuration::{DatabaseSettings, Settings};
 use crate::routes::{health_check, test_items, players, races, auth};
 use crate::services::{JwtService, JwtConfig, SessionManager, SessionConfig};
 use crate::middleware::{AuthMiddleware, RequireRole};
-use axum::{routing::get, Router, middleware};
+use axum::{routing::get, Router};
 use mongodb::{Client, Database};
 use std::sync::Arc;
 
@@ -178,7 +178,7 @@ pub async fn run(
     // Create admin-protected routes with AppState and middleware
     let admin_routes = players::admin_routes()
         .layer(RequireRole::admin())
-        .layer(AuthMiddleware::new())
+        .layer(AuthMiddleware::new(app_state.jwt_service.clone(), app_state.session_manager.clone()))
         .with_state(app_state.clone());
 
     // Create main app with Database state for other routes

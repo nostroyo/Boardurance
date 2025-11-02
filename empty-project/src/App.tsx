@@ -7,6 +7,8 @@ import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import TeamPage from './components/TeamPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
+import AdminDashboard from './components/AdminDashboard';
 import './App.css';
 
 function App() {
@@ -33,6 +35,14 @@ function App() {
                 <ProtectedRoute>
                   <TeamPage />
                 </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin" 
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
               } 
             />
           </Routes>
