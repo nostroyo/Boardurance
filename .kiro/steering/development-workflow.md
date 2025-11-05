@@ -1,5 +1,8 @@
 # Development Workflow & Standards
 
+ALWAYS create a branch before starting developpment
+ALWAYS update Steering document before merge into main at the end of a feature
+
 ## Operational Doctrine
 
 ### Core Principles
@@ -39,17 +42,6 @@
 
 ## Task Management via Dart AI MCP
 
-### Task State Management
-- **MANDATORY**: Move tasks through proper states
-  - To Do → Doing → Complete
-- **MANDATORY**: Update task descriptions when changing states
-- **MANDATORY**: Update descriptions with completion details
-- **FORBIDDEN**: Creating new subtasks on Dartboard
-
-### MCP Integration
-- All task actions must go through Dart AI via MCP
-- Maintain task traceability and status updates
-- Document progress and completion in task descriptions
 
 ## Clarification Threshold
 Only consult user when:
