@@ -12,31 +12,41 @@ ALWAYS update Steering document before merge into main at the end of a feature
 - **Extreme Ownership**: Fix all related issues, update all consumers, leave system better
 
 ### Mandatory Workflow
-1. **Reconnaissance** (Read-Only Phase)
+1. **Branch Creation** (Before Starting Any Task)
+   - ALWAYS create a branch before starting development
+   - Use descriptive branch names (e.g., `feature/task-name`, `fix/issue-description`)
+   - Store branch creation practice in steering documents
+
+2. **Reconnaissance** (Read-Only Phase)
    - Repository inventory and dependency analysis
    - Configuration corpus review
    - Idiomatic pattern inference
    - Quality gates identification
    - Produce reconnaissance digest (≤200 lines)
 
-2. **Planning & Context**
+3. **Planning & Context**
    - Read before write; reread after write
    - Account for full system impact
    - Plan updates for all consumers/dependencies
 
-3. **Execution**
+4. **Execution**
    - Wrap all shell commands with timeout
    - Use non-interactive flags
    - Fail-fast semantics
    - Capture full output (stdout & stderr)
 
-4. **Verification**
+5. **Verification**
    - Run all quality gates
    - Autonomously fix failures
    - Reread altered artifacts
    - End-to-end workflow verification
 
-5. **Reporting**
+6. **Commit & Integration**
+   - ALWAYS commit after each task completion
+   - Use descriptive commit messages
+   - Update steering documents before merge into main at end of feature
+
+7. **Reporting**
    - Keep narratives in chat (no unsolicited files)
    - Use clear status legend (✅ ⚠️ 🚧)
 
@@ -57,5 +67,8 @@ Only consult user when:
 - Continuous improvement and learning
 
 ## GENERAL rules
+- **ALWAYS create a branch before starting development**
 - Always update documentation before coding
-- always commit after changes (changes must pass all tests)
+- Always commit after changes (changes must pass all tests)
+- Store branch creation workflow in steering documents
+- Update steering documents before merging into main at end of feature

@@ -13,8 +13,9 @@ use chrono::{DateTime, Utc};
 
 use crate::domain::{
     Race, Track, Sector, SectorType, RaceStatus, LapAction, LapResult, LapCharacteristic,
-    Car, Engine, Body, Pilot, MovementType,
+    MovementType,
 };
+use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateRaceRequest {
@@ -268,32 +269,7 @@ pub struct RaceMetadata {
     pub total_turns: u32,
 }
 
-// Car Validation Service
-pub struct CarValidationService;
 
-#[derive(Debug)]
-pub struct ValidatedCarData {
-    pub car: Car,
-    pub engine: Engine,
-    pub body: Body,
-    pub pilot: Pilot,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum CarValidationError {
-    #[error("Car not found: {0}")]
-    CarNotFound(Uuid),
-    #[error("Car does not belong to player")]
-    InvalidOwnership,
-    #[error("Car missing engine component")]
-    MissingEngine,
-    #[error("Car missing body component")]
-    MissingBody,
-    #[error("Car missing pilot component")]
-    MissingPilot,
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-}
 
 pub fn routes() -> Router<Database> {
     Router::new()
@@ -666,85 +642,7 @@ async fn process_individual_lap_action(
     }
 }
 
-// Car Validation Service Implementation
-impl CarValidationService {
-    pub async fn validate_car_for_race(
-        database: &Database,
-        _player_uuid: Uuid,
-        car_uuid: Uuid,
-    ) -> Result<ValidatedCarData, CarValidationError> {
-        // 1. Verify car exists and belongs to player
-        let car = Self::get_car_by_uuid(database, car_uuid).await?;
-        Self::verify_car_ownership(_player_uuid, &car)?;
-        
-        // 2. Validate car has all required components
-        let engine = Self::get_car_engine(database, &car).await?;
-        let body = Self::get_car_body(database, &car).await?;
-        let pilot = Self::get_car_pilot(database, &car).await?;
-        
-        // 3. Return validated car data
-        Ok(ValidatedCarData {
-            car,
-            engine,
-            body,
-            pilot,
-        })
-    }
-    
-    async fn get_car_by_uuid(database: &Database, car_uuid: Uuid) -> Result<Car, CarValidationError> {
-        let collection = database.collection::<Car>("cars");
-        let filter = doc! { "uuid": car_uuid.to_string() };
-        
-        match collection.find_one(filter, None).await {
-            Ok(Some(car)) => Ok(car),
-            Ok(None) => Err(CarValidationError::CarNotFound(car_uuid)),
-            Err(e) => Err(CarValidationError::DatabaseError(e.to_string())),
-        }
-    }
-    
-    fn verify_car_ownership(_player_uuid: Uuid, _car: &Car) -> Result<(), CarValidationError> {
-        // TODO: Implement proper ownership verification
-        // For now, we'll assume cars are owned by the requesting player
-        // In a real implementation, we'd check a player_cars table or similar
-        Ok(())
-    }
-    
-    async fn get_car_engine(database: &Database, car: &Car) -> Result<Engine, CarValidationError> {
-        let engine_uuid = car.engine_uuid.ok_or(CarValidationError::MissingEngine)?;
-        let collection = database.collection::<Engine>("engines");
-        let filter = doc! { "uuid": engine_uuid.to_string() };
-        
-        match collection.find_one(filter, None).await {
-            Ok(Some(engine)) => Ok(engine),
-            Ok(None) => Err(CarValidationError::MissingEngine),
-            Err(e) => Err(CarValidationError::DatabaseError(e.to_string())),
-        }
-    }
-    
-    async fn get_car_body(database: &Database, car: &Car) -> Result<Body, CarValidationError> {
-        let body_uuid = car.body_uuid.ok_or(CarValidationError::MissingBody)?;
-        let collection = database.collection::<Body>("bodies");
-        let filter = doc! { "uuid": body_uuid.to_string() };
-        
-        match collection.find_one(filter, None).await {
-            Ok(Some(body)) => Ok(body),
-            Ok(None) => Err(CarValidationError::MissingBody),
-            Err(e) => Err(CarValidationError::DatabaseError(e.to_string())),
-        }
-    }
-    
-    async fn get_car_pilot(database: &Database, car: &Car) -> Result<Pilot, CarValidationError> {
-        let pilot_uuid = car.pilot_uuid.ok_or(CarValidationError::MissingPilot)?;
-        let collection = database.collection::<Pilot>("pilots");
-        let filter = doc! { "uuid": pilot_uuid.to_string() };
-        
-        match collection.find_one(filter, None).await {
-            Ok(Some(pilot)) => Ok(pilot),
-            Ok(None) => Err(CarValidationError::MissingPilot),
-            Err(e) => Err(CarValidationError::DatabaseError(e.to_string())),
-        }
-    }
-}
+
 
 // Enhanced API Endpoint Implementations
 
