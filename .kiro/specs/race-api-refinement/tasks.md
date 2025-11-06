@@ -71,7 +71,10 @@
     - _Requirements: 1.5, 7.3_
 
 - [ ] 4. Enhance race processing logic for individual actions
-  - [ ] 4.1 Implement individual lap action processing
+  - [-] 4.1 Implement individual lap action processing
+
+
+
     - Add `process_individual_lap_action` method to Race struct
     - Store pending actions until all players submit
     - Calculate performance using validated car data and boost selection

@@ -2,7 +2,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+use crate::services::car_validation::ValidatedCarData;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Race {
@@ -22,6 +24,9 @@ pub struct Race {
     pub created_at: DateTime<Utc>,
     #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
+    // Individual lap action processing fields
+    pub pending_actions: Vec<LapAction>,
+    pub action_submissions: HashMap<Uuid, DateTime<Utc>>, // Track submission times
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -114,6 +119,31 @@ pub enum MovementType {
     FinishedRace,
 }
 
+/// Result of processing an individual lap action
+#[derive(Debug)]
+pub enum IndividualLapResult {
+    /// Action was recorded, waiting for other players
+    ActionRecorded {
+        predicted_performance: PerformanceCalculation,
+        waiting_for_players: Vec<Uuid>,
+    },
+    /// All actions submitted, lap was processed
+    LapProcessed(LapResult),
+}
+
+/// Detailed performance calculation breakdown
+#[derive(Debug, Clone)]
+pub struct PerformanceCalculation {
+    pub engine_contribution: u32,
+    pub body_contribution: u32,
+    pub pilot_contribution: u32,
+    pub base_value: u32,
+    pub sector_ceiling: u32,
+    pub capped_base_value: u32,
+    pub boost_value: u32,
+    pub final_value: u32,
+}
+
 impl Race {
     #[must_use]
     pub fn new(name: String, track: Track, total_laps: u32) -> Self {
@@ -130,6 +160,8 @@ impl Race {
             status: RaceStatus::Waiting,
             created_at: now,
             updated_at: now,
+            pending_actions: Vec::new(),
+            action_submissions: HashMap::new(),
         }
     }
 
@@ -294,6 +326,152 @@ impl Race {
             lap_characteristic: self.lap_characteristic.clone(),
             sector_positions: self.get_sector_positions(),
             movements,
+        })
+    }
+
+    /// Process individual lap action for a single player
+    /// Stores pending actions until all players submit, then processes simultaneous turn resolution
+    pub fn process_individual_lap_action(
+        &mut self,
+        player_uuid: Uuid,
+        boost_value: u32,
+        car_data: &ValidatedCarData,
+    ) -> Result<IndividualLapResult, String> {
+        if self.status != RaceStatus::InProgress {
+            return Err("Race is not in progress".to_string());
+        }
+
+        // 1. Validate player is in race and not finished
+        let participant = self.participants
+            .iter()
+            .find(|p| p.player_uuid == player_uuid)
+            .ok_or("Player not found in race")?;
+        
+        if participant.is_finished {
+            return Err("Player has already finished the race".to_string());
+        }
+
+        // 2. Check if player has already submitted an action for this turn
+        if self.pending_actions.iter().any(|a| a.player_uuid == player_uuid) {
+            return Err("Player has already submitted an action for this turn".to_string());
+        }
+
+        // 3. Validate boost value
+        if boost_value > 5 {
+            return Err(format!("Invalid boost value: {}", boost_value));
+        }
+
+        // 4. Calculate performance using validated car data
+        let performance = self.calculate_performance_with_car_data(
+            participant,
+            boost_value,
+            car_data,
+            &self.lap_characteristic,
+        )?;
+
+        // 5. Store action for batch processing
+        let action = LapAction {
+            player_uuid,
+            boost_value,
+        };
+        self.pending_actions.push(action);
+        self.action_submissions.insert(player_uuid, Utc::now());
+
+        // 6. Check if all participants have submitted actions
+        if self.all_actions_submitted() {
+            // Clone the pending actions to avoid borrowing issues
+            let actions_to_process = self.pending_actions.clone();
+            
+            // Process all actions simultaneously
+            let lap_result = self.process_lap(&actions_to_process)?;
+            
+            // Clear pending actions after processing
+            self.pending_actions.clear();
+            self.action_submissions.clear();
+            
+            Ok(IndividualLapResult::LapProcessed(lap_result))
+        } else {
+            // Return current state with action recorded
+            Ok(IndividualLapResult::ActionRecorded {
+                predicted_performance: performance,
+                waiting_for_players: self.get_pending_players(),
+            })
+        }
+    }
+
+    /// Check if all active participants have submitted actions
+    pub fn all_actions_submitted(&self) -> bool {
+        let active_participants: HashSet<Uuid> = self.participants
+            .iter()
+            .filter(|p| !p.is_finished)
+            .map(|p| p.player_uuid)
+            .collect();
+            
+        let submitted_actions: HashSet<Uuid> = self.pending_actions
+            .iter()
+            .map(|a| a.player_uuid)
+            .collect();
+            
+        active_participants == submitted_actions
+    }
+
+    /// Get list of players who haven't submitted actions yet
+    pub fn get_pending_players(&self) -> Vec<Uuid> {
+        let submitted: HashSet<Uuid> = self.pending_actions
+            .iter()
+            .map(|a| a.player_uuid)
+            .collect();
+            
+        self.participants
+            .iter()
+            .filter(|p| !p.is_finished && !submitted.contains(&p.player_uuid))
+            .map(|p| p.player_uuid)
+            .collect()
+    }
+
+    /// Calculate performance using validated car data and boost selection
+    fn calculate_performance_with_car_data(
+        &self,
+        participant: &RaceParticipant,
+        boost_value: u32,
+        car_data: &ValidatedCarData,
+        lap_characteristic: &LapCharacteristic,
+    ) -> Result<PerformanceCalculation, String> {
+        // Get performance values based on lap characteristic (convert u8 to u32)
+        let engine_value = match lap_characteristic {
+            LapCharacteristic::Straight => car_data.engine.straight_value as u32,
+            LapCharacteristic::Curve => car_data.engine.curve_value as u32,
+        };
+        
+        let body_value = match lap_characteristic {
+            LapCharacteristic::Straight => car_data.body.straight_value as u32,
+            LapCharacteristic::Curve => car_data.body.curve_value as u32,
+        };
+        
+        let pilot_value = match lap_characteristic {
+            LapCharacteristic::Straight => car_data.pilot.performance.straight_value as u32,
+            LapCharacteristic::Curve => car_data.pilot.performance.curve_value as u32,
+        };
+        
+        // Calculate base performance
+        let base_value = engine_value + body_value + pilot_value;
+        
+        // Apply sector performance ceiling to base value
+        let current_sector = &self.track.sectors[participant.current_sector as usize];
+        let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
+        
+        // Add boost to the capped base value
+        let final_value = capped_base_value + boost_value;
+        
+        Ok(PerformanceCalculation {
+            engine_contribution: engine_value,
+            body_contribution: body_value,
+            pilot_contribution: pilot_value,
+            base_value,
+            sector_ceiling: current_sector.max_value,
+            capped_base_value,
+            boost_value,
+            final_value,
         })
     }
 
@@ -1582,5 +1760,215 @@ mod tests {
         
         assert_eq!(sector_1_car.player_uuid, player_uuids[0]); // Best performer moved up
         assert_eq!(sector_0_car.player_uuid, player_uuids[1]); // Second performer stayed
+    }
+
+    #[test]
+    fn test_individual_lap_action_processing() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Individual Action Test".to_string(), track, 2);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        // Set both to start in sector 0
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            50,
+            45,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            40,
+            50,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(60, 65, 70, 55).unwrap();
+        let performance = PilotPerformance::new(30, 35).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Test 1: First player submits action, should be recorded
+        let result1 = race.process_individual_lap_action(
+            player_uuids[0],
+            3,
+            &car_data,
+        ).unwrap();
+        
+        match result1 {
+            IndividualLapResult::ActionRecorded { predicted_performance, waiting_for_players } => {
+                assert_eq!(predicted_performance.boost_value, 3);
+                assert_eq!(waiting_for_players.len(), 1);
+                assert_eq!(waiting_for_players[0], player_uuids[1]);
+            }
+            _ => panic!("Expected ActionRecorded result"),
+        }
+        
+        // Verify pending actions are stored
+        assert_eq!(race.pending_actions.len(), 1);
+        assert_eq!(race.pending_actions[0].player_uuid, player_uuids[0]);
+        assert_eq!(race.pending_actions[0].boost_value, 3);
+        
+        // Test 2: Second player submits action, should process lap
+        let result2 = race.process_individual_lap_action(
+            player_uuids[1],
+            2,
+            &car_data,
+        ).unwrap();
+        
+        match result2 {
+            IndividualLapResult::LapProcessed(lap_result) => {
+                assert_eq!(lap_result.movements.len(), 2);
+                // Both players should have moved (performance exceeds sector 0 max)
+                assert!(lap_result.movements.iter().any(|m| m.movement_type == MovementType::MovedUp));
+            }
+            _ => panic!("Expected LapProcessed result"),
+        }
+        
+        // Verify pending actions are cleared after processing
+        assert_eq!(race.pending_actions.len(), 0);
+        assert_eq!(race.action_submissions.len(), 0);
+        
+        // Test 3: Try to submit action for same player again in the same turn (should fail)
+        // First, let's add an action to simulate a pending state
+        race.pending_actions.push(LapAction {
+            player_uuid: player_uuids[0],
+            boost_value: 1,
+        });
+        
+        let result3 = race.process_individual_lap_action(
+            player_uuids[0],
+            1,
+            &car_data,
+        );
+        
+        // This should fail because player already submitted an action
+        assert!(result3.is_err());
+        assert!(result3.unwrap_err().contains("already submitted an action"));
+        
+        // Clear the test action
+        race.pending_actions.clear();
+    }
+
+    #[test]
+    fn test_individual_lap_action_validation() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Validation Test".to_string(), track, 2);
+        
+        let player_uuid = Uuid::new_v4();
+        let car_uuid = Uuid::new_v4();
+        let pilot_uuid = Uuid::new_v4();
+        
+        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        race.participants[0].current_sector = 0;
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            50,
+            45,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            40,
+            50,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(60, 65, 70, 55).unwrap();
+        let performance = PilotPerformance::new(30, 35).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Test invalid boost value
+        let result = race.process_individual_lap_action(
+            player_uuid,
+            6, // Invalid: max is 5
+            &car_data,
+        );
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid boost value"));
+        
+        // Test non-existent player
+        let non_existent_player = Uuid::new_v4();
+        let result = race.process_individual_lap_action(
+            non_existent_player,
+            3,
+            &car_data,
+        );
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Player not found"));
+        
+        // Test race not in progress
+        race.status = RaceStatus::Finished;
+        let result = race.process_individual_lap_action(
+            player_uuid,
+            3,
+            &car_data,
+        );
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Race is not in progress"));
     }
 }

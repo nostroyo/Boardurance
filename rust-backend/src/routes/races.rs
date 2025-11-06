@@ -323,6 +323,8 @@ async fn register_player_in_race(
     let update = doc! { 
         "$set": { 
             "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
+            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
+            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -599,7 +601,7 @@ async fn process_individual_lap_action(
     race_uuid: Uuid,
     player_uuid: Uuid,
     boost_value: u32,
-    _car_data: &ValidatedCarData,
+    car_data: &ValidatedCarData,
 ) -> Result<Option<Race>, mongodb::error::Error> {
     let collection = database.collection::<Race>("races");
     
@@ -608,23 +610,10 @@ async fn process_individual_lap_action(
         return Ok(None);
     };
 
-    // Validate race is in progress
-    if race.status != RaceStatus::InProgress {
-        return Err(mongodb::error::Error::custom("Race is not in progress"));
-    }
-
-    // TODO: Implement individual lap action processing
-    // For now, we'll use the existing process_lap method with a single action
-    let actions = vec![LapAction {
-        player_uuid,
-        boost_value,
-    }];
-
-    // Process the lap if all participants have submitted actions
-    // This is a simplified implementation - the full implementation would track pending actions
-    match race.process_lap(&actions) {
-        Ok(_lap_result) => {
-            // Update the race in database
+    // Process individual lap action using the new method
+    match race.process_individual_lap_action(player_uuid, boost_value, car_data) {
+        Ok(_individual_result) => {
+            // Update the race in database with new fields
             let filter = doc! { "uuid": race_uuid.to_string() };
             let update = doc! { 
                 "$set": { 
@@ -632,6 +621,8 @@ async fn process_individual_lap_action(
                     "current_lap": race.current_lap,
                     "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
                     "status": mongodb::bson::to_bson(&race.status).unwrap(),
+                    "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
+                    "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
                     "updated_at": BsonDateTime::now()
                 } 
             };
@@ -1410,6 +1401,8 @@ pub async fn join_race_in_db(
     let update = doc! { 
         "$set": { 
             "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
+            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
+            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1441,6 +1434,8 @@ pub async fn start_race_in_db(
             "status": mongodb::bson::to_bson(&race.status).unwrap(),
             "current_lap": race.current_lap,
             "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
+            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
+            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1475,6 +1470,8 @@ pub async fn process_lap_in_db(
             "current_lap": race.current_lap,
             "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
             "status": mongodb::bson::to_bson(&race.status).unwrap(),
+            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
+            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
