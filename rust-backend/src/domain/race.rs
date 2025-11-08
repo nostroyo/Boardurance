@@ -27,6 +27,7 @@ pub struct Race {
     // Individual lap action processing fields
     pub pending_actions: Vec<LapAction>,
     pub action_submissions: HashMap<Uuid, DateTime<Utc>>, // Track submission times
+    pub pending_performance_calculations: HashMap<Uuid, PerformanceCalculation>, // Store performance calculations
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -86,6 +87,14 @@ pub struct LapAction {
     pub boost_value: u32, // 0 to 5
 }
 
+/// Extended lap action with performance calculation
+/// Used internally to store both the action and its calculated performance
+#[derive(Debug, Clone)]
+pub struct LapActionWithPerformance {
+    pub action: LapAction,
+    pub performance: PerformanceCalculation,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct LapResult {
     pub lap: u32,
@@ -132,7 +141,7 @@ pub enum IndividualLapResult {
 }
 
 /// Detailed performance calculation breakdown
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PerformanceCalculation {
     pub engine_contribution: u32,
     pub body_contribution: u32,
@@ -162,6 +171,7 @@ impl Race {
             updated_at: now,
             pending_actions: Vec::new(),
             action_submissions: HashMap::new(),
+            pending_performance_calculations: HashMap::new(),
         }
     }
 
@@ -238,6 +248,51 @@ impl Race {
         }
     }
 
+    /// Process lap with pre-calculated performance values from car components
+    /// This is the new method that uses actual car data for performance calculation
+    pub fn process_lap_with_car_data(&mut self, actions: &[LapAction], performance_calculations: &HashMap<Uuid, PerformanceCalculation>) -> Result<LapResult, String> {
+        if self.status != RaceStatus::InProgress {
+            return Err("Race is not in progress".to_string());
+        }
+
+        // Validate all participants have submitted actions
+        for participant in &self.participants {
+            if participant.is_finished {
+                continue;
+            }
+            if !actions.iter().any(|a| a.player_uuid == participant.player_uuid) {
+                return Err(format!("Missing action for player {}", participant.player_uuid));
+            }
+        }
+
+        // Validate boost values
+        for action in actions {
+            if action.boost_value > 5 {
+                return Err(format!("Invalid boost value {} for player {}", action.boost_value, action.player_uuid));
+            }
+        }
+
+        // Use pre-calculated performance values from car components
+        let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
+        for action in actions {
+            if let Some(participant) = self.participants.iter().find(|p| p.player_uuid == action.player_uuid) {
+                if !participant.is_finished {
+                    // Use the pre-calculated performance from car data
+                    if let Some(performance) = performance_calculations.get(&action.player_uuid) {
+                        participant_values.insert(action.player_uuid, performance.final_value);
+                    } else {
+                        return Err(format!("Missing performance calculation for player {}", action.player_uuid));
+                    }
+                }
+            }
+        }
+
+        self.process_lap_internal(actions, participant_values)
+    }
+
+    /// Legacy process_lap method for backward compatibility with tests
+    /// Uses placeholder base value of 10 for performance calculation
+    /// New code should use process_lap_with_car_data instead
     pub fn process_lap(&mut self, actions: &[LapAction]) -> Result<LapResult, String> {
         if self.status != RaceStatus::InProgress {
             return Err("Race is not in progress".to_string());
@@ -260,14 +315,13 @@ impl Race {
             }
         }
 
-        // Calculate final values for all participants
+        // Calculate final values for all participants using placeholder base value
         let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
         for action in actions {
             if let Some(participant) = self.participants.iter().find(|p| p.player_uuid == action.player_uuid) {
                 if !participant.is_finished {
-                    // TODO: Calculate base value from car engine + body + pilot performance
-                    // For now, use a simple base value
-                    let base_value = 10; // Placeholder
+                    // Use placeholder base value for backward compatibility
+                    let base_value = 10;
                     
                     // Apply sector performance ceiling: cap base value to current sector's max_value
                     let current_sector = &self.track.sectors[participant.current_sector as usize];
@@ -279,6 +333,12 @@ impl Race {
                 }
             }
         }
+
+        self.process_lap_internal(actions, participant_values)
+    }
+
+    /// Internal method that processes lap movements after performance values are calculated
+    fn process_lap_internal(&mut self, actions: &[LapAction], participant_values: HashMap<Uuid, u32>) -> Result<LapResult, String> {
 
         // Process movements using the new algorithm: best sector to worst sector
         let mut movements = Vec::new();
@@ -369,25 +429,28 @@ impl Race {
             &self.lap_characteristic,
         )?;
 
-        // 5. Store action for batch processing
+        // 5. Store action and performance calculation for batch processing
         let action = LapAction {
             player_uuid,
             boost_value,
         };
         self.pending_actions.push(action);
         self.action_submissions.insert(player_uuid, Utc::now());
+        self.pending_performance_calculations.insert(player_uuid, performance.clone());
 
         // 6. Check if all participants have submitted actions
         if self.all_actions_submitted() {
-            // Clone the pending actions to avoid borrowing issues
+            // Clone the pending actions and performance calculations to avoid borrowing issues
             let actions_to_process = self.pending_actions.clone();
+            let performance_calculations = self.pending_performance_calculations.clone();
             
-            // Process all actions simultaneously
-            let lap_result = self.process_lap(&actions_to_process)?;
+            // Process all actions simultaneously with their performance calculations
+            let lap_result = self.process_lap_with_car_data(&actions_to_process, &performance_calculations)?;
             
-            // Clear pending actions after processing
+            // Clear pending actions and calculations after processing
             self.pending_actions.clear();
             self.action_submissions.clear();
+            self.pending_performance_calculations.clear();
             
             Ok(IndividualLapResult::LapProcessed(lap_result))
         } else {
@@ -429,6 +492,42 @@ impl Race {
             .collect()
     }
 
+    /// Calculate performance for all participants using their car data
+    /// This is used for batch processing when all car data is available upfront
+    pub fn calculate_all_performances(
+        &self,
+        actions: &[LapAction],
+        car_data_map: &HashMap<Uuid, ValidatedCarData>,
+    ) -> Result<HashMap<Uuid, PerformanceCalculation>, String> {
+        let mut performance_calculations = HashMap::new();
+        
+        for action in actions {
+            let participant = self.participants
+                .iter()
+                .find(|p| p.player_uuid == action.player_uuid)
+                .ok_or_else(|| format!("Player {} not found in race", action.player_uuid))?;
+            
+            if participant.is_finished {
+                continue;
+            }
+            
+            let car_data = car_data_map
+                .get(&action.player_uuid)
+                .ok_or_else(|| format!("Car data not found for player {}", action.player_uuid))?;
+            
+            let performance = self.calculate_performance_with_car_data(
+                participant,
+                action.boost_value,
+                car_data,
+                &self.lap_characteristic,
+            )?;
+            
+            performance_calculations.insert(action.player_uuid, performance);
+        }
+        
+        Ok(performance_calculations)
+    }
+
     /// Calculate performance using validated car data and boost selection
     fn calculate_performance_with_car_data(
         &self,
@@ -460,8 +559,20 @@ impl Race {
         let current_sector = &self.track.sectors[participant.current_sector as usize];
         let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
         
-        // Add boost to the capped base value
-        let final_value = capped_base_value + boost_value;
+        // Apply boost as a multiplier to make it more significant
+        // Boost multiplier: 1.0 + (boost_value * 0.08)
+        // This gives:
+        // - Boost 0: 1.0x (no change)
+        // - Boost 1: 1.08x (+8%)
+        // - Boost 2: 1.16x (+16%)
+        // - Boost 3: 1.24x (+24%)
+        // - Boost 4: 1.32x (+32%)
+        // - Boost 5: 1.40x (+40%)
+        let boost_multiplier = 1.0 + (boost_value as f64 * 0.08);
+        let boosted_value = (capped_base_value as f64 * boost_multiplier).round() as u32;
+        
+        // Final value is the boosted value
+        let final_value = boosted_value;
         
         Ok(PerformanceCalculation {
             engine_contribution: engine_value,
@@ -1791,21 +1902,21 @@ mod tests {
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
             ComponentRarity::Common,
-            50,
-            45,
+            5,
+            4,
             None,
         ).unwrap();
         
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
-            40,
-            50,
+            4,
+            5,
             None,
         ).unwrap();
         
-        let skills = PilotSkills::new(60, 65, 70, 55).unwrap();
-        let performance = PilotPerformance::new(30, 35).unwrap();
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
             PilotName::parse("Test Pilot").unwrap(),
             PilotClass::AllRounder,
@@ -1906,21 +2017,21 @@ mod tests {
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
             ComponentRarity::Common,
-            50,
-            45,
+            5,
+            4,
             None,
         ).unwrap();
         
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
-            40,
-            50,
+            4,
+            5,
             None,
         ).unwrap();
         
-        let skills = PilotSkills::new(60, 65, 70, 55).unwrap();
-        let performance = PilotPerformance::new(30, 35).unwrap();
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
             PilotName::parse("Test Pilot").unwrap(),
             PilotClass::AllRounder,

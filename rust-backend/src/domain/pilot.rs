@@ -45,16 +45,16 @@ pub enum PilotRarity {
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct PilotSkills {
-    pub reaction_time: u8,    // 1-100 - affects acceleration
-    pub precision: u8,        // 1-100 - affects handling
-    pub focus: u8,           // 1-100 - affects consistency
-    pub stamina: u8,         // 1-100 - affects performance over time
+    pub reaction_time: u8,    // 0-10 - affects acceleration
+    pub precision: u8,        // 0-10 - affects handling
+    pub focus: u8,           // 0-10 - affects consistency
+    pub stamina: u8,         // 0-10 - affects performance over time
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct PilotPerformance {
-    pub straight_value: u8,  // 1-100
-    pub curve_value: u8,     // 1-100
+    pub straight_value: u8,  // 0-10
+    pub curve_value: u8,     // 0-10
 }
 
 impl Pilot {
@@ -123,28 +123,28 @@ impl Pilot {
     pub fn get_class_bonus(&self) -> PilotClassBonus {
         match self.pilot_class {
             PilotClass::Speedster => PilotClassBonus {
-                speed_bonus: 15,
-                acceleration_bonus: 20,
+                speed_bonus: 2,
+                acceleration_bonus: 3,
                 handling_bonus: 0,
                 durability_bonus: 0,
             },
             PilotClass::Technician => PilotClassBonus {
                 speed_bonus: 0,
-                acceleration_bonus: 5,
-                handling_bonus: 25,
-                durability_bonus: 10,
+                acceleration_bonus: 1,
+                handling_bonus: 3,
+                durability_bonus: 1,
             },
             PilotClass::Endurance => PilotClassBonus {
                 speed_bonus: 0,
                 acceleration_bonus: 0,
-                handling_bonus: 10,
-                durability_bonus: 30,
+                handling_bonus: 1,
+                durability_bonus: 4,
             },
             PilotClass::AllRounder => PilotClassBonus {
-                speed_bonus: 8,
-                acceleration_bonus: 8,
-                handling_bonus: 8,
-                durability_bonus: 8,
+                speed_bonus: 1,
+                acceleration_bonus: 1,
+                handling_bonus: 1,
+                durability_bonus: 1,
             },
         }
     }
@@ -199,17 +199,17 @@ impl PilotSkills {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.reaction_time == 0 || self.reaction_time > 100 {
-            return Err("Reaction time must be between 1 and 100".to_string());
+        if self.reaction_time > 10 {
+            return Err("Reaction time must be between 0 and 10".to_string());
         }
-        if self.precision == 0 || self.precision > 100 {
-            return Err("Precision must be between 1 and 100".to_string());
+        if self.precision > 10 {
+            return Err("Precision must be between 0 and 10".to_string());
         }
-        if self.focus == 0 || self.focus > 100 {
-            return Err("Focus must be between 1 and 100".to_string());
+        if self.focus > 10 {
+            return Err("Focus must be between 0 and 10".to_string());
         }
-        if self.stamina == 0 || self.stamina > 100 {
-            return Err("Stamina must be between 1 and 100".to_string());
+        if self.stamina > 10 {
+            return Err("Stamina must be between 0 and 10".to_string());
         }
         Ok(())
     }
@@ -223,11 +223,11 @@ impl PilotPerformance {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.straight_value == 0 || self.straight_value > 100 {
-            return Err("Pilot straight value must be between 1 and 100".to_string());
+        if self.straight_value > 10 {
+            return Err("Pilot straight value must be between 0 and 10".to_string());
         }
-        if self.curve_value == 0 || self.curve_value > 100 {
-            return Err("Pilot curve value must be between 1 and 100".to_string());
+        if self.curve_value > 10 {
+            return Err("Pilot curve value must be between 0 and 10".to_string());
         }
         Ok(())
     }
@@ -248,11 +248,11 @@ impl PilotRarity {
     #[must_use]
     pub fn get_max_skills(&self) -> u8 {
         match self {
-            PilotRarity::Rookie => 60,
-            PilotRarity::Professional => 70,
-            PilotRarity::Expert => 80,
-            PilotRarity::Champion => 90,
-            PilotRarity::Legend => 100,
+            PilotRarity::Rookie => 5,
+            PilotRarity::Professional => 6,
+            PilotRarity::Expert => 7,
+            PilotRarity::Champion => 9,
+            PilotRarity::Legend => 10,
         }
     }
 

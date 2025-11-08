@@ -325,6 +325,7 @@ async fn register_player_in_race(
             "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
             "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
             "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
+            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -623,6 +624,7 @@ async fn process_individual_lap_action(
                     "status": mongodb::bson::to_bson(&race.status).unwrap(),
                     "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
                     "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
+                    "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
                     "updated_at": BsonDateTime::now()
                 } 
             };
@@ -1403,6 +1405,7 @@ pub async fn join_race_in_db(
             "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
             "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
             "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
+            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1436,6 +1439,7 @@ pub async fn start_race_in_db(
             "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
             "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
             "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
+            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1472,6 +1476,7 @@ pub async fn process_lap_in_db(
             "status": mongodb::bson::to_bson(&race.status).unwrap(),
             "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
             "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
+            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
             "updated_at": BsonDateTime::now()
         } 
     };

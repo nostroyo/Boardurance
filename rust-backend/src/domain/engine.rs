@@ -12,8 +12,8 @@ pub struct Engine {
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: EngineName,
     pub rarity: ComponentRarity,
-    pub straight_value: u8,  // 1-100
-    pub curve_value: u8,     // 1-100
+    pub straight_value: u8,  // 0-10
+    pub curve_value: u8,     // 0-10
     #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
     #[schema(value_type = String, format = "date-time")]
@@ -40,11 +40,11 @@ impl Engine {
         curve_value: u8,
         nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
-        if straight_value == 0 || straight_value > 100 {
-            return Err("Engine straight value must be between 1 and 100".to_string());
+        if straight_value > 10 {
+            return Err("Engine straight value must be between 0 and 10".to_string());
         }
-        if curve_value == 0 || curve_value > 100 {
-            return Err("Engine curve value must be between 1 and 100".to_string());
+        if curve_value > 10 {
+            return Err("Engine curve value must be between 0 and 10".to_string());
         }
         
         let now = Utc::now();
@@ -61,11 +61,11 @@ impl Engine {
     }
 
     pub fn update_values(&mut self, straight_value: u8, curve_value: u8) -> Result<(), String> {
-        if straight_value == 0 || straight_value > 100 {
-            return Err("Engine straight value must be between 1 and 100".to_string());
+        if straight_value > 10 {
+            return Err("Engine straight value must be between 0 and 10".to_string());
         }
-        if curve_value == 0 || curve_value > 100 {
-            return Err("Engine curve value must be between 1 and 100".to_string());
+        if curve_value > 10 {
+            return Err("Engine curve value must be between 0 and 10".to_string());
         }
         
         self.straight_value = straight_value;
@@ -127,11 +127,11 @@ impl ComponentRarity {
     #[must_use]
     pub fn get_max_values(&self) -> u8 {
         match self {
-            ComponentRarity::Common => 70,
-            ComponentRarity::Uncommon => 75,
-            ComponentRarity::Rare => 85,
-            ComponentRarity::Epic => 95,
-            ComponentRarity::Legendary => 100,
+            ComponentRarity::Common => 6,
+            ComponentRarity::Uncommon => 7,
+            ComponentRarity::Rare => 8,
+            ComponentRarity::Epic => 9,
+            ComponentRarity::Legendary => 10,
         }
     }
 }

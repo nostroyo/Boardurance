@@ -317,8 +317,8 @@ mod tests {
         Engine::new(
             EngineName::parse("Test Engine").unwrap(),
             ComponentRarity::Common,
-            50,
-            45,
+            5,
+            4,
             None,
         )
         .unwrap()
@@ -328,16 +328,16 @@ mod tests {
         Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
-            40,
-            50,
+            4,
+            5,
             None,
         )
         .unwrap()
     }
 
     fn create_test_pilot() -> Pilot {
-        let skills = PilotSkills::new(60, 65, 70, 55).unwrap();
-        let performance = PilotPerformance::new(30, 35).unwrap();
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
 
         Pilot::new(
             PilotName::parse("Test Pilot").unwrap(),
