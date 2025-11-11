@@ -6,6 +6,99 @@ use std::collections::{HashMap, HashSet};
 
 use crate::services::car_validation::ValidatedCarData;
 
+/// Boost hand management system for tracking available boost cards
+/// Each player has 5 boost cards (0, 1, 2, 3, 4) that can be used once per cycle
+/// When all cards are used, the hand automatically replenishes
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct BoostHand {
+    /// Availability state for each boost card (0-4)
+    /// true = available, false = used
+    pub cards: HashMap<u8, bool>,
+    
+    /// Current cycle number (starts at 1)
+    pub current_cycle: u32,
+    
+    /// Total number of cycles completed
+    pub cycles_completed: u32,
+    
+    /// Number of cards remaining in current cycle
+    pub cards_remaining: u32,
+}
+
+impl BoostHand {
+    /// Initialize a new boost hand with all cards available
+    #[must_use]
+    pub fn new() -> Self {
+        let mut cards = HashMap::new();
+        for i in 0..=4 {
+            cards.insert(i, true);
+        }
+        
+        Self {
+            cards,
+            current_cycle: 1,
+            cycles_completed: 0,
+            cards_remaining: 5,
+        }
+    }
+    
+    /// Check if a specific boost card is available
+    #[must_use]
+    pub fn is_card_available(&self, boost_value: u8) -> bool {
+        self.cards.get(&boost_value).copied().unwrap_or(false)
+    }
+    
+    /// Use a boost card (mark as unavailable)
+    /// Returns Ok(()) if successful, Err with message if card is not available
+    /// Automatically triggers replenishment when all cards are used
+    pub fn use_card(&mut self, boost_value: u8) -> Result<(), String> {
+        if !self.is_card_available(boost_value) {
+            return Err(format!("Boost card {} is not available", boost_value));
+        }
+        
+        self.cards.insert(boost_value, false);
+        self.cards_remaining -= 1;
+        
+        // Check if all cards are used - trigger replenishment
+        if self.cards_remaining == 0 {
+            self.replenish();
+        }
+        
+        Ok(())
+    }
+    
+    /// Replenish all boost cards (internal method)
+    /// Called automatically when all cards have been used
+    fn replenish(&mut self) {
+        for i in 0..=4 {
+            self.cards.insert(i, true);
+        }
+        self.cards_remaining = 5;
+        self.cycles_completed += 1;
+        self.current_cycle += 1;
+    }
+    
+    /// Get list of available boost card values
+    #[must_use]
+    pub fn get_available_cards(&self) -> Vec<u8> {
+        let mut available: Vec<u8> = self.cards
+            .iter()
+            .filter(|(_, &is_available)| is_available)
+            .map(|(&value, _)| value)
+            .collect();
+        
+        // Sort for consistent ordering
+        available.sort_unstable();
+        available
+    }
+}
+
+impl Default for BoostHand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Race {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
@@ -949,6 +1042,186 @@ mod tests {
 
         Track::new("Test Track".to_string(), sectors).unwrap()
     }
+
+    // ========== BoostHand Tests ==========
+
+    #[test]
+    fn test_boost_hand_initialization() {
+        let hand = BoostHand::new();
+        
+        // Verify initial state
+        assert_eq!(hand.cards_remaining, 5, "Should start with 5 cards");
+        assert_eq!(hand.current_cycle, 1, "Should start at cycle 1");
+        assert_eq!(hand.cycles_completed, 0, "Should have 0 completed cycles");
+        
+        // Verify all cards are available
+        for i in 0..=4 {
+            assert!(hand.is_card_available(i), "Card {} should be available", i);
+        }
+        
+        // Verify cards HashMap has correct size
+        assert_eq!(hand.cards.len(), 5, "Should have 5 cards in HashMap");
+    }
+
+    #[test]
+    fn test_boost_hand_use_card() {
+        let mut hand = BoostHand::new();
+        
+        // Use card 2
+        let result = hand.use_card(2);
+        assert!(result.is_ok(), "Should successfully use card 2");
+        
+        // Verify card 2 is now unavailable
+        assert!(!hand.is_card_available(2), "Card 2 should be unavailable");
+        assert_eq!(hand.cards_remaining, 4, "Should have 4 cards remaining");
+        
+        // Verify other cards are still available
+        assert!(hand.is_card_available(0), "Card 0 should still be available");
+        assert!(hand.is_card_available(1), "Card 1 should still be available");
+        assert!(hand.is_card_available(3), "Card 3 should still be available");
+        assert!(hand.is_card_available(4), "Card 4 should still be available");
+    }
+
+    #[test]
+    fn test_boost_hand_cannot_use_same_card_twice() {
+        let mut hand = BoostHand::new();
+        
+        // Use card 3 first time
+        let result1 = hand.use_card(3);
+        assert!(result1.is_ok(), "First use should succeed");
+        
+        // Try to use card 3 again
+        let result2 = hand.use_card(3);
+        assert!(result2.is_err(), "Second use should fail");
+        assert_eq!(
+            result2.unwrap_err(),
+            "Boost card 3 is not available",
+            "Should return correct error message"
+        );
+    }
+
+    #[test]
+    fn test_boost_hand_replenishment() {
+        let mut hand = BoostHand::new();
+        
+        // Use all 5 cards
+        hand.use_card(2).unwrap();
+        assert_eq!(hand.cards_remaining, 4);
+        
+        hand.use_card(0).unwrap();
+        assert_eq!(hand.cards_remaining, 3);
+        
+        hand.use_card(4).unwrap();
+        assert_eq!(hand.cards_remaining, 2);
+        
+        hand.use_card(1).unwrap();
+        assert_eq!(hand.cards_remaining, 1);
+        
+        // Using the last card should trigger replenishment
+        hand.use_card(3).unwrap();
+        
+        // Verify replenishment occurred
+        assert_eq!(hand.cards_remaining, 5, "All cards should be replenished");
+        assert_eq!(hand.current_cycle, 2, "Should be in cycle 2");
+        assert_eq!(hand.cycles_completed, 1, "Should have 1 completed cycle");
+        
+        // Verify all cards are available again
+        for i in 0..=4 {
+            assert!(hand.is_card_available(i), "Card {} should be available after replenishment", i);
+        }
+    }
+
+    #[test]
+    fn test_boost_hand_multiple_cycles() {
+        let mut hand = BoostHand::new();
+        
+        // Complete first cycle
+        for i in 0..=4 {
+            hand.use_card(i).unwrap();
+        }
+        assert_eq!(hand.current_cycle, 2);
+        assert_eq!(hand.cycles_completed, 1);
+        
+        // Complete second cycle
+        for i in 0..=4 {
+            hand.use_card(i).unwrap();
+        }
+        assert_eq!(hand.current_cycle, 3);
+        assert_eq!(hand.cycles_completed, 2);
+        
+        // Verify all cards are still available
+        for i in 0..=4 {
+            assert!(hand.is_card_available(i), "Card {} should be available", i);
+        }
+    }
+
+    #[test]
+    fn test_boost_hand_get_available_cards() {
+        let mut hand = BoostHand::new();
+        
+        // Initially all cards should be available
+        let available = hand.get_available_cards();
+        assert_eq!(available.len(), 5, "Should have 5 available cards");
+        assert_eq!(available, vec![0, 1, 2, 3, 4], "Should return sorted list of all cards");
+        
+        // Use some cards
+        hand.use_card(1).unwrap();
+        hand.use_card(3).unwrap();
+        
+        let available = hand.get_available_cards();
+        assert_eq!(available.len(), 3, "Should have 3 available cards");
+        assert_eq!(available, vec![0, 2, 4], "Should return sorted list of available cards");
+        assert!(!available.contains(&1), "Should not include used card 1");
+        assert!(!available.contains(&3), "Should not include used card 3");
+    }
+
+    #[test]
+    fn test_boost_hand_is_card_available_invalid_card() {
+        let hand = BoostHand::new();
+        
+        // Test with invalid card values
+        assert!(!hand.is_card_available(5), "Card 5 should not be available (out of range)");
+        assert!(!hand.is_card_available(10), "Card 10 should not be available (out of range)");
+        assert!(!hand.is_card_available(255), "Card 255 should not be available (out of range)");
+    }
+
+    #[test]
+    fn test_boost_hand_default_trait() {
+        let hand = BoostHand::default();
+        
+        // Verify default is same as new()
+        assert_eq!(hand.cards_remaining, 5);
+        assert_eq!(hand.current_cycle, 1);
+        assert_eq!(hand.cycles_completed, 0);
+        
+        for i in 0..=4 {
+            assert!(hand.is_card_available(i));
+        }
+    }
+
+    #[test]
+    fn test_boost_hand_use_card_sequence() {
+        let mut hand = BoostHand::new();
+        
+        // Use cards in a specific sequence
+        let sequence = vec![4, 1, 3, 0, 2];
+        
+        for (index, &card) in sequence.iter().enumerate() {
+            let result = hand.use_card(card);
+            assert!(result.is_ok(), "Should successfully use card {}", card);
+            assert_eq!(
+                hand.cards_remaining,
+                5 - (index as u32) - 1,
+                "Cards remaining should decrease"
+            );
+        }
+        
+        // After using all cards, should be replenished
+        assert_eq!(hand.cards_remaining, 5);
+        assert_eq!(hand.cycles_completed, 1);
+    }
+
+    // ========== End BoostHand Tests ==========
 
     #[test]
     fn test_create_race() {
