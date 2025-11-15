@@ -27,6 +27,7 @@ pub struct RequireOwnership {
 
 impl RequireOwnership {
     /// Factory method for player ownership validation
+    #[must_use] 
     pub fn player(param_name: &str) -> Self {
         Self {
             validation_type: OwnershipValidationType::Player(param_name.to_string()),
@@ -34,6 +35,7 @@ impl RequireOwnership {
     }
     
     /// Factory method for race ownership validation
+    #[must_use] 
     pub fn race(param_name: &str) -> Self {
         Self {
             validation_type: OwnershipValidationType::Race(param_name.to_string()),
@@ -88,24 +90,21 @@ where
 
         Box::pin(async move {
             // Extract user context (set by auth middleware)
-            let user_context = match request.extensions().get::<UserContext>() {
-                Some(context) => context,
-                None => {
-                    // No user context means auth middleware didn't run
-                    let error_response = Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .header("content-type", "application/json")
-                        .body(
-                            json!({
-                                "error": "authentication_required",
-                                "message": "Authentication is required"
-                            })
-                            .to_string()
-                            .into(),
-                        )
-                        .unwrap();
-                    return Ok(error_response);
-                }
+            let Some(user_context) = request.extensions().get::<UserContext>() else {
+                // No user context means auth middleware didn't run
+                let error_response = Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(
+                        json!({
+                            "error": "authentication_required",
+                            "message": "Authentication is required"
+                        })
+                        .to_string()
+                        .into(),
+                    )
+                    .unwrap();
+                return Ok(error_response);
             };
 
             // Validate ownership based on type
@@ -154,6 +153,7 @@ pub struct RequireRole {
 
 impl RequireRole {
     /// Factory method for admin role requirement
+    #[must_use] 
     pub fn admin() -> Self {
         Self {
             required_role: UserRole::Admin,
@@ -161,6 +161,7 @@ impl RequireRole {
     }
     
     /// Factory method for super admin role requirement
+    #[must_use] 
     pub fn super_admin() -> Self {
         Self {
             required_role: UserRole::SuperAdmin,
@@ -168,13 +169,15 @@ impl RequireRole {
     }
     
     /// Factory method for player role requirement
+    #[must_use] 
     pub fn player() -> Self {
         Self {
             required_role: UserRole::Player,
         }
     }
 
-    /// Factory method for any admin role (Admin or SuperAdmin)
+    /// Factory method for any admin role (Admin or `SuperAdmin`)
+    #[must_use] 
     pub fn any_admin() -> Self {
         Self {
             required_role: UserRole::Admin, // We'll check is_admin() which covers both
@@ -222,24 +225,21 @@ where
 
         Box::pin(async move {
             // Extract user context (set by auth middleware)
-            let user_context = match request.extensions().get::<UserContext>() {
-                Some(context) => context,
-                None => {
-                    // No user context means auth middleware didn't run
-                    let error_response = Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .header("content-type", "application/json")
-                        .body(
-                            json!({
-                                "error": "authentication_required",
-                                "message": "Authentication is required"
-                            })
-                            .to_string()
-                            .into(),
-                        )
-                        .unwrap();
-                    return Ok(error_response);
-                }
+            let Some(user_context) = request.extensions().get::<UserContext>() else {
+                // No user context means auth middleware didn't run
+                let error_response = Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(
+                        json!({
+                            "error": "authentication_required",
+                            "message": "Authentication is required"
+                        })
+                        .to_string()
+                        .into(),
+                    )
+                    .unwrap();
+                return Ok(error_response);
             };
 
             // Check role authorization
@@ -335,7 +335,7 @@ fn extract_uuid_from_path(request: &Request, param_name: &str) -> Option<Uuid> {
 fn extract_param_from_path(path: &str, param_name: &str) -> Option<String> {
     // Simple path parameter extraction
     // Look for pattern like "/players/{uuid}/cars" where param_name is "player_uuid"
-    let _param_pattern = format!(":{}", param_name);
+    let _param_pattern = format!(":{param_name}");
     
     // This is a simplified implementation
     // In practice, you'd use Axum's built-in path parameter extraction

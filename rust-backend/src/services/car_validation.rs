@@ -54,6 +54,7 @@ pub enum CarValidationError {
 
 impl CarValidationError {
     /// Returns the error code for API responses
+    #[must_use] 
     pub fn error_code(&self) -> &'static str {
         match self {
             CarValidationError::CarNotFound(_) => "CAR_NOT_FOUND",
@@ -74,16 +75,17 @@ impl CarValidationError {
     }
 
     /// Returns a user-friendly message for API responses
+    #[must_use] 
     pub fn user_message(&self) -> String {
         match self {
             CarValidationError::CarNotFound(uuid) => {
-                format!("The specified car ({}) was not found in your inventory", uuid)
+                format!("The specified car ({uuid}) was not found in your inventory")
             }
             CarValidationError::InvalidOwnership { player_uuid } => {
-                format!("You do not own this car. Player UUID: {}", player_uuid)
+                format!("You do not own this car. Player UUID: {player_uuid}")
             }
             CarValidationError::PlayerNotFound(uuid) => {
-                format!("Player not found: {}", uuid)
+                format!("Player not found: {uuid}")
             }
             CarValidationError::MissingEngine => {
                 "This car is missing an engine. Please equip an engine before racing.".to_string()
@@ -95,19 +97,19 @@ impl CarValidationError {
                 "This car is missing a pilot. Please assign a pilot before racing.".to_string()
             }
             CarValidationError::EngineNotFound(uuid) => {
-                format!("The engine ({}) assigned to this car was not found", uuid)
+                format!("The engine ({uuid}) assigned to this car was not found")
             }
             CarValidationError::BodyNotFound(uuid) => {
-                format!("The body ({}) assigned to this car was not found", uuid)
+                format!("The body ({uuid}) assigned to this car was not found")
             }
             CarValidationError::PilotNotFound(uuid) => {
-                format!("The pilot ({}) assigned to this car was not found", uuid)
+                format!("The pilot ({uuid}) assigned to this car was not found")
             }
             CarValidationError::IncompleteCarConfiguration => {
                 "This car is not properly configured. Please ensure it has an engine, body, and pilot.".to_string()
             }
             CarValidationError::ComponentOwnershipMismatch { component_type, component_uuid, .. } => {
-                format!("The {} ({}) does not belong to you", component_type, component_uuid)
+                format!("The {component_type} ({component_uuid}) does not belong to you")
             }
             CarValidationError::DatabaseConnectionError(_) => {
                 "Unable to connect to the database. Please try again later.".to_string()
@@ -122,6 +124,7 @@ impl CarValidationError {
     }
 
     /// Returns suggested actions for resolving the error
+    #[must_use] 
     pub fn suggested_action(&self) -> Option<String> {
         match self {
             CarValidationError::CarNotFound(_) => Some(
@@ -182,7 +185,7 @@ impl CarValidationService {
     /// 3. Returns validated car data with all components
     ///
     /// # Arguments
-    /// * `database` - MongoDB database connection
+    /// * `database` - `MongoDB` database connection
     /// * `player_uuid` - UUID of the player who owns the car
     /// * `car_uuid` - UUID of the car to validate
     ///

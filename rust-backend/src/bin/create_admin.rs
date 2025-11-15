@@ -1,7 +1,6 @@
 use mongodb::{Client, Database};
 use rust_backend::domain::{Player, Email, TeamName, Password, UserRole, Car, Pilot};
 use std::env;
-use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,8 +10,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let team_name = env::var("ADMIN_TEAM").unwrap_or_else(|_| "Admin Team".to_string());
 
     println!("Creating admin user...");
-    println!("Email: {}", email);
-    println!("Team: {}", team_name);
+    println!("Email: {email}");
+    println!("Team: {team_name}");
 
     // Parse and validate inputs
     let email = Email::parse(&email)?;

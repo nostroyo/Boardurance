@@ -53,7 +53,7 @@ impl BoostHand {
     /// Automatically triggers replenishment when all cards are used
     pub fn use_card(&mut self, boost_value: u8) -> Result<(), String> {
         if !self.is_card_available(boost_value) {
-            return Err(format!("Boost card {} is not available", boost_value));
+            return Err(format!("Boost card {boost_value} is not available"));
         }
         
         self.cards.insert(boost_value, false);
@@ -163,6 +163,7 @@ pub struct RaceParticipant {
     pub total_value: u32,
     pub is_finished: bool,
     pub finish_position: Option<u32>,
+    pub boost_hand: BoostHand,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -219,6 +220,14 @@ pub enum MovementType {
     MovedDown,
     FinishedLap,
     FinishedRace,
+}
+
+/// Movement probability based on performance prediction
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
+pub enum MovementProbability {
+    MoveUp,
+    Stay,
+    MoveDown,
 }
 
 /// Result of processing an individual lap action
@@ -291,6 +300,7 @@ impl Race {
             total_value: 0,
             is_finished: false,
             finish_position: None,
+            boost_hand: BoostHand::new(),
         };
 
         self.participants.push(participant);
@@ -380,12 +390,12 @@ impl Race {
             }
         }
 
-        self.process_lap_internal(actions, participant_values)
+        Ok(self.process_lap_internal(actions, &participant_values))
     }
 
-    /// Legacy process_lap method for backward compatibility with tests
+    /// Legacy `process_lap` method for backward compatibility with tests
     /// Uses placeholder base value of 10 for performance calculation
-    /// New code should use process_lap_with_car_data instead
+    /// New code should use `process_lap_with_car_data` instead
     pub fn process_lap(&mut self, actions: &[LapAction]) -> Result<LapResult, String> {
         if self.status != RaceStatus::InProgress {
             return Err("Race is not in progress".to_string());
@@ -427,11 +437,11 @@ impl Race {
             }
         }
 
-        self.process_lap_internal(actions, participant_values)
+        Ok(self.process_lap_internal(actions, &participant_values))
     }
 
     /// Internal method that processes lap movements after performance values are calculated
-    fn process_lap_internal(&mut self, actions: &[LapAction], participant_values: HashMap<Uuid, u32>) -> Result<LapResult, String> {
+    fn process_lap_internal(&mut self, actions: &[LapAction], participant_values: &HashMap<Uuid, u32>) -> LapResult {
 
         // Process movements using the new algorithm: best sector to worst sector
         let mut movements = Vec::new();
@@ -440,7 +450,7 @@ impl Race {
         
         // Process sectors from highest to lowest (best to worst)
         for sector_id in (0..=max_sector).rev() {
-            let sector_movements = self.process_sector_movements(sector_id, &participant_values);
+            let sector_movements = self.process_sector_movements(sector_id, participant_values);
             movements.extend(sector_movements);
         }
 
@@ -474,12 +484,12 @@ impl Race {
 
         self.updated_at = Utc::now();
 
-        Ok(LapResult {
+        LapResult {
             lap: processed_lap,
             lap_characteristic: self.lap_characteristic.clone(),
             sector_positions: self.get_sector_positions(),
             movements,
-        })
+        }
     }
 
     /// Process individual lap action for a single player
@@ -511,7 +521,7 @@ impl Race {
 
         // 3. Validate boost value
         if boost_value > 5 {
-            return Err(format!("Invalid boost value: {}", boost_value));
+            return Err(format!("Invalid boost value: {boost_value}"));
         }
 
         // 4. Calculate performance using validated car data
@@ -520,7 +530,7 @@ impl Race {
             boost_value,
             car_data,
             &self.lap_characteristic,
-        )?;
+        );
 
         // 5. Store action and performance calculation for batch processing
         let action = LapAction {
@@ -556,6 +566,7 @@ impl Race {
     }
 
     /// Check if all active participants have submitted actions
+    #[must_use] 
     pub fn all_actions_submitted(&self) -> bool {
         let active_participants: HashSet<Uuid> = self.participants
             .iter()
@@ -572,6 +583,7 @@ impl Race {
     }
 
     /// Get list of players who haven't submitted actions yet
+    #[must_use] 
     pub fn get_pending_players(&self) -> Vec<Uuid> {
         let submitted: HashSet<Uuid> = self.pending_actions
             .iter()
@@ -613,7 +625,7 @@ impl Race {
                 action.boost_value,
                 car_data,
                 &self.lap_characteristic,
-            )?;
+            );
             
             performance_calculations.insert(action.player_uuid, performance);
         }
@@ -628,21 +640,21 @@ impl Race {
         boost_value: u32,
         car_data: &ValidatedCarData,
         lap_characteristic: &LapCharacteristic,
-    ) -> Result<PerformanceCalculation, String> {
+    ) -> PerformanceCalculation {
         // Get performance values based on lap characteristic (convert u8 to u32)
         let engine_value = match lap_characteristic {
-            LapCharacteristic::Straight => car_data.engine.straight_value as u32,
-            LapCharacteristic::Curve => car_data.engine.curve_value as u32,
+            LapCharacteristic::Straight => u32::from(car_data.engine.straight_value),
+            LapCharacteristic::Curve => u32::from(car_data.engine.curve_value),
         };
         
         let body_value = match lap_characteristic {
-            LapCharacteristic::Straight => car_data.body.straight_value as u32,
-            LapCharacteristic::Curve => car_data.body.curve_value as u32,
+            LapCharacteristic::Straight => u32::from(car_data.body.straight_value),
+            LapCharacteristic::Curve => u32::from(car_data.body.curve_value),
         };
         
         let pilot_value = match lap_characteristic {
-            LapCharacteristic::Straight => car_data.pilot.performance.straight_value as u32,
-            LapCharacteristic::Curve => car_data.pilot.performance.curve_value as u32,
+            LapCharacteristic::Straight => u32::from(car_data.pilot.performance.straight_value),
+            LapCharacteristic::Curve => u32::from(car_data.pilot.performance.curve_value),
         };
         
         // Calculate base performance
@@ -661,13 +673,14 @@ impl Race {
         // - Boost 3: 1.24x (+24%)
         // - Boost 4: 1.32x (+32%)
         // - Boost 5: 1.40x (+40%)
-        let boost_multiplier = 1.0 + (boost_value as f64 * 0.08);
-        let boosted_value = (capped_base_value as f64 * boost_multiplier).round() as u32;
+        let boost_multiplier = 1.0 + (f64::from(boost_value) * 0.08);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let boosted_value = (f64::from(capped_base_value) * boost_multiplier).round() as u32;
         
         // Final value is the boosted value
         let final_value = boosted_value;
         
-        Ok(PerformanceCalculation {
+        PerformanceCalculation {
             engine_contribution: engine_value,
             body_contribution: body_value,
             pilot_contribution: pilot_value,
@@ -676,7 +689,7 @@ impl Race {
             capped_base_value,
             boost_value,
             final_value,
-        })
+        }
     }
 
     fn process_sector_movements(&mut self, sector_id: u32, participant_values: &HashMap<Uuid, u32>) -> Vec<ParticipantMovement> {
@@ -1209,11 +1222,20 @@ mod tests {
         for (index, &card) in sequence.iter().enumerate() {
             let result = hand.use_card(card);
             assert!(result.is_ok(), "Should successfully use card {}", card);
-            assert_eq!(
-                hand.cards_remaining,
-                5 - (index as u32) - 1,
-                "Cards remaining should decrease"
-            );
+            
+            // After using the 5th card (index 4), replenishment occurs immediately
+            if index == 4 {
+                // Replenishment should have occurred
+                assert_eq!(hand.cards_remaining, 5, "Should be replenished after using all cards");
+                assert_eq!(hand.cycles_completed, 1, "Should have completed 1 cycle");
+            } else {
+                // Cards should decrease normally
+                assert_eq!(
+                    hand.cards_remaining,
+                    5 - (index as u32) - 1,
+                    "Cards remaining should decrease"
+                );
+            }
         }
         
         // After using all cards, should be replenished

@@ -41,10 +41,10 @@ pub enum AuthError {
 impl From<AuthError> for StatusCode {
     fn from(error: AuthError) -> Self {
         match error {
-            AuthError::MissingToken => StatusCode::UNAUTHORIZED,
-            AuthError::InvalidToken => StatusCode::UNAUTHORIZED,
-            AuthError::TokenExpired => StatusCode::UNAUTHORIZED,
-            AuthError::BlacklistedToken => StatusCode::UNAUTHORIZED,
+            AuthError::MissingToken
+            | AuthError::InvalidToken
+            | AuthError::TokenExpired
+            | AuthError::BlacklistedToken => StatusCode::UNAUTHORIZED,
             AuthError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -59,6 +59,7 @@ pub struct AuthMiddleware {
 
 impl AuthMiddleware {
     /// Create a new authentication middleware
+    #[must_use] 
     pub fn new(jwt_service: Arc<JwtService>, session_manager: Arc<SessionManager>) -> Self {
         Self {
             jwt_service,
@@ -71,8 +72,8 @@ impl AuthMiddleware {
         // Try Authorization header first (for API clients)
         if let Some(auth_header) = request.headers().get(AUTHORIZATION) {
             if let Ok(auth_str) = auth_header.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    return Some(auth_str[7..].to_string());
+                if let Some(stripped) = auth_str.strip_prefix("Bearer ") {
+                    return Some(stripped.to_string());
                 }
             }
         }
@@ -82,8 +83,8 @@ impl AuthMiddleware {
             if let Ok(cookie_str) = cookie_header.to_str() {
                 for cookie in cookie_str.split(';') {
                     let cookie = cookie.trim();
-                    if cookie.starts_with("access_token=") {
-                        return Some(cookie[13..].to_string());
+                    if let Some(stripped) = cookie.strip_prefix("access_token=") {
+                        return Some(stripped.to_string());
                     }
                 }
             }
@@ -184,23 +185,20 @@ where
 
         Box::pin(async move {
             // Extract token from request
-            let token = match AuthMiddleware::extract_token_from_request(&request) {
-                Some(token) => token,
-                None => {
-                    let error_response = Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .header("content-type", "application/json")
-                        .body(
-                            json!({
-                                "error": "authentication_required",
-                                "message": "Authentication token is required"
-                            })
-                            .to_string()
-                            .into(),
-                        )
-                        .unwrap();
-                    return Ok(error_response);
-                }
+            let Some(token) = AuthMiddleware::extract_token_from_request(&request) else {
+                let error_response = Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(
+                        json!({
+                            "error": "authentication_required",
+                            "message": "Authentication token is required"
+                        })
+                        .to_string()
+                        .into(),
+                    )
+                    .unwrap();
+                return Ok(error_response);
             };
 
             // Create auth middleware instance for validation

@@ -8,7 +8,9 @@ use utoipa::ToSchema;
 
 /// User roles for authorization
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[derive(Default)]
 pub enum UserRole {
+    #[default]
     Player,
     Admin,
     SuperAdmin,
@@ -16,21 +18,18 @@ pub enum UserRole {
 
 impl UserRole {
     /// Check if this role has admin privileges
+    #[must_use] 
     pub fn is_admin(&self) -> bool {
         matches!(self, UserRole::Admin | UserRole::SuperAdmin)
     }
     
     /// Check if this role can access any resource
+    #[must_use] 
     pub fn can_access_any_resource(&self) -> bool {
         self.is_admin()
     }
 }
 
-impl Default for UserRole {
-    fn default() -> Self {
-        UserRole::Player
-    }
-}
 
 /// A secure password wrapper that prevents accidental exposure
 #[derive(Debug, Clone)]
@@ -71,8 +70,8 @@ impl Password {
         }
         
         // Check for at least one uppercase, one lowercase, and one digit
-        let has_uppercase = password.chars().any(|c| c.is_uppercase());
-        let has_lowercase = password.chars().any(|c| c.is_lowercase());
+        let has_uppercase = password.chars().any(char::is_uppercase);
+        let has_lowercase = password.chars().any(char::is_lowercase);
         let has_digit = password.chars().any(|c| c.is_ascii_digit());
         
         if !has_uppercase {
@@ -97,7 +96,7 @@ impl Password {
         
         let password_hash = argon2
             .hash_password(self.0.expose_secret().as_bytes(), &salt)
-            .map_err(|e| format!("Failed to hash password: {}", e))?;
+            .map_err(|e| format!("Failed to hash password: {e}"))?;
         
         Ok(HashedPassword(password_hash.to_string()))
     }
@@ -107,23 +106,25 @@ impl HashedPassword {
     /// Verify a password against this hash
     pub fn verify(&self, password: &Password) -> Result<bool, String> {
         let parsed_hash = PasswordHash::new(&self.0)
-            .map_err(|e| format!("Failed to parse password hash: {}", e))?;
+            .map_err(|e| format!("Failed to parse password hash: {e}"))?;
         
         let argon2 = Argon2::default();
         
         match argon2.verify_password(password.0.expose_secret().as_bytes(), &parsed_hash) {
             Ok(()) => Ok(true),
             Err(argon2::password_hash::Error::Password) => Ok(false),
-            Err(e) => Err(format!("Password verification failed: {}", e)),
+            Err(e) => Err(format!("Password verification failed: {e}")),
         }
     }
     
     /// Get the hash string for database storage
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.0
     }
     
     /// Create from a stored hash string (for loading from database)
+    #[must_use] 
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
     }

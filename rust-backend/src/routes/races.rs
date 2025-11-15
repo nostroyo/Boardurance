@@ -342,13 +342,12 @@ fn get_player_race_position(race: &Race, player_uuid: Uuid) -> Result<PlayerRace
     // Calculate qualification rank based on starting sector and position
     let mut qualification_rank = 1u32;
     for other_participant in &race.participants {
-        if other_participant.player_uuid != player_uuid {
-            if other_participant.current_sector > participant.current_sector ||
+        if other_participant.player_uuid != player_uuid
+            && (other_participant.current_sector > participant.current_sector ||
                (other_participant.current_sector == participant.current_sector && 
-                other_participant.current_position_in_sector < participant.current_position_in_sector) {
+                other_participant.current_position_in_sector < participant.current_position_in_sector)) {
                 qualification_rank += 1;
             }
-        }
     }
     
     Ok(PlayerRacePosition {
@@ -368,6 +367,7 @@ fn build_race_progress_status(race: &Race) -> RaceProgressStatus {
         },
     };
     
+    #[allow(clippy::cast_possible_truncation)]
     let finished_participants = race.participants
         .iter()
         .filter(|p| p.is_finished)
@@ -381,6 +381,7 @@ fn build_race_progress_status(race: &Race) -> RaceProgressStatus {
         TurnPhase::Complete
     };
     
+    #[allow(clippy::cast_possible_truncation)]
     RaceProgressStatus {
         status,
         current_lap: race.current_lap,
@@ -392,6 +393,7 @@ fn build_race_progress_status(race: &Race) -> RaceProgressStatus {
     }
 }
 
+#[allow(clippy::unused_async)]
 async fn build_track_situation_data(
     _database: &Database,
     race: &Race,
@@ -427,6 +429,7 @@ async fn build_track_situation_data(
         // Sort by position in sector
         sector_participants.sort_by_key(|p| p.position_in_sector);
         
+        #[allow(clippy::cast_possible_truncation)]
         let capacity_info = SectorCapacityInfo {
             max_capacity: sector.slot_capacity,
             current_occupancy: sector_participants.len() as u32,
@@ -469,6 +472,7 @@ async fn build_track_situation_data(
                 position_in_sector: participant.current_position_in_sector,
                 total_value: participant.total_value,
                 current_lap: participant.current_lap,
+                #[allow(clippy::cast_possible_truncation)]
                 overall_rank: (index + 1) as u32,
             });
         }
@@ -481,6 +485,7 @@ async fn build_track_situation_data(
     });
     
     // Update ranks after sorting
+    #[allow(clippy::cast_possible_truncation)]
     for (index, entry) in leaderboard_entries.iter_mut().enumerate() {
         entry.overall_rank = (index + 1) as u32;
     }
@@ -507,6 +512,7 @@ fn build_race_metadata(race: &Race) -> RaceMetadata {
     }
 }
 
+#[allow(clippy::unused_async)]
 async fn build_player_specific_data(
     _database: &Database,
     race: &Race,
@@ -569,13 +575,12 @@ async fn build_player_specific_data(
     // Build current position
     let mut overall_rank = 1u32;
     for other_participant in &race.participants {
-        if other_participant.player_uuid != player_uuid && !other_participant.is_finished {
-            if other_participant.current_sector > participant.current_sector ||
+        if other_participant.player_uuid != player_uuid && !other_participant.is_finished
+            && (other_participant.current_sector > participant.current_sector ||
                (other_participant.current_sector == participant.current_sector && 
-                other_participant.current_position_in_sector < participant.current_position_in_sector) {
+                other_participant.current_position_in_sector < participant.current_position_in_sector)) {
                 overall_rank += 1;
             }
-        }
     }
     
     let current_position = CurrentPlayerPosition {

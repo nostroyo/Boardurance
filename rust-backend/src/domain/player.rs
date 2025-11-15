@@ -234,14 +234,17 @@ impl Player {
         Ok(())
     }
 
+    #[must_use] 
     pub fn get_engine(&self, engine_uuid: Uuid) -> Option<&Engine> {
         self.engines.iter().find(|engine| engine.uuid == engine_uuid)
     }
 
+    #[must_use] 
     pub fn get_body(&self, body_uuid: Uuid) -> Option<&Body> {
         self.bodies.iter().find(|body| body.uuid == body_uuid)
     }
 
+    #[must_use] 
     pub fn get_pilot(&self, pilot_uuid: Uuid) -> Option<&Pilot> {
         self.pilots.iter().find(|pilot| pilot.uuid == pilot_uuid)
     }
@@ -258,11 +261,13 @@ impl Player {
     }
 
     /// Check if this player has admin privileges
+    #[must_use] 
     pub fn is_admin(&self) -> bool {
         self.role.is_admin()
     }
 
     /// Check if this player can access a resource owned by another player
+    #[must_use] 
     pub fn can_access_resource(&self, resource_owner_uuid: Uuid) -> bool {
         self.is_admin() || self.uuid == resource_owner_uuid
     }

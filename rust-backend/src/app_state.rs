@@ -12,6 +12,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[must_use] 
     pub fn new(
         database: Database,
         jwt_service: Arc<JwtService>,

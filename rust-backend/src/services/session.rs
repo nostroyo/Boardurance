@@ -83,7 +83,7 @@ impl SessionCache {
     }
 }
 
-/// Session manager with MongoDB and in-memory caching
+/// Session manager with `MongoDB` and in-memory caching
 pub struct SessionManager {
     database: Arc<Database>,
     cache: Arc<RwLock<SessionCache>>,
@@ -109,6 +109,7 @@ pub enum SessionError {
 
 impl SessionManager {
     /// Create a new session manager
+    #[must_use] 
     pub fn new(database: Arc<Database>, config: SessionConfig) -> Self {
         Self {
             database,
@@ -318,13 +319,14 @@ impl SessionManager {
         // Clear cache to force refresh
         self.clear_cache();
 
+        #[allow(clippy::cast_possible_truncation)]
         Ok((session_result.deleted_count + blacklist_result.deleted_count) as usize)
     }
 
     // Private helper methods
     fn cache_session(&self, session: Session) -> Result<(), SessionError> {
         let mut cache = self.cache.write()
-            .map_err(|e| SessionError::Cache(format!("Failed to acquire write lock: {}", e)))?;
+            .map_err(|e| SessionError::Cache(format!("Failed to acquire write lock: {e}")))?;
 
         // Check cache size limit
         if cache.sessions.len() >= self.config.cache_size_limit {
@@ -399,6 +401,7 @@ impl SessionManager {
             )
             .await?;
 
+        #[allow(clippy::cast_possible_truncation)]
         Ok(count as usize)
     }
 }

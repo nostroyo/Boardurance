@@ -4,7 +4,6 @@ use axum::{
     response::Json,
     routing::{get, post, put, delete},
     Router,
-    middleware,
 };
 use mongodb::{bson::{doc, DateTime as BsonDateTime}, Database};
 use serde::{Deserialize, Serialize};
@@ -17,7 +16,6 @@ use crate::domain::{
     Engine, EngineName, Body, BodyName, ComponentRarity,
     Password,
 };
-use crate::middleware::{AuthMiddleware, RequireRole};
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePlayerRequest {
@@ -123,6 +121,7 @@ pub fn admin_routes() -> Router<crate::app_state::AppState> {
         team_name = %payload.team_name
     )
 )]
+#[allow(clippy::too_many_lines)]
 pub async fn create_player(
     State(database): State<Database>,
     Json(payload): Json<CreatePlayerRequest>,

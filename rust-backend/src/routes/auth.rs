@@ -27,13 +27,14 @@ pub fn routes() -> Router<AppState> {
 }
 
 // Helper function to create starter assets for new players
+#[allow(clippy::type_complexity)]
 fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String> {
     // Create 2 starter cars
     let car1 = Car::new(CarName::parse("Starter Car 1").unwrap(), None)
-        .map_err(|e| format!("Failed to create starter car 1: {}", e))?;
+        .map_err(|e| format!("Failed to create starter car 1: {e}"))?;
     
     let car2 = Car::new(CarName::parse("Starter Car 2").unwrap(), None)
-        .map_err(|e| format!("Failed to create starter car 2: {}", e))?;
+        .map_err(|e| format!("Failed to create starter car 2: {e}"))?;
 
     // Create 2 starter engines with different characteristics
     let engine1 = Engine::new(
@@ -42,7 +43,7 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
         35, // straight_value - good for straights
         25, // curve_value
         None,
-    ).map_err(|e| format!("Failed to create starter engine 1: {}", e))?;
+    ).map_err(|e| format!("Failed to create starter engine 1: {e}"))?;
 
     let engine2 = Engine::new(
         EngineName::parse("Balanced Engine").unwrap(),
@@ -50,7 +51,7 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
         30, // straight_value
         30, // curve_value - balanced
         None,
-    ).map_err(|e| format!("Failed to create starter engine 2: {}", e))?;
+    ).map_err(|e| format!("Failed to create starter engine 2: {e}"))?;
 
     // Create 2 starter bodies with different characteristics
     let body1 = Body::new(
@@ -59,7 +60,7 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
         25, // straight_value
         35, // curve_value - good for curves
         None,
-    ).map_err(|e| format!("Failed to create starter body 1: {}", e))?;
+    ).map_err(|e| format!("Failed to create starter body 1: {e}"))?;
 
     let body2 = Body::new(
         BodyName::parse("Sturdy Frame").unwrap(),
@@ -67,7 +68,7 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
         35, // straight_value - good for straights
         25, // curve_value
         None,
-    ).map_err(|e| format!("Failed to create starter body 2: {}", e))?;
+    ).map_err(|e| format!("Failed to create starter body 2: {e}"))?;
 
     Ok((
         vec![car1, car2],
@@ -89,6 +90,7 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String>
     ),
     tag = "Authentication"
 )]
+#[allow(clippy::cast_possible_wrap)]
 pub async fn register_user(
     State(app_state): State<AppState>,
     headers: HeaderMap,
@@ -169,11 +171,11 @@ pub async fn register_user(
             .get("x-forwarded-for")
             .or_else(|| headers.get("x-real-ip"))
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
         user_agent: headers
             .get("user-agent")
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
     };
 
     // Create session
@@ -233,6 +235,7 @@ pub async fn register_user(
     ),
     tag = "Authentication"
 )]
+#[allow(clippy::cast_possible_wrap)]
 pub async fn login_user(
     State(app_state): State<AppState>,
     headers: HeaderMap,
@@ -295,11 +298,11 @@ pub async fn login_user(
             .get("x-forwarded-for")
             .or_else(|| headers.get("x-real-ip"))
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
         user_agent: headers
             .get("user-agent")
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
     };
 
     // Create session
@@ -473,11 +476,11 @@ pub async fn refresh_token(
             .get("x-forwarded-for")
             .or_else(|| headers.get("x-real-ip"))
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
         user_agent: headers
             .get("user-agent")
             .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string()),
+            .map(std::string::ToString::to_string),
     };
 
     if let Err(e) = app_state.session_manager.create_session(user.uuid, new_claims.jti, session_metadata).await {
@@ -508,8 +511,8 @@ fn extract_token_from_headers(headers: &HeaderMap) -> Option<String> {
     // Try Authorization header first
     if let Some(auth_header) = headers.get("authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                return Some(auth_str[7..].to_string());
+            if let Some(stripped) = auth_str.strip_prefix("Bearer ") {
+                return Some(stripped.to_string());
             }
         }
     }
@@ -519,8 +522,8 @@ fn extract_token_from_headers(headers: &HeaderMap) -> Option<String> {
         if let Ok(cookie_str) = cookie_header.to_str() {
             for cookie in cookie_str.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("access_token=") {
-                    return Some(cookie[13..].to_string());
+                if let Some(stripped) = cookie.strip_prefix("access_token=") {
+                    return Some(stripped.to_string());
                 }
             }
         }
@@ -534,8 +537,8 @@ fn extract_refresh_token_from_headers(headers: &HeaderMap) -> Option<String> {
         if let Ok(cookie_str) = cookie_header.to_str() {
             for cookie in cookie_str.split(';') {
                 let cookie = cookie.trim();
-                if cookie.starts_with("refresh_token=") {
-                    return Some(cookie[14..].to_string());
+                if let Some(stripped) = cookie.strip_prefix("refresh_token=") {
+                    return Some(stripped.to_string());
                 }
             }
         }

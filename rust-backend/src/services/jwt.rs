@@ -82,6 +82,7 @@ pub enum JwtError {
 
 impl JwtService {
     /// Create a new JWT service with the given configuration
+    #[must_use] 
     pub fn new(config: JwtConfig) -> Self {
         let encoding_key = EncodingKey::from_secret(config.secret.as_bytes());
         let decoding_key = DecodingKey::from_secret(config.secret.as_bytes());
@@ -99,6 +100,7 @@ impl JwtService {
         let exp = now + Duration::from_std(self.config.access_token_expiry)
             .map_err(|e| JwtError::TokenGeneration(e.to_string()))?;
         
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let claims = Claims {
             sub: user.uuid.to_string(),
             email: user.email.as_ref().to_string(),
@@ -120,6 +122,7 @@ impl JwtService {
         let exp = now + Duration::from_std(self.config.refresh_token_expiry)
             .map_err(|e| JwtError::TokenGeneration(e.to_string()))?;
         
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let claims = Claims {
             sub: user.uuid.to_string(),
             email: user.email.as_ref().to_string(),

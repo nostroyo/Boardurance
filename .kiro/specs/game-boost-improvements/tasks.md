@@ -12,20 +12,35 @@
   - Implement `get_available_cards()` helper method
   - _Requirements: 1.1, 1.2, 2.1, 2.2_
 
-- [ ] 2. Extend RaceParticipant with boost hand
+- [x] 2. Extend RaceParticipant with boost hand
+
+
+
+
+
+
   - Add `boost_hand: BoostHand` field to `RaceParticipant` struct
   - Update participant initialization to include default boost hand
   - Ensure serialization/deserialization works correctly with MongoDB
   - _Requirements: 1.1, 3.1_
 
-- [ ] 3. Create boost hand manager and validation logic
-  - [ ] 3.1 Implement `BoostHandManager` struct with validation methods
+- [x] 3. Create boost hand manager and validation logic
+
+
+
+
+
+  - [x] 3.1 Implement `BoostHandManager` struct with validation methods
+
+
     - Create `validate_boost_selection()` to check card availability
     - Implement `use_boost_card()` to mark cards as used and trigger replenishment
     - Add `get_boost_availability()` for API response generation
     - _Requirements: 1.3, 1.4, 5.1, 5.2_
 
-  - [ ] 3.2 Define boost card error types
+  - [x] 3.2 Define boost card error types
+
+
     - Create `BoostCardError` enum with specific error variants
     - Implement error messages for unavailable cards and invalid values
     - Add error response struct with available cards information
