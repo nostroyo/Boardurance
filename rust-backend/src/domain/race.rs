@@ -25,6 +25,43 @@ pub struct BoostHand {
     pub cards_remaining: u32,
 }
 
+/// Record of a single boost card usage
+/// Tracks lap-by-lap boost card usage for history and analytics
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct BoostUsageRecord {
+    /// Lap number when the boost was used
+    pub lap_number: u32,
+    
+    /// Boost card value that was used (0-4)
+    pub boost_value: u8,
+    
+    /// Cycle number when the boost was used
+    pub cycle_number: u32,
+    
+    /// Number of cards remaining after this usage
+    pub cards_remaining_after: u32,
+    
+    /// Whether replenishment occurred after this usage
+    pub replenishment_occurred: bool,
+}
+
+/// Summary statistics for a complete boost cycle
+/// Provides cycle-level analytics for strategic analysis
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct BoostCycleSummary {
+    /// Cycle number
+    pub cycle_number: u32,
+    
+    /// Boost card values used in this cycle (in order)
+    pub cards_used: Vec<u8>,
+    
+    /// Lap numbers when cards were used in this cycle
+    pub laps_in_cycle: Vec<u32>,
+    
+    /// Average boost value for this cycle
+    pub average_boost: f32,
+}
+
 impl BoostHand {
     /// Initialize a new boost hand with all cards available
     #[must_use]
@@ -164,6 +201,10 @@ pub struct RaceParticipant {
     pub is_finished: bool,
     pub finish_position: Option<u32>,
     pub boost_hand: BoostHand,
+    
+    /// History of boost card usage for this participant
+    #[serde(default)]
+    pub boost_usage_history: Vec<BoostUsageRecord>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -301,6 +342,7 @@ impl Race {
             is_finished: false,
             finish_position: None,
             boost_hand: BoostHand::new(),
+            boost_usage_history: Vec::new(),
         };
 
         self.participants.push(participant);
@@ -530,10 +572,20 @@ impl Race {
         #[allow(clippy::cast_possible_truncation)]
         let boost_value_u8 = boost_value as u8;
         
-        let _boost_usage_result = BoostHandManager::use_boost_card(
+        let boost_usage_result = BoostHandManager::use_boost_card(
             &mut self.participants[participant_index].boost_hand,
             boost_value_u8,
         ).map_err(|e| e.to_string())?;
+        
+        // Record boost usage in history
+        let usage_record = BoostUsageRecord {
+            lap_number: self.current_lap,
+            boost_value: boost_value_u8,
+            cycle_number: boost_usage_result.current_cycle,
+            cards_remaining_after: boost_usage_result.cards_remaining,
+            replenishment_occurred: boost_usage_result.replenishment_occurred,
+        };
+        self.participants[participant_index].boost_usage_history.push(usage_record);
 
         // 5. Calculate performance using validated car data
         let performance = self.calculate_performance_with_car_data(
@@ -971,6 +1023,78 @@ impl Race {
                     participant.finish_position = Some(index as u32 + 1);
                 }
             }
+        }
+    }
+}
+
+impl RaceParticipant {
+    /// Get boost usage history grouped by cycle
+    /// Returns a vector of cycle summaries with statistics for each cycle
+    #[must_use]
+    pub fn get_boost_cycle_summaries(&self) -> Vec<BoostCycleSummary> {
+        let mut summaries: HashMap<u32, BoostCycleSummary> = HashMap::new();
+        
+        for record in &self.boost_usage_history {
+            let summary = summaries.entry(record.cycle_number).or_insert_with(|| {
+                BoostCycleSummary {
+                    cycle_number: record.cycle_number,
+                    cards_used: Vec::new(),
+                    laps_in_cycle: Vec::new(),
+                    average_boost: 0.0,
+                }
+            });
+            
+            summary.cards_used.push(record.boost_value);
+            summary.laps_in_cycle.push(record.lap_number);
+        }
+        
+        // Calculate average boost for each cycle
+        for summary in summaries.values_mut() {
+            if !summary.cards_used.is_empty() {
+                let sum: u32 = summary.cards_used.iter().map(|&v| u32::from(v)).sum();
+                #[allow(clippy::cast_precision_loss)]
+                {
+                    summary.average_boost = sum as f32 / summary.cards_used.len() as f32;
+                }
+            }
+        }
+        
+        // Sort by cycle number
+        let mut result: Vec<BoostCycleSummary> = summaries.into_values().collect();
+        result.sort_by_key(|s| s.cycle_number);
+        result
+    }
+    
+    /// Get boost usage history for a specific cycle
+    #[must_use]
+    pub fn get_boost_usage_for_cycle(&self, cycle_number: u32) -> Vec<&BoostUsageRecord> {
+        self.boost_usage_history
+            .iter()
+            .filter(|record| record.cycle_number == cycle_number)
+            .collect()
+    }
+    
+    /// Get total number of boost cards used across all cycles
+    #[must_use]
+    pub fn get_total_boosts_used(&self) -> usize {
+        self.boost_usage_history.len()
+    }
+    
+    /// Get average boost value across all usage
+    #[must_use]
+    pub fn get_average_boost_value(&self) -> f32 {
+        if self.boost_usage_history.is_empty() {
+            return 0.0;
+        }
+        
+        let sum: u32 = self.boost_usage_history
+            .iter()
+            .map(|record| u32::from(record.boost_value))
+            .sum();
+        
+        #[allow(clippy::cast_precision_loss)]
+        {
+            sum as f32 / self.boost_usage_history.len() as f32
         }
     }
 }
@@ -2792,4 +2916,514 @@ mod tests {
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
         assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
     }
+
+    // ========== Boost Usage History Tests ==========
+
+    #[test]
+    fn test_boost_usage_history_records_created() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("History Test".to_string(), track, 10);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Initially, history should be empty
+        assert_eq!(race.participants[0].boost_usage_history.len(), 0);
+        
+        // Use 3 boost cards
+        let boost_sequence = vec![2, 0, 4];
+        
+        for (index, &boost_value) in boost_sequence.iter().enumerate() {
+            race.process_individual_lap_action(
+                player_uuids[0],
+                boost_value,
+                &car_data,
+            ).unwrap();
+            
+            // Complete lap with player 2
+            race.process_individual_lap_action(
+                player_uuids[1],
+                boost_value,
+                &car_data,
+            ).unwrap();
+            
+            // Verify history record was created
+            assert_eq!(
+                race.participants[0].boost_usage_history.len(),
+                index + 1,
+                "Should have {} history records",
+                index + 1
+            );
+            
+            // Verify the latest record
+            let latest_record = &race.participants[0].boost_usage_history[index];
+            assert_eq!(latest_record.boost_value, boost_value);
+            assert_eq!(latest_record.lap_number, (index + 1) as u32);
+            assert_eq!(latest_record.cycle_number, 1);
+            assert_eq!(latest_record.cards_remaining_after, 4 - index as u32);
+            assert!(!latest_record.replenishment_occurred);
+        }
+    }
+
+    #[test]
+    fn test_boost_usage_history_tracks_replenishment() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Replenishment History Test".to_string(), track, 10);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Use all 5 boost cards to trigger replenishment
+        for card in 0..=4 {
+            race.process_individual_lap_action(
+                player_uuids[0],
+                card,
+                &car_data,
+            ).unwrap();
+            
+            race.process_individual_lap_action(
+                player_uuids[1],
+                card,
+                &car_data,
+            ).unwrap();
+        }
+        
+        // Verify we have 5 history records
+        assert_eq!(race.participants[0].boost_usage_history.len(), 5);
+        
+        // Verify the last record shows replenishment occurred
+        let last_record = &race.participants[0].boost_usage_history[4];
+        assert_eq!(last_record.boost_value, 4);
+        assert_eq!(last_record.cycle_number, 1);
+        assert_eq!(last_record.cards_remaining_after, 5); // Replenished
+        assert!(last_record.replenishment_occurred);
+        
+        // Verify earlier records don't show replenishment
+        for i in 0..4 {
+            assert!(!race.participants[0].boost_usage_history[i].replenishment_occurred);
+        }
+    }
+
+    #[test]
+    fn test_boost_cycle_summaries() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Cycle Summary Test".to_string(), track, 15);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Complete 2 full cycles
+        // Cycle 1: use cards 0, 1, 2, 3, 4
+        for card in 0..=4 {
+            race.process_individual_lap_action(
+                player_uuids[0],
+                card,
+                &car_data,
+            ).unwrap();
+            
+            race.process_individual_lap_action(
+                player_uuids[1],
+                card,
+                &car_data,
+            ).unwrap();
+        }
+        
+        // Cycle 2: use cards 4, 3, 2, 1, 0 (reverse order)
+        for card in (0..=4).rev() {
+            race.process_individual_lap_action(
+                player_uuids[0],
+                card,
+                &car_data,
+            ).unwrap();
+            
+            race.process_individual_lap_action(
+                player_uuids[1],
+                card,
+                &car_data,
+            ).unwrap();
+        }
+        
+        // Get cycle summaries
+        let summaries = race.participants[0].get_boost_cycle_summaries();
+        
+        // Should have 2 cycle summaries
+        assert_eq!(summaries.len(), 2);
+        
+        // Verify cycle 1 summary
+        let cycle1 = &summaries[0];
+        assert_eq!(cycle1.cycle_number, 1);
+        assert_eq!(cycle1.cards_used, vec![0, 1, 2, 3, 4]);
+        assert_eq!(cycle1.laps_in_cycle, vec![1, 2, 3, 4, 5]);
+        assert_eq!(cycle1.average_boost, 2.0); // (0+1+2+3+4)/5 = 2.0
+        
+        // Verify cycle 2 summary
+        let cycle2 = &summaries[1];
+        assert_eq!(cycle2.cycle_number, 2);
+        assert_eq!(cycle2.cards_used, vec![4, 3, 2, 1, 0]);
+        assert_eq!(cycle2.laps_in_cycle, vec![6, 7, 8, 9, 10]);
+        assert_eq!(cycle2.average_boost, 2.0); // (4+3+2+1+0)/5 = 2.0
+    }
+
+    #[test]
+    fn test_boost_usage_statistics() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Statistics Test".to_string(), track, 10);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Use specific boost cards: 3, 4, 2
+        let boost_sequence = vec![3, 4, 2];
+        
+        for &boost_value in &boost_sequence {
+            race.process_individual_lap_action(
+                player_uuids[0],
+                boost_value,
+                &car_data,
+            ).unwrap();
+            
+            race.process_individual_lap_action(
+                player_uuids[1],
+                boost_value,
+                &car_data,
+            ).unwrap();
+        }
+        
+        let participant = &race.participants[0];
+        
+        // Test total boosts used
+        assert_eq!(participant.get_total_boosts_used(), 3);
+        
+        // Test average boost value: (3 + 4 + 2) / 3 = 3.0
+        assert_eq!(participant.get_average_boost_value(), 3.0);
+        
+        // Test get_boost_usage_for_cycle
+        let cycle1_usage = participant.get_boost_usage_for_cycle(1);
+        assert_eq!(cycle1_usage.len(), 3);
+        assert_eq!(cycle1_usage[0].boost_value, 3);
+        assert_eq!(cycle1_usage[1].boost_value, 4);
+        assert_eq!(cycle1_usage[2].boost_value, 2);
+    }
+
+    #[test]
+    fn test_boost_usage_history_multiple_cycles() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Multi-Cycle History Test".to_string(), track, 15);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Complete 2 full cycles (10 laps)
+        for _cycle in 1..=2 {
+            for card in 0..=4 {
+                race.process_individual_lap_action(
+                    player_uuids[0],
+                    card,
+                    &car_data,
+                ).unwrap();
+                
+                race.process_individual_lap_action(
+                    player_uuids[1],
+                    card,
+                    &car_data,
+                ).unwrap();
+            }
+        }
+        
+        let participant = &race.participants[0];
+        
+        // Should have 10 history records (2 cycles * 5 cards)
+        assert_eq!(participant.boost_usage_history.len(), 10);
+        
+        // Verify cycle numbers in history
+        for i in 0..5 {
+            assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
+        }
+        for i in 5..10 {
+            assert_eq!(participant.boost_usage_history[i].cycle_number, 2);
+        }
+        
+        // Verify replenishment flags
+        assert!(participant.boost_usage_history[4].replenishment_occurred); // End of cycle 1
+        assert!(participant.boost_usage_history[9].replenishment_occurred); // End of cycle 2
+        
+        // Get cycle summaries
+        let summaries = participant.get_boost_cycle_summaries();
+        assert_eq!(summaries.len(), 2);
+        
+        // Verify both cycles have 5 cards each
+        assert_eq!(summaries[0].cards_used.len(), 5);
+        assert_eq!(summaries[1].cards_used.len(), 5);
+        
+        // Test statistics
+        assert_eq!(participant.get_total_boosts_used(), 10);
+        assert_eq!(participant.get_average_boost_value(), 2.0); // (0+1+2+3+4)*2 / 10 = 2.0
+    }
+
+    // ========== End Boost Usage History Tests ==========
 }

@@ -206,6 +206,8 @@ pub struct PlayerSpecificData {
     pub performance_preview: PerformancePreview,
     pub current_position: CurrentPlayerPosition,
     pub lap_history: Option<Vec<LapPerformanceRecord>>,
+    pub boost_usage_history: Vec<crate::domain::BoostUsageRecord>,
+    pub boost_cycle_summaries: Vec<crate::domain::BoostCycleSummary>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -547,11 +549,17 @@ async fn build_player_specific_data(
     // Build lap history (placeholder)
     let lap_history = None; // TODO: Implement lap history tracking
     
+    // Get boost usage history and cycle summaries
+    let boost_usage_history = participant.boost_usage_history.clone();
+    let boost_cycle_summaries = participant.get_boost_cycle_summaries();
+    
     Ok(PlayerSpecificData {
         boost_availability,
         performance_preview,
         current_position,
         lap_history,
+        boost_usage_history,
+        boost_cycle_summaries,
     })
 }
 

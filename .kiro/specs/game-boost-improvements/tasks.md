@@ -113,7 +113,12 @@
     - Display replenishment countdown
     - _Requirements: 3.1, 3.2, 3.3, 6.1_
 
-- [ ] 7. Implement boost usage history tracking
+- [x] 7. Implement boost usage history tracking
+
+
+
+
+
   - Create `BoostUsageRecord` struct for lap-by-lap tracking
   - Add `BoostCycleSummary` for cycle-level statistics
   - Store usage records in race participant or separate collection
