@@ -15,6 +15,7 @@ use crate::domain::{
     Race, Track, Sector, SectorType, RaceStatus, LapAction, LapResult, LapCharacteristic,
     MovementType,
 };
+use crate::domain::boost_hand_manager::{BoostHandManager, BoostAvailability, BoostCardErrorResponse};
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -205,29 +206,6 @@ pub struct PlayerSpecificData {
     pub performance_preview: PerformancePreview,
     pub current_position: CurrentPlayerPosition,
     pub lap_history: Option<Vec<LapPerformanceRecord>>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct BoostAvailability {
-    pub available_range: (u32, u32), // (min, max) - typically (0, 5)
-    pub current_sector_ceiling: u32,
-    pub base_performance: u32,
-    pub boost_impact_preview: Vec<BoostImpactOption>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct BoostImpactOption {
-    pub boost_value: u32,
-    pub predicted_final_value: u32,
-    pub movement_probability: MovementProbability,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MovementProbability {
-    pub can_move_up: bool,
-    pub can_move_down: bool,
-    pub will_stay: bool,
-    pub target_sector: Option<u32>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -529,38 +507,13 @@ async fn build_player_specific_data(
     
     let current_sector = &race.track.sectors[participant.current_sector as usize];
     
-    // Build boost availability
+    // Build boost availability using BoostHandManager
     let base_performance = 10u32; // TODO: Calculate from car components
-    let boost_impact_preview = (0..=5).map(|boost| {
-        let capped_base = std::cmp::min(base_performance, current_sector.max_value);
-        let predicted_final = capped_base + boost;
-        
-        let movement_probability = MovementProbability {
-            can_move_up: predicted_final > current_sector.max_value,
-            can_move_down: predicted_final < current_sector.min_value,
-            will_stay: predicted_final >= current_sector.min_value && predicted_final <= current_sector.max_value,
-            target_sector: if predicted_final > current_sector.max_value {
-                Some(participant.current_sector + 1)
-            } else if predicted_final < current_sector.min_value && participant.current_sector > 0 {
-                Some(participant.current_sector - 1)
-            } else {
-                None
-            },
-        };
-        
-        BoostImpactOption {
-            boost_value: boost,
-            predicted_final_value: predicted_final,
-            movement_probability,
-        }
-    }).collect();
-    
-    let boost_availability = BoostAvailability {
-        available_range: (0, 5),
-        current_sector_ceiling: current_sector.max_value,
+    let boost_availability = BoostHandManager::get_boost_availability(
+        &participant.boost_hand,
+        current_sector,
         base_performance,
-        boost_impact_preview,
-    };
+    );
     
     // Build performance preview
     let performance_preview = PerformancePreview {
@@ -853,7 +806,7 @@ pub async fn get_race_status_detailed(
     request_body = ApplyLapRequest,
     responses(
         (status = 200, description = "Lap action processed", body = DetailedRaceStatusResponse),
-        (status = 400, description = "Invalid request or boost value"),
+        (status = 400, description = "Invalid request or boost card error", body = BoostCardErrorResponse),
         (status = 404, description = "Race not found"),
         (status = 409, description = "Cannot process action (race not in progress, etc.)"),
         (status = 500, description = "Internal server error")
@@ -873,12 +826,18 @@ pub async fn apply_lap_action(
     State(database): State<Database>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<ApplyLapRequest>,
-) -> Result<Json<DetailedRaceStatusResponse>, StatusCode> {
+) -> Result<Json<DetailedRaceStatusResponse>, (StatusCode, Json<BoostCardErrorResponse>)> {
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
         Err(e) => {
             tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+            return Err((StatusCode::BAD_REQUEST, Json(BoostCardErrorResponse {
+                error_code: "INVALID_UUID".to_string(),
+                message: format!("Invalid race UUID: {e}"),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
     
@@ -886,7 +845,13 @@ pub async fn apply_lap_action(
         Ok(uuid) => uuid,
         Err(e) => {
             tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+            return Err((StatusCode::BAD_REQUEST, Json(BoostCardErrorResponse {
+                error_code: "INVALID_UUID".to_string(),
+                message: format!("Invalid player UUID: {e}"),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
     
@@ -894,15 +859,15 @@ pub async fn apply_lap_action(
         Ok(uuid) => uuid,
         Err(e) => {
             tracing::warn!("Invalid car UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+            return Err((StatusCode::BAD_REQUEST, Json(BoostCardErrorResponse {
+                error_code: "INVALID_UUID".to_string(),
+                message: format!("Invalid car UUID: {e}"),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
-    
-    // Validate boost value
-    if payload.boost_value > 5 {
-        tracing::warn!("Invalid boost value: {}", payload.boost_value);
-        return Err(StatusCode::BAD_REQUEST);
-    }
     
     // Validate car data
     let car_data = match CarValidationService::validate_car_for_race(
@@ -913,9 +878,63 @@ pub async fn apply_lap_action(
         Ok(data) => data,
         Err(e) => {
             tracing::warn!("Car validation failed: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+            return Err((StatusCode::BAD_REQUEST, Json(BoostCardErrorResponse {
+                error_code: "CAR_VALIDATION_FAILED".to_string(),
+                message: format!("Car validation failed: {e}"),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
+    
+    // Get race to validate boost card before processing
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err((StatusCode::NOT_FOUND, Json(BoostCardErrorResponse {
+                error_code: "RACE_NOT_FOUND".to_string(),
+                message: "Race not found".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(BoostCardErrorResponse {
+                error_code: "DATABASE_ERROR".to_string(),
+                message: "Failed to fetch race".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
+        }
+    };
+    
+    // Find participant and validate boost card
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid);
+    
+    if let Some(participant) = participant {
+        // Validate boost card selection before processing
+        #[allow(clippy::cast_possible_truncation)]
+        let boost_value_u8 = payload.boost_value as u8;
+        
+        if let Err(boost_error) = BoostHandManager::validate_boost_selection(
+            &participant.boost_hand,
+            boost_value_u8,
+        ) {
+            tracing::warn!("Boost card validation failed: {}", boost_error);
+            let error_response = BoostCardErrorResponse::from_error(
+                &boost_error,
+                &participant.boost_hand,
+            );
+            return Err((StatusCode::BAD_REQUEST, Json(error_response)));
+        }
+    }
     
     // Process individual lap action
     let updated_race = match process_individual_lap_action(
@@ -928,24 +947,62 @@ pub async fn apply_lap_action(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((StatusCode::NOT_FOUND, Json(BoostCardErrorResponse {
+                error_code: "RACE_NOT_FOUND".to_string(),
+                message: "Race not found".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
         Err(e) => {
             tracing::error!("Failed to process lap action: {:?}", e);
-            if e.to_string().contains("not in progress") || e.to_string().contains("already submitted") {
-                return Err(StatusCode::CONFLICT);
+            let error_msg = e.to_string();
+            
+            // Check for boost card errors in the error message
+            if error_msg.contains("not available") || error_msg.contains("Invalid boost") {
+                return Err((StatusCode::BAD_REQUEST, Json(BoostCardErrorResponse {
+                    error_code: "BOOST_CARD_ERROR".to_string(),
+                    message: error_msg,
+                    available_cards: vec![],
+                    current_cycle: 0,
+                    cards_remaining: 0,
+                })));
             }
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            
+            if error_msg.contains("not in progress") || error_msg.contains("already submitted") {
+                return Err((StatusCode::CONFLICT, Json(BoostCardErrorResponse {
+                    error_code: "RACE_STATE_ERROR".to_string(),
+                    message: error_msg,
+                    available_cards: vec![],
+                    current_cycle: 0,
+                    cards_remaining: 0,
+                })));
+            }
+            
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(BoostCardErrorResponse {
+                error_code: "INTERNAL_ERROR".to_string(),
+                message: "Failed to process lap action".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
     
-    // Return same format as status endpoint
+    // Return same format as status endpoint with updated boost hand state
     let race_progress = build_race_progress_status(&updated_race);
     let track_situation = match build_track_situation_data(&database, &updated_race).await {
         Ok(data) => data,
         Err(e) => {
             tracing::error!("Failed to build track situation: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(BoostCardErrorResponse {
+                error_code: "INTERNAL_ERROR".to_string(),
+                message: "Failed to build track situation".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
     let race_metadata = build_race_metadata(&updated_race);
@@ -953,7 +1010,13 @@ pub async fn apply_lap_action(
         Ok(data) => Some(data),
         Err(e) => {
             tracing::error!("Failed to build player specific data: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(BoostCardErrorResponse {
+                error_code: "INTERNAL_ERROR".to_string(),
+                message: "Failed to build player specific data".to_string(),
+                available_cards: vec![],
+                current_cycle: 0,
+                cards_remaining: 0,
+            })));
         }
     };
     

@@ -46,41 +46,68 @@
     - Add error response struct with available cards information
     - _Requirements: 1.4, 6.2_
 
-- [ ] 4. Integrate boost card validation into race domain
-  - [ ] 4.1 Update `Race::process_individual_lap_action()` method
+- [x] 4. Integrate boost card validation into race domain
+
+
+
+
+
+  - [x] 4.1 Update `Race::process_individual_lap_action()` method
+
+
     - Add boost card validation before performance calculation
     - Call `BoostHandManager::use_boost_card()` to update hand state
     - Handle boost card errors and return appropriate error messages
     - _Requirements: 1.2, 1.3, 2.1, 8.2_
 
-  - [ ] 4.2 Ensure replenishment triggers correctly
+  - [x] 4.2 Ensure replenishment triggers correctly
+
+
     - Verify replenishment occurs when all 5 cards are used
     - Test cycle counter increments properly
     - Validate all cards become available after replenishment
     - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 5. Update API response models
-  - [ ] 5.1 Create enhanced `BoostAvailability` struct
+- [x] 5. Update API response models
+
+
+
+
+
+  - [x] 5.1 Create enhanced `BoostAvailability` struct
+
+
     - Add `available_cards` vector showing usable boost values
     - Include `hand_state` HashMap for detailed card status
     - Add cycle information fields (current_cycle, cycles_completed, cards_remaining)
     - Include `next_replenishment_at` indicator
     - _Requirements: 3.1, 3.2, 3.3, 4.1_
 
-  - [ ] 5.2 Update `BoostImpactOption` with availability flag
+  - [x] 5.2 Update `BoostImpactOption` with availability flag
+
+
     - Add `is_available` boolean field
     - Filter impact preview to show only available cards
     - Maintain existing performance prediction logic
     - _Requirements: 3.3, 8.3_
 
-- [ ] 6. Modify race API endpoints
-  - [ ] 6.1 Update `apply_lap_action` endpoint
+- [x] 6. Modify race API endpoints
+
+
+
+
+
+  - [x] 6.1 Update `apply_lap_action` endpoint
+
+
     - Add boost card validation before processing lap
     - Return specific error responses for boost card issues
     - Include updated boost hand state in response
     - _Requirements: 1.3, 1.4, 6.1, 8.2_
 
-  - [ ] 6.2 Update `get_race_status_detailed` endpoint
+  - [x] 6.2 Update `get_race_status_detailed` endpoint
+
+
     - Include boost hand state in player-specific data
     - Show available cards and cycle information
     - Display replenishment countdown

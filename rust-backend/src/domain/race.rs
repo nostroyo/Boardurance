@@ -500,17 +500,19 @@ impl Race {
         boost_value: u32,
         car_data: &ValidatedCarData,
     ) -> Result<IndividualLapResult, String> {
+        use crate::domain::boost_hand_manager::BoostHandManager;
+
         if self.status != RaceStatus::InProgress {
             return Err("Race is not in progress".to_string());
         }
 
         // 1. Validate player is in race and not finished
-        let participant = self.participants
+        let participant_index = self.participants
             .iter()
-            .find(|p| p.player_uuid == player_uuid)
+            .position(|p| p.player_uuid == player_uuid)
             .ok_or("Player not found in race")?;
         
-        if participant.is_finished {
+        if self.participants[participant_index].is_finished {
             return Err("Player has already finished the race".to_string());
         }
 
@@ -519,20 +521,29 @@ impl Race {
             return Err("Player has already submitted an action for this turn".to_string());
         }
 
-        // 3. Validate boost value
-        if boost_value > 5 {
-            return Err(format!("Invalid boost value: {boost_value}"));
+        // 3. Validate boost value range (0-4 for boost cards)
+        if boost_value > 4 {
+            return Err(format!("Invalid boost value: {boost_value}. Must be between 0 and 4"));
         }
 
-        // 4. Calculate performance using validated car data
+        // 4. Validate boost card availability and use the card
+        #[allow(clippy::cast_possible_truncation)]
+        let boost_value_u8 = boost_value as u8;
+        
+        let _boost_usage_result = BoostHandManager::use_boost_card(
+            &mut self.participants[participant_index].boost_hand,
+            boost_value_u8,
+        ).map_err(|e| e.to_string())?;
+
+        // 5. Calculate performance using validated car data
         let performance = self.calculate_performance_with_car_data(
-            participant,
+            &self.participants[participant_index],
             boost_value,
             car_data,
             &self.lap_characteristic,
         );
 
-        // 5. Store action and performance calculation for batch processing
+        // 6. Store action and performance calculation for batch processing
         let action = LapAction {
             player_uuid,
             boost_value,
@@ -541,7 +552,7 @@ impl Race {
         self.action_submissions.insert(player_uuid, Utc::now());
         self.pending_performance_calculations.insert(player_uuid, performance.clone());
 
-        // 6. Check if all participants have submitted actions
+        // 7. Check if all participants have submitted actions
         if self.all_actions_submitted() {
             // Clone the pending actions and performance calculations to avoid borrowing issues
             let actions_to_process = self.pending_actions.clone();
@@ -2376,5 +2387,409 @@ mod tests {
         
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Race is not in progress"));
+    }
+
+    #[test]
+    fn test_boost_card_validation_in_race() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Boost Card Test".to_string(), track, 2);
+        
+        let player_uuid = Uuid::new_v4();
+        let car_uuid = Uuid::new_v4();
+        let pilot_uuid = Uuid::new_v4();
+        
+        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        race.participants[0].current_sector = 0;
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Verify initial boost hand state
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
+        assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
+        assert!(race.participants[0].boost_hand.is_card_available(2));
+        
+        // Use boost card 2
+        let result = race.process_individual_lap_action(
+            player_uuid,
+            2,
+            &car_data,
+        );
+        
+        assert!(result.is_ok());
+        
+        // Verify card 2 is now unavailable
+        assert!(!race.participants[0].boost_hand.is_card_available(2));
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
+        
+        // Clear pending actions to test again
+        race.pending_actions.clear();
+        race.action_submissions.clear();
+        race.pending_performance_calculations.clear();
+        
+        // Try to use card 2 again - should fail
+        let result = race.process_individual_lap_action(
+            player_uuid,
+            2,
+            &car_data,
+        );
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not available"));
+    }
+
+    #[test]
+    fn test_boost_card_replenishment_triggers_correctly() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Replenishment Test".to_string(), track, 10);
+        
+        // Add 2 participants to test individual actions
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Use all 5 boost cards for player 1
+        let boost_sequence_p1 = vec![2, 0, 4, 1, 3];
+        let boost_sequence_p2 = vec![0, 1, 2, 3, 4];
+        
+        for (index, &boost_value) in boost_sequence_p1.iter().enumerate() {
+            // Player 1 submits action
+            let result = race.process_individual_lap_action(
+                player_uuids[0],
+                boost_value,
+                &car_data,
+            );
+            
+            assert!(result.is_ok(), "Failed to use boost card {} for player 1", boost_value);
+            
+            // Player 2 submits action to complete the lap
+            let _result2 = race.process_individual_lap_action(
+                player_uuids[1],
+                boost_sequence_p2[index],
+                &car_data,
+            );
+            
+            // Check cards remaining after each use
+            if index < 4 {
+                // Before last card
+                assert_eq!(
+                    race.participants[0].boost_hand.cards_remaining,
+                    4 - index as u32,
+                    "Cards remaining should decrease"
+                );
+                assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
+                assert_eq!(race.participants[0].boost_hand.cycles_completed, 0);
+            } else {
+                // After using the 5th card, replenishment should occur
+                assert_eq!(
+                    race.participants[0].boost_hand.cards_remaining,
+                    5,
+                    "All cards should be replenished"
+                );
+                assert_eq!(
+                    race.participants[0].boost_hand.current_cycle,
+                    2,
+                    "Should be in cycle 2"
+                );
+                assert_eq!(
+                    race.participants[0].boost_hand.cycles_completed,
+                    1,
+                    "Should have 1 completed cycle"
+                );
+            }
+        }
+        
+        // Verify all cards are available again after replenishment
+        for i in 0..=4 {
+            assert!(
+                race.participants[0].boost_hand.is_card_available(i),
+                "Card {} should be available after replenishment",
+                i
+            );
+        }
+        
+        // Test that we can use the same cards again in the new cycle
+        let result = race.process_individual_lap_action(
+            player_uuids[0],
+            2, // Same card we used first in previous cycle
+            &car_data,
+        );
+        
+        assert!(result.is_ok(), "Should be able to use card 2 again after replenishment");
+        assert!(!race.participants[0].boost_hand.is_card_available(2));
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
+    }
+
+    #[test]
+    fn test_boost_card_multiple_cycles() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Multiple Cycles Test".to_string(), track, 20);
+        
+        // Add 2 participants
+        let mut player_uuids = Vec::new();
+        for _i in 0..2 {
+            let player_uuid = Uuid::new_v4();
+            let car_uuid = Uuid::new_v4();
+            let pilot_uuid = Uuid::new_v4();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            player_uuids.push(player_uuid);
+        }
+        
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Complete 3 full cycles (15 laps total)
+        for cycle in 1..=3 {
+            for card in 0..=4 {
+                // Player 1 uses a card
+                let result = race.process_individual_lap_action(
+                    player_uuids[0],
+                    card,
+                    &car_data,
+                );
+                
+                assert!(result.is_ok(), "Cycle {}, card {} should work for player 1", cycle, card);
+                
+                // Player 2 completes the lap (also uses the same card sequence)
+                let _result2 = race.process_individual_lap_action(
+                    player_uuids[1],
+                    card,
+                    &car_data,
+                );
+            }
+            
+            // After each cycle, verify replenishment occurred
+            assert_eq!(
+                race.participants[0].boost_hand.cards_remaining,
+                5,
+                "Cycle {}: All cards should be replenished",
+                cycle
+            );
+            assert_eq!(
+                race.participants[0].boost_hand.current_cycle,
+                cycle + 1,
+                "Cycle {}: Should be in next cycle",
+                cycle
+            );
+            assert_eq!(
+                race.participants[0].boost_hand.cycles_completed,
+                cycle,
+                "Cycle {}: Should have completed {} cycles",
+                cycle,
+                cycle
+            );
+        }
+        
+        // Verify final state after 3 complete cycles
+        assert_eq!(race.participants[0].boost_hand.current_cycle, 4);
+        assert_eq!(race.participants[0].boost_hand.cycles_completed, 3);
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
+        
+        // All cards should be available
+        for i in 0..=4 {
+            assert!(race.participants[0].boost_hand.is_card_available(i));
+        }
+    }
+
+    #[test]
+    fn test_boost_card_invalid_value_rejected() {
+        use crate::services::car_validation::ValidatedCarData;
+        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
+
+        let track = create_test_track();
+        let mut race = Race::new("Invalid Boost Test".to_string(), track, 2);
+        
+        let player_uuid = Uuid::new_v4();
+        let car_uuid = Uuid::new_v4();
+        let pilot_uuid = Uuid::new_v4();
+        
+        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        race.participants[0].current_sector = 0;
+        race.start_race().unwrap();
+        
+        // Create mock validated car data
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            5,
+            4,
+            None,
+        ).unwrap();
+        
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            4,
+            5,
+            None,
+        ).unwrap();
+        
+        let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+        let performance = PilotPerformance::new(3, 3).unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Professional,
+            skills,
+            performance,
+            None,
+        ).unwrap();
+        
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        
+        let car_data = ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        };
+        
+        // Test boost value > 4 (invalid)
+        let result = race.process_individual_lap_action(
+            player_uuid,
+            5,
+            &car_data,
+        );
+        
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Invalid boost value"));
+        assert!(error_msg.contains("Must be between 0 and 4"));
+        
+        // Verify boost hand state unchanged
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
+        assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
     }
 }

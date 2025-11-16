@@ -6,7 +6,7 @@ mod race;
 mod engine;
 mod body;
 mod auth;
-mod boost_hand_manager;
+pub mod boost_hand_manager;
 
 pub use test_item::*;
 pub use player::*;
