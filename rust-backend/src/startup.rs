@@ -14,6 +14,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use axum::http::Method;
 
 pub struct Application {
     port: u16,
@@ -199,7 +200,21 @@ pub async fn run(
         .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::new()
+                .allow_origin([
+                    "http://localhost:5173".parse().unwrap(),
+                    "http://localhost:5174".parse().unwrap(),
+                    "http://localhost:5175".parse().unwrap(),
+                ])
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ])
+                .allow_credentials(true)
+        )
         .with_state(db_pool);
 
     // TODO: Add admin-only routes with proper authentication middleware
