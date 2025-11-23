@@ -61,7 +61,6 @@ impl Application {
         crate::routes::health_check,
         crate::routes::test_items::create_test_item,
         crate::routes::test_items::get_test_items,
-        crate::routes::players::create_player,
         crate::routes::players::get_all_players,
         crate::routes::players::get_player_by_uuid,
         crate::routes::players::get_player_by_wallet,
@@ -118,7 +117,6 @@ impl Application {
             crate::domain::PilotPerformance,
             // Route DTOs
             crate::routes::test_items::CreateTestItemRequest,
-            crate::routes::players::CreatePlayerRequest,
             crate::routes::players::ConnectWalletRequest,
             crate::routes::players::UpdateTeamNameRequest,
             crate::routes::players::AddCarRequest,
@@ -135,7 +133,16 @@ impl Application {
             crate::routes::HealthResponse,
             crate::domain::UserRegistration,
             crate::domain::UserCredentials,
-            crate::domain::HashedPassword
+            crate::domain::HashedPassword,
+            // Boost Hand System schemas
+            crate::domain::BoostHand,
+            crate::domain::BoostUsageRecord,
+            crate::domain::BoostCycleSummary,
+            crate::domain::boost_hand_manager::BoostCardError,
+            crate::domain::boost_hand_manager::BoostUsageResult,
+            crate::domain::boost_hand_manager::BoostAvailability,
+            crate::domain::boost_hand_manager::BoostImpactOption,
+            crate::domain::boost_hand_manager::BoostCardErrorResponse
         )
     ),
     tags(
@@ -143,6 +150,7 @@ impl Application {
         (name = "test", description = "Test endpoints"),
         (name = "players", description = "Player management endpoints"),
         (name = "races", description = "Race management and gameplay endpoints"),
+        (name = "boost-cards", description = "Boost card system endpoints with strategic resource management"),
         (name = "Authentication", description = "User authentication endpoints")
     )
 )]

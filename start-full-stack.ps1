@@ -15,6 +15,9 @@ Write-Host "=======================================" -ForegroundColor Cyan
 
 $ErrorActionPreference = "Stop"
 
+# Refresh environment PATH to include recently installed tools
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
 # Function to check if a port is in use
 function Test-Port {
     param([int]$Port)
@@ -123,7 +126,7 @@ try {
             }
             
             Write-Host "   Starting Rust backend server..." -ForegroundColor Gray
-            $backendProcess = Start-Process -FilePath "cargo" -ArgumentList "run" -NoNewWindow -PassThru
+            $backendProcess = Start-Process -FilePath "cargo" -ArgumentList "run --bin rust-backend" -NoNewWindow -PassThru
             Set-Location ".."
             
             # Wait for backend to be ready
@@ -159,19 +162,14 @@ try {
                 Write-Host "   Installing npm dependencies..." -ForegroundColor Gray
                 npm install
                 if ($LASTEXITCODE -ne 0) {
+                    Set-Location ".."
                     throw "Failed to install npm dependencies"
                 }
             }
             
-            # Build frontend to verify it works
-            Write-Host "   Building frontend to verify..." -ForegroundColor Gray
-            npm run build
-            if ($LASTEXITCODE -ne 0) {
-                throw "Frontend build failed"
-            }
-            
             Write-Host "   Starting development server..." -ForegroundColor Gray
-            $frontendProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -NoNewWindow -PassThru
+            $currentPath = Get-Location
+            $frontendProcess = Start-Process -FilePath "cmd" -ArgumentList "/c", "cd /d `"$currentPath`" && npm run dev" -PassThru
             Set-Location ".."
             
             # Wait for frontend to be ready

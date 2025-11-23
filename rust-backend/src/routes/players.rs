@@ -11,17 +11,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::{
-    Player, WalletAddress, TeamName, Email, Car, CarName,
+    Player, WalletAddress, TeamName, Car, CarName,
     Pilot, PilotName, PilotClass, PilotRarity, PilotSkills,
-    Engine, EngineName, Body, BodyName, ComponentRarity,
-    Password,
 };
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct CreatePlayerRequest {
-    pub email: String,
-    pub team_name: String,
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectWalletRequest {
@@ -70,9 +62,6 @@ pub struct PlayerResponse {
 
 pub fn routes() -> Router<Database> {
     Router::new()
-        // Public routes (no authentication required)
-        .route("/players", post(create_player))  // User registration
-        
         // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
         // TODO: Apply middleware layers in startup.rs:
         // 1. AuthMiddleware to validate JWT tokens and extract UserContext
@@ -98,180 +87,6 @@ pub fn admin_routes() -> Router<crate::app_state::AppState> {
     // .route("/players", get(get_all_players_admin))
     // .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet_admin))
     // .route("/players/by-email/:email", get(get_player_by_email_admin))
-}
-
-/// Create a new player with starter assets
-#[utoipa::path(
-    post,
-    path = "/api/v1/players",
-    request_body = CreatePlayerRequest,
-    responses(
-        (status = 201, description = "Player created successfully with assets", body = PlayerResponse),
-        (status = 400, description = "Bad request"),
-        (status = 409, description = "Email already exists"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(
-    name = "Creating a new player with assets",
-    skip(database, payload),
-    fields(
-        email = %payload.email,
-        team_name = %payload.team_name
-    )
-)]
-#[allow(clippy::too_many_lines)]
-pub async fn create_player(
-    State(database): State<Database>,
-    Json(payload): Json<CreatePlayerRequest>,
-) -> Result<(StatusCode, Json<PlayerResponse>), StatusCode> {
-    let email = match Email::parse(&payload.email) {
-        Ok(email) => {
-            // Check if email is already registered
-            if let Ok(existing) = get_player_by_email_address(&database, email.as_ref()).await {
-                if existing.is_some() {
-                    tracing::warn!("Email {} is already registered", email.as_ref());
-                    return Err(StatusCode::CONFLICT);
-                }
-            }
-            email
-        }
-        Err(e) => {
-            tracing::warn!("Invalid email address: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    let team_name = match TeamName::parse(&payload.team_name) {
-        Ok(name) => name,
-        Err(e) => {
-            tracing::warn!("Invalid team name: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    // Create 2 empty cars
-    let car1 = match Car::new(
-        CarName::parse("Car 1").unwrap(),
-        None,
-    ) {
-        Ok(car) => car,
-        Err(e) => {
-            tracing::error!("Failed to create car 1: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    let car2 = match Car::new(
-        CarName::parse("Car 2").unwrap(),
-        None,
-    ) {
-        Ok(car) => car,
-        Err(e) => {
-            tracing::error!("Failed to create car 2: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    // Create 2 basic engines
-    let engine1 = match Engine::new(
-        EngineName::parse("Basic Engine 1").unwrap(),
-        ComponentRarity::Common,
-        30, // straight_value
-        25, // curve_value
-        None,
-    ) {
-        Ok(engine) => engine,
-        Err(e) => {
-            tracing::error!("Failed to create engine 1: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    let engine2 = match Engine::new(
-        EngineName::parse("Basic Engine 2").unwrap(),
-        ComponentRarity::Common,
-        25, // straight_value
-        30, // curve_value
-        None,
-    ) {
-        Ok(engine) => engine,
-        Err(e) => {
-            tracing::error!("Failed to create engine 2: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    // Create 2 basic bodies
-    let body1 = match Body::new(
-        BodyName::parse("Basic Body 1").unwrap(),
-        ComponentRarity::Common,
-        20, // straight_value
-        30, // curve_value
-        None,
-    ) {
-        Ok(body) => body,
-        Err(e) => {
-            tracing::error!("Failed to create body 1: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    let body2 = match Body::new(
-        BodyName::parse("Basic Body 2").unwrap(),
-        ComponentRarity::Common,
-        30, // straight_value
-        20, // curve_value
-        None,
-    ) {
-        Ok(body) => body,
-        Err(e) => {
-            tracing::error!("Failed to create body 2: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
-
-    // Create a default password hash for testing purposes
-    // In production, users should register through the auth endpoints
-    let default_password = Password::new("TempPassword123".to_string())
-        .expect("Default password should be valid");
-    let password_hash = default_password.hash()
-        .expect("Password hashing should work");
-
-    // Create player with assets
-    let player = match Player::new_with_assets(
-        email,
-        password_hash,
-        team_name,
-        vec![car1, car2],
-        vec![], // Empty pilots as requested
-        vec![engine1, engine2],
-        vec![body1, body2],
-    ) {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!("Failed to create player: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    match insert_player(&database, &player).await {
-        Ok(created_player) => {
-            tracing::info!("Player created successfully with assets. UUID: {}", created_player.uuid);
-            Ok((
-                StatusCode::CREATED,
-                Json(PlayerResponse {
-                    player: created_player,
-                    message: "Player created successfully with starter assets".to_string(),
-                }),
-            ))
-        }
-        Err(e) => {
-            tracing::error!("Failed to create player: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
 }
 
 /// Get all players

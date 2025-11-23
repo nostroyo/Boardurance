@@ -14,7 +14,8 @@ use uuid;
 use crate::app_state::AppState;
 use crate::domain::{
     Email, TeamName, Player, Password, UserRegistration, UserCredentials,
-    Car, CarName, Engine, EngineName, Body, BodyName, ComponentRarity
+    Car, CarName, Engine, EngineName, Body, BodyName, ComponentRarity,
+    Pilot, PilotName, PilotClass, PilotRarity, PilotSkills
 };
 use crate::services::session::SessionMetadata;
 
@@ -28,50 +29,113 @@ pub fn routes() -> Router<AppState> {
 
 // Helper function to create starter assets for new players
 #[allow(clippy::type_complexity)]
-fn create_starter_assets() -> Result<(Vec<Car>, Vec<Engine>, Vec<Body>), String> {
+fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Body>), String> {
+    // Create 6 pilots with different classes and rarities
+    let pilot1 = Pilot::new(
+        PilotName::parse("Speedster Ace").unwrap(),
+        PilotClass::Speedster,
+        PilotRarity::Rookie,
+        PilotSkills::new(7, 5, 6, 4).unwrap(),
+        crate::domain::PilotPerformance::new(8, 5).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 1: {e}"))?;
+
+    let pilot2 = Pilot::new(
+        PilotName::parse("Tech Master").unwrap(),
+        PilotClass::Technician,
+        PilotRarity::Rookie,
+        PilotSkills::new(5, 8, 7, 5).unwrap(),
+        crate::domain::PilotPerformance::new(5, 8).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 2: {e}"))?;
+
+    let pilot3 = Pilot::new(
+        PilotName::parse("Endurance Pro").unwrap(),
+        PilotClass::Endurance,
+        PilotRarity::Rookie,
+        PilotSkills::new(4, 6, 8, 9).unwrap(),
+        crate::domain::PilotPerformance::new(6, 7).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 3: {e}"))?;
+
+    let pilot4 = Pilot::new(
+        PilotName::parse("All-Round Rookie").unwrap(),
+        PilotClass::AllRounder,
+        PilotRarity::Rookie,
+        PilotSkills::new(6, 6, 6, 6).unwrap(),
+        crate::domain::PilotPerformance::new(6, 6).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 4: {e}"))?;
+
+    let pilot5 = Pilot::new(
+        PilotName::parse("Speed Demon").unwrap(),
+        PilotClass::Speedster,
+        PilotRarity::Professional,
+        PilotSkills::new(8, 4, 5, 3).unwrap(),
+        crate::domain::PilotPerformance::new(9, 4).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 5: {e}"))?;
+
+    let pilot6 = Pilot::new(
+        PilotName::parse("Precision Driver").unwrap(),
+        PilotClass::Technician,
+        PilotRarity::Professional,
+        PilotSkills::new(4, 9, 8, 6).unwrap(),
+        crate::domain::PilotPerformance::new(4, 9).unwrap(),
+        None,
+    ).map_err(|e| format!("Failed to create pilot 6: {e}"))?;
+
     // Create 2 starter cars
-    let car1 = Car::new(CarName::parse("Starter Car 1").unwrap(), None)
+    let mut car1 = Car::new(CarName::parse("Car 1").unwrap(), None)
         .map_err(|e| format!("Failed to create starter car 1: {e}"))?;
     
-    let car2 = Car::new(CarName::parse("Starter Car 2").unwrap(), None)
+    let mut car2 = Car::new(CarName::parse("Car 2").unwrap(), None)
         .map_err(|e| format!("Failed to create starter car 2: {e}"))?;
+
+    // Assign pilots to cars (3 pilots per car)
+    car1.assign_pilots(vec![pilot1.uuid, pilot2.uuid, pilot3.uuid])
+        .map_err(|e| format!("Failed to assign pilots to car 1: {e}"))?;
+    
+    car2.assign_pilots(vec![pilot4.uuid, pilot5.uuid, pilot6.uuid])
+        .map_err(|e| format!("Failed to assign pilots to car 2: {e}"))?;
 
     // Create 2 starter engines with different characteristics
     let engine1 = Engine::new(
-        EngineName::parse("Rookie Engine").unwrap(),
+        EngineName::parse("Basic Engine 1").unwrap(),
         ComponentRarity::Common,
-        35, // straight_value - good for straights
-        25, // curve_value
+        7, // straight_value - good for straights (0-10 range)
+        5, // curve_value
         None,
     ).map_err(|e| format!("Failed to create starter engine 1: {e}"))?;
 
     let engine2 = Engine::new(
-        EngineName::parse("Balanced Engine").unwrap(),
+        EngineName::parse("Basic Engine 2").unwrap(),
         ComponentRarity::Common,
-        30, // straight_value
-        30, // curve_value - balanced
+        5, // straight_value
+        7, // curve_value - good for curves
         None,
     ).map_err(|e| format!("Failed to create starter engine 2: {e}"))?;
 
     // Create 2 starter bodies with different characteristics
     let body1 = Body::new(
-        BodyName::parse("Lightweight Frame").unwrap(),
+        BodyName::parse("Basic Body 1").unwrap(),
         ComponentRarity::Common,
-        25, // straight_value
-        35, // curve_value - good for curves
+        5, // straight_value (0-10 range)
+        7, // curve_value - good for curves
         None,
     ).map_err(|e| format!("Failed to create starter body 1: {e}"))?;
 
     let body2 = Body::new(
-        BodyName::parse("Sturdy Frame").unwrap(),
+        BodyName::parse("Basic Body 2").unwrap(),
         ComponentRarity::Common,
-        35, // straight_value - good for straights
-        25, // curve_value
+        7, // straight_value - good for straights
+        5, // curve_value
         None,
     ).map_err(|e| format!("Failed to create starter body 2: {e}"))?;
 
     Ok((
         vec![car1, car2],
+        vec![pilot1, pilot2, pilot3, pilot4, pilot5, pilot6],
         vec![engine1, engine2],
         vec![body1, body2],
     ))
@@ -129,17 +193,17 @@ pub async fn register_user(
         ));
     }
 
-    // Create starter assets for new player
-    let (starter_cars, starter_engines, starter_bodies) = create_starter_assets()
+    // Create starter assets for new player (2 cars with 3 pilots each, engines, and bodies)
+    let (starter_cars, starter_pilots, starter_engines, starter_bodies) = create_starter_assets()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, ResponseJson(json!({"error": e}))))?;
 
-    // Create new player with starter assets
+    // Create new player with starter assets including 6 pilots assigned to 2 cars
     let player = Player::new_with_assets(
         email, 
         password_hash, 
         team_name, 
         starter_cars,
-        vec![], // No pilots initially - players can recruit them later
+        starter_pilots,
         starter_engines,
         starter_bodies,
     ).map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
