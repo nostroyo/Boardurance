@@ -18,6 +18,12 @@ use crate::domain::{
 use crate::domain::boost_hand_manager::{BoostHandManager, BoostAvailability, BoostCardErrorResponse};
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
+// Helper function to convert to BSON with proper error handling
+fn to_bson_safe<T: serde::Serialize>(value: &T, field_name: &str) -> Result<mongodb::bson::Bson, mongodb::error::Error> {
+    mongodb::bson::to_bson(value)
+        .map_err(|e| mongodb::error::Error::custom(format!("Failed to serialize {}: {}", field_name, e)))
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateRaceRequest {
     pub name: String,
@@ -103,11 +109,33 @@ pub struct DetailedRaceStatusResponse {
     pub race_metadata: RaceMetadata,
 }
 
+/// Request to apply a lap action with boost card selection
+/// 
+/// # Boost Card System
+/// The `boost_value` field represents which boost card to use (0-4).
+/// Each player has 5 boost cards per cycle that can be used once each.
+/// When all cards are used, the hand automatically replenishes.
+/// 
+/// # Performance Calculation
+/// Final performance = base_performance * (1 + boost_value * 0.08)
+/// - boost_value 0: No boost (1.0x multiplier)
+/// - boost_value 1: 8% boost (1.08x multiplier)  
+/// - boost_value 2: 16% boost (1.16x multiplier)
+/// - boost_value 3: 24% boost (1.24x multiplier)
+/// - boost_value 4: 32% boost (1.32x multiplier)
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApplyLapRequest {
+    /// UUID of the player making the lap action
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub player_uuid: String,
+    
+    /// UUID of the car being used for this lap
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440001")]
     pub car_uuid: String,
-    pub boost_value: u32, // 0-5
+    
+    /// Boost card value to use (0-4). Must be available in current cycle.
+    #[schema(example = 3, minimum = 0, maximum = 4)]
+    pub boost_value: u32,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -302,10 +330,10 @@ async fn register_player_in_race(
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! { 
         "$set": { 
-            "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
-            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
-            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
-            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
+            "participants": to_bson_safe(&race.participants, "participants")?,
+            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
+            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
+            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -584,13 +612,13 @@ async fn process_individual_lap_action(
             let filter = doc! { "uuid": race_uuid.to_string() };
             let update = doc! { 
                 "$set": { 
-                    "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
+                    "participants": to_bson_safe(&race.participants, "participants")?,
                     "current_lap": race.current_lap,
-                    "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
-                    "status": mongodb::bson::to_bson(&race.status).unwrap(),
-                    "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
-                    "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
-                    "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
+                    "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
+                    "status": to_bson_safe(&race.status, "status")?,
+                    "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
+                    "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
+                    "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
                     "updated_at": BsonDateTime::now()
                 } 
             };
@@ -715,21 +743,123 @@ pub async fn register_player(
     }))
 }
 
-/// Get detailed race status with comprehensive track situation
+/// Get detailed race status with comprehensive boost hand information
+/// 
+/// This endpoint provides complete race status including boost card system state.
+/// When `player_uuid` is provided, returns player-specific data including:
+/// - Current boost hand state (available/used cards)
+/// - Boost cycle information (current cycle, cycles completed)
+/// - Boost usage history and cycle summaries
+/// - Performance impact preview for each boost card
+/// 
+/// # Boost Hand State Information
+/// - `available_cards`: List of boost card values (0-4) currently available
+/// - `hand_state`: Detailed boolean map of each card's availability
+/// - `current_cycle`: Current boost cycle number (starts at 1)
+/// - `cycles_completed`: Number of complete cycles finished
+/// - `cards_remaining`: Cards left before next replenishment
+/// - `boost_impact_preview`: Performance prediction for each boost option
+/// 
+/// # Usage History
+/// - `boost_usage_history`: Lap-by-lap record of boost card usage
+/// - `boost_cycle_summaries`: Aggregated statistics per cycle
 #[utoipa::path(
     get,
     path = "/api/v1/races/{race_uuid}/status-detailed",
     params(
         ("race_uuid" = String, Path, description = "Race UUID"),
-        ("player_uuid" = Option<String>, Query, description = "Player UUID for player-specific data"),
-        ("include_history" = Option<bool>, Query, description = "Include lap history")
+        ("player_uuid" = Option<String>, Query, description = "Player UUID for player-specific boost hand data"),
+        ("include_history" = Option<bool>, Query, description = "Include detailed lap and boost usage history")
     ),
     responses(
-        (status = 200, description = "Detailed race status", body = DetailedRaceStatusResponse),
+        (
+            status = 200, 
+            description = "Detailed race status with boost hand information",
+            body = DetailedRaceStatusResponse,
+            example = json!({
+                "race_progress": {
+                    "status": "Ongoing",
+                    "current_lap": 3,
+                    "total_laps": 5,
+                    "participants_count": 2,
+                    "finished_participants": 0
+                },
+                "track_situation": {
+                    "sectors": [
+                        {
+                            "sector_id": 1,
+                            "sector_name": "Start/Finish",
+                            "participants": [
+                                {
+                                    "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                                    "position_in_sector": 1,
+                                    "total_value": 45,
+                                    "current_lap": 3
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "player_data": {
+                    "boost_availability": {
+                        "available_cards": [1, 4],
+                        "hand_state": {
+                            "0": false,
+                            "1": true,
+                            "2": false,
+                            "3": false,
+                            "4": true
+                        },
+                        "current_cycle": 1,
+                        "cycles_completed": 0,
+                        "cards_remaining": 2,
+                        "next_replenishment_at": 2,
+                        "boost_impact_preview": [
+                            {
+                                "boost_value": 0,
+                                "is_available": false,
+                                "predicted_final_value": 20,
+                                "movement_probability": "Stay"
+                            },
+                            {
+                                "boost_value": 1,
+                                "is_available": true,
+                                "predicted_final_value": 22,
+                                "movement_probability": "MoveUp"
+                            }
+                        ]
+                    },
+                    "boost_usage_history": [
+                        {
+                            "lap_number": 1,
+                            "boost_value": 2,
+                            "cycle_number": 1,
+                            "cards_remaining_after": 3,
+                            "replenishment_occurred": false
+                        },
+                        {
+                            "lap_number": 2,
+                            "boost_value": 0,
+                            "cycle_number": 1,
+                            "cards_remaining_after": 2,
+                            "replenishment_occurred": false
+                        }
+                    ],
+                    "boost_cycle_summaries": [
+                        {
+                            "cycle_number": 1,
+                            "cards_used": [2, 0, 3],
+                            "laps_in_cycle": [1, 2, 3],
+                            "average_boost": 1.67
+                        }
+                    ]
+                }
+            })
+        ),
         (status = 404, description = "Race not found"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "races"
+    tag = "boost-cards"
 )]
 #[tracing::instrument(
     name = "Getting detailed race status",
@@ -806,20 +936,103 @@ pub async fn get_race_status_detailed(
     }))
 }
 
-/// Apply individual lap action for a player
+/// Apply individual lap action for a player with boost card validation
+/// 
+/// This endpoint processes a player's lap action including boost card selection.
+/// The boost card system enforces strategic resource management:
+/// - Players have 5 boost cards (values 0-4) available per cycle
+/// - Each card can only be used once per cycle
+/// - When all 5 cards are used, the hand automatically replenishes
+/// - Boost cards multiply performance: base_value * (1 + boost_value * 0.08)
+/// 
+/// # Boost Card Usage Flow
+/// 1. Player selects an available boost card (0-4)
+/// 2. System validates card availability in current cycle
+/// 3. Card is marked as used and performance is calculated
+/// 4. If all cards used, hand replenishes for next cycle
+/// 
+/// # Error Handling
+/// - `BOOST_CARD_NOT_AVAILABLE`: Selected card already used in current cycle
+/// - `INVALID_BOOST_VALUE`: Boost value outside 0-4 range
+/// - `CAR_VALIDATION_FAILED`: Invalid car/player combination
 #[utoipa::path(
     post,
     path = "/api/v1/races/{race_uuid}/apply-lap",
     params(("race_uuid" = String, Path, description = "Race UUID")),
-    request_body = ApplyLapRequest,
+    request_body(
+        content = ApplyLapRequest,
+        description = "Lap action request with boost card selection",
+        example = json!({
+            "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+            "car_uuid": "550e8400-e29b-41d4-a716-446655440001", 
+            "boost_value": 3
+        })
+    ),
     responses(
-        (status = 200, description = "Lap action processed", body = DetailedRaceStatusResponse),
-        (status = 400, description = "Invalid request or boost card error", body = BoostCardErrorResponse),
+        (
+            status = 200, 
+            description = "Lap action processed successfully. Returns updated race status with boost hand state.",
+            body = DetailedRaceStatusResponse,
+            example = json!({
+                "race_progress": {
+                    "status": "Ongoing",
+                    "current_lap": 2,
+                    "total_laps": 5,
+                    "participants_count": 4,
+                    "finished_participants": 0
+                },
+                "player_data": {
+                    "boost_availability": {
+                        "available_cards": [0, 1, 2, 4],
+                        "hand_state": {
+                            "0": true,
+                            "1": true, 
+                            "2": true,
+                            "3": false,
+                            "4": true
+                        },
+                        "current_cycle": 1,
+                        "cycles_completed": 0,
+                        "cards_remaining": 4,
+                        "next_replenishment_at": 4
+                    }
+                }
+            })
+        ),
+        (
+            status = 400, 
+            description = "Boost card validation error or invalid request",
+            body = BoostCardErrorResponse,
+            examples(
+                ("card_not_available" = (
+                    summary = "Boost card already used",
+                    description = "Player tried to use a boost card that was already used in the current cycle",
+                    value = json!({
+                        "error_code": "BOOST_CARD_NOT_AVAILABLE",
+                        "message": "Boost card 3 is not available. Available cards: [0, 1, 2, 4]",
+                        "available_cards": [0, 1, 2, 4],
+                        "current_cycle": 1,
+                        "cards_remaining": 4
+                    })
+                )),
+                ("invalid_boost_value" = (
+                    summary = "Invalid boost value",
+                    description = "Player provided boost value outside the valid range (0-4)",
+                    value = json!({
+                        "error_code": "INVALID_BOOST_VALUE", 
+                        "message": "Invalid boost value: 5. Must be between 0 and 4",
+                        "available_cards": [0, 1, 2, 3, 4],
+                        "current_cycle": 1,
+                        "cards_remaining": 5
+                    })
+                ))
+            )
+        ),
         (status = 404, description = "Race not found"),
         (status = 409, description = "Cannot process action (race not in progress, etc.)"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "races"
+    tag = "boost-cards"
 )]
 #[tracing::instrument(
     name = "Applying lap action",
@@ -1426,7 +1639,7 @@ pub async fn insert_race(
     let result = collection.insert_one(race, None).await?;
     
     let mut created_race = race.clone();
-    created_race.id = Some(result.inserted_id.as_object_id().unwrap());
+    created_race.id = result.inserted_id.as_object_id();
     Ok(created_race)
 }
 
@@ -1478,10 +1691,10 @@ pub async fn join_race_in_db(
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! { 
         "$set": { 
-            "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
-            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
-            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
-            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
+            "participants": to_bson_safe(&race.participants, "participants")?,
+            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
+            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
+            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1510,12 +1723,12 @@ pub async fn start_race_in_db(
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! { 
         "$set": { 
-            "status": mongodb::bson::to_bson(&race.status).unwrap(),
+            "status": to_bson_safe(&race.status, "status")?,
             "current_lap": race.current_lap,
-            "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
-            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
-            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
-            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
+            "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
+            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
+            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
+            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1546,13 +1759,13 @@ pub async fn process_lap_in_db(
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! { 
         "$set": { 
-            "participants": mongodb::bson::to_bson(&race.participants).unwrap(),
+            "participants": to_bson_safe(&race.participants, "participants")?,
             "current_lap": race.current_lap,
-            "lap_characteristic": mongodb::bson::to_bson(&race.lap_characteristic).unwrap(),
-            "status": mongodb::bson::to_bson(&race.status).unwrap(),
-            "pending_actions": mongodb::bson::to_bson(&race.pending_actions).unwrap(),
-            "action_submissions": mongodb::bson::to_bson(&race.action_submissions).unwrap(),
-            "pending_performance_calculations": mongodb::bson::to_bson(&race.pending_performance_calculations).unwrap(),
+            "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
+            "status": to_bson_safe(&race.status, "status")?,
+            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
+            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
+            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
             "updated_at": BsonDateTime::now()
         } 
     };
@@ -1561,3 +1774,8 @@ pub async fn process_lap_in_db(
     
     Ok(Some((lap_result, race.status)))
 }
+
+
+
+
+

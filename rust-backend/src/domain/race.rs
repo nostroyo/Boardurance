@@ -234,7 +234,7 @@ pub struct LapActionWithPerformance {
 pub struct LapResult {
     pub lap: u32,
     pub lap_characteristic: LapCharacteristic,
-    pub sector_positions: HashMap<u32, Vec<RaceParticipant>>, // sector_id -> participants
+    pub sector_positions: HashMap<String, Vec<RaceParticipant>>, // sector_id -> participants (String keys for MongoDB compatibility)
     pub movements: Vec<ParticipantMovement>,
 }
 
@@ -572,6 +572,9 @@ impl Race {
         #[allow(clippy::cast_possible_truncation)]
         let boost_value_u8 = boost_value as u8;
         
+        // Record the cycle number BEFORE using the card (since replenishment increments it)
+        let cycle_before_use = self.participants[participant_index].boost_hand.current_cycle;
+        
         let boost_usage_result = BoostHandManager::use_boost_card(
             &mut self.participants[participant_index].boost_hand,
             boost_value_u8,
@@ -581,7 +584,7 @@ impl Race {
         let usage_record = BoostUsageRecord {
             lap_number: self.current_lap,
             boost_value: boost_value_u8,
-            cycle_number: boost_usage_result.current_cycle,
+            cycle_number: cycle_before_use,
             cards_remaining_after: boost_usage_result.cards_remaining,
             replenishment_occurred: boost_usage_result.replenishment_occurred,
         };
@@ -978,12 +981,12 @@ impl Race {
         }
     }
 
-    fn get_sector_positions(&self) -> HashMap<u32, Vec<RaceParticipant>> {
-        let mut positions: HashMap<u32, Vec<RaceParticipant>> = HashMap::new();
+    fn get_sector_positions(&self) -> HashMap<String, Vec<RaceParticipant>> {
+        let mut positions: HashMap<String, Vec<RaceParticipant>> = HashMap::new();
         
         for participant in &self.participants {
             if !participant.is_finished {
-                positions.entry(participant.current_sector)
+                positions.entry(participant.current_sector.to_string())
                     .or_default()
                     .push(participant.clone());
             }
@@ -2984,19 +2987,19 @@ mod tests {
         assert_eq!(race.participants[0].boost_usage_history.len(), 0);
         
         // Use 3 boost cards
-        let boost_sequence = vec![2, 0, 4];
+        let boost_sequence: Vec<u8> = vec![2, 0, 4];
         
         for (index, &boost_value) in boost_sequence.iter().enumerate() {
             race.process_individual_lap_action(
                 player_uuids[0],
-                boost_value,
+                u32::from(boost_value),
                 &car_data,
             ).unwrap();
             
             // Complete lap with player 2
             race.process_individual_lap_action(
                 player_uuids[1],
-                boost_value,
+                u32::from(boost_value),
                 &car_data,
             ).unwrap();
             
