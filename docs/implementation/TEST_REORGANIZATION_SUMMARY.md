@@ -1,7 +1,5 @@
 # Test Script Reorganization Summary
 
-> **📚 Full Documentation**: See [docs/implementation/TEST_REORGANIZATION_SUMMARY.md](../docs/implementation/TEST_REORGANIZATION_SUMMARY.md) for comprehensive documentation.
-
 ## ✅ Completed Actions
 
 ### 1. Script Audit & Analysis

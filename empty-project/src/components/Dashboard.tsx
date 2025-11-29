@@ -58,7 +58,7 @@ function Dashboard() {
             Manage Team
           </Link>
           <Link
-            to="/"
+            to="/game"
             className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 text-center"
           >
             Start Racing

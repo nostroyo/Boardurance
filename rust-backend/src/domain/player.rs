@@ -89,12 +89,18 @@ impl Player {
         email: Email,
         password_hash: HashedPassword,
         team_name: TeamName,
-        cars: Vec<Car>,
+        mut cars: Vec<Car>,
         pilots: Vec<Pilot>,
         engines: Vec<Engine>,
         bodies: Vec<Body>,
     ) -> Result<Self, String> {
         let now = Utc::now();
+
+        let first_car = cars.get_mut(0).ok_or("Player must have at least one car".to_string())?;
+        first_car.assign_pilots(pilots.iter().take(3).map(|pilot| pilot.uuid).collect())?;
+        first_car.assign_body(bodies.first().ok_or("Player must have a least one body".to_owned())?.uuid);
+        first_car.assign_engine(engines.first().ok_or("Player must have a least one engine".to_owned())?.uuid);
+
         Ok(Self {
             id: None,
             uuid: Uuid::new_v4(),
@@ -113,17 +119,11 @@ impl Player {
     }
 
     pub fn validate_for_game(&self) -> Result<(), String> {
-        // Validate player constraints for game participation
-        if self.wallet_address.is_none() {
-            return Err("Player must have a connected wallet to participate in games".to_string());
-        }
 
-        if self.cars.len() != 2 {
-            return Err("Player must have exactly 2 cars to participate in games".to_string());
-        }
+        let car = self.cars.get(0).ok_or("Player must have at least one car".to_string())?;
 
-        if self.pilots.is_empty() {
-            return Err("Player must have at least one pilot to participate in games".to_string());
+        if !car.is_complete() {
+            return Err("Car must be complete (have pilots, engine, and body) to play".to_string());
         }
 
         Ok(())

@@ -57,8 +57,9 @@ Create a new player with starter assets.
 **Creates:**
 - Player with email and team name
 - 2 empty cars ("Car 1", "Car 2")
-- 2 basic engines with different stats
-- 2 basic bodies with different stats
+- 6 pilots with different classes and rarities (ready for racing)
+- 6 engines with different stats (2 basic, 2 specialized, 2 uncommon)
+- 6 bodies with different stats (2 basic, 2 specialized, 2 uncommon)
 
 ### GET /api/v1/players
 Get all players.

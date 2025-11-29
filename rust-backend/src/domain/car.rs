@@ -11,8 +11,8 @@ pub struct Car {
     pub uuid: Uuid,
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: CarName,
-    #[schema(value_type = Option<String>, format = "uuid")]
-    pub pilot_uuid: Option<Uuid>,  // Assigned pilot
+    #[schema(value_type = Vec<String>, format = "uuid")]
+    pub pilot_uuids: Vec<Uuid>,  // Assigned pilots (exactly 3 required)
     #[schema(value_type = Option<String>, format = "uuid")]
     pub engine_uuid: Option<Uuid>, // Assigned engine
     #[schema(value_type = Option<String>, format = "uuid")]
@@ -39,7 +39,7 @@ impl Car {
             uuid: Uuid::new_v4(),
             nft_mint_address,
             name,
-            pilot_uuid: None,
+            pilot_uuids: Vec::new(),
             engine_uuid: None,
             body_uuid: None,
             is_equipped: false,
@@ -58,14 +58,69 @@ impl Car {
         self.updated_at = Utc::now();
     }
 
-    pub fn assign_pilot(&mut self, pilot_uuid: Uuid) {
-        self.pilot_uuid = Some(pilot_uuid);
+    pub fn assign_pilots(&mut self, pilot_uuids: Vec<Uuid>) -> Result<(), String> {
+        if pilot_uuids.len() != 3 {
+            return Err(format!("Car must have exactly 3 pilots, got {}", pilot_uuids.len()));
+        }
+        
+        // Check for duplicate pilots
+        let mut unique_pilots = pilot_uuids.clone();
+        unique_pilots.sort();
+        unique_pilots.dedup();
+        if unique_pilots.len() != 3 {
+            return Err("All 3 pilots must be unique".to_string());
+        }
+        
+        self.pilot_uuids = pilot_uuids;
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn add_pilot(&mut self, pilot_uuid: Uuid) -> Result<(), String> {
+        if self.pilot_uuids.len() >= 3 {
+            return Err("Car already has maximum of 3 pilots".to_string());
+        }
+        
+        if self.pilot_uuids.contains(&pilot_uuid) {
+            return Err("Pilot is already assigned to this car".to_string());
+        }
+        
+        self.pilot_uuids.push(pilot_uuid);
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn remove_pilot(&mut self, pilot_uuid: Uuid) -> Result<(), String> {
+        let initial_len = self.pilot_uuids.len();
+        self.pilot_uuids.retain(|&uuid| uuid != pilot_uuid);
+        
+        if self.pilot_uuids.len() == initial_len {
+            return Err("Pilot not found in car".to_string());
+        }
+        
+        self.updated_at = Utc::now();
+        Ok(())
+    }
+
+    pub fn clear_pilots(&mut self) {
+        self.pilot_uuids.clear();
         self.updated_at = Utc::now();
     }
 
-    pub fn unassign_pilot(&mut self) {
-        self.pilot_uuid = None;
-        self.updated_at = Utc::now();
+    pub fn validate_pilots(&self) -> Result<(), String> {
+        if self.pilot_uuids.len() != 3 {
+            return Err(format!("Car must have exactly 3 pilots, currently has {}", self.pilot_uuids.len()));
+        }
+        
+        // Check for duplicate pilots
+        let mut unique_pilots = self.pilot_uuids.clone();
+        unique_pilots.sort();
+        unique_pilots.dedup();
+        if unique_pilots.len() != 3 {
+            return Err("All 3 pilots must be unique".to_string());
+        }
+        
+        Ok(())
     }
 
     pub fn assign_engine(&mut self, engine_uuid: Uuid) {
@@ -90,7 +145,22 @@ impl Car {
 
     #[must_use]
     pub fn is_complete(&self) -> bool {
-        self.pilot_uuid.is_some() && self.engine_uuid.is_some() && self.body_uuid.is_some()
+        self.pilot_uuids.len() == 3 && self.engine_uuid.is_some() && self.body_uuid.is_some()
+    }
+
+    #[must_use]
+    pub fn is_ready_for_race(&self) -> bool {
+        self.is_complete() && self.validate_pilots().is_ok()
+    }
+
+    #[must_use]
+    pub fn get_pilot_count(&self) -> usize {
+        self.pilot_uuids.len()
+    }
+
+    #[must_use]
+    pub fn has_pilot(&self, pilot_uuid: Uuid) -> bool {
+        self.pilot_uuids.contains(&pilot_uuid)
     }
 }
 

@@ -13,7 +13,8 @@ use crate::services::car_validation::ValidatedCarData;
 pub struct BoostHand {
     /// Availability state for each boost card (0-4)
     /// true = available, false = used
-    pub cards: HashMap<u8, bool>,
+    /// Using String keys for MongoDB compatibility
+    pub cards: HashMap<String, bool>,
     
     /// Current cycle number (starts at 1)
     pub current_cycle: u32,
@@ -68,7 +69,7 @@ impl BoostHand {
     pub fn new() -> Self {
         let mut cards = HashMap::new();
         for i in 0..=4 {
-            cards.insert(i, true);
+            cards.insert(i.to_string(), true);
         }
         
         Self {
@@ -82,7 +83,7 @@ impl BoostHand {
     /// Check if a specific boost card is available
     #[must_use]
     pub fn is_card_available(&self, boost_value: u8) -> bool {
-        self.cards.get(&boost_value).copied().unwrap_or(false)
+        self.cards.get(&boost_value.to_string()).copied().unwrap_or(false)
     }
     
     /// Use a boost card (mark as unavailable)
@@ -93,7 +94,7 @@ impl BoostHand {
             return Err(format!("Boost card {boost_value} is not available"));
         }
         
-        self.cards.insert(boost_value, false);
+        self.cards.insert(boost_value.to_string(), false);
         self.cards_remaining -= 1;
         
         // Check if all cards are used - trigger replenishment
@@ -108,7 +109,7 @@ impl BoostHand {
     /// Called automatically when all cards have been used
     fn replenish(&mut self) {
         for i in 0..=4 {
-            self.cards.insert(i, true);
+            self.cards.insert(i.to_string(), true);
         }
         self.cards_remaining = 5;
         self.cycles_completed += 1;
@@ -121,7 +122,7 @@ impl BoostHand {
         let mut available: Vec<u8> = self.cards
             .iter()
             .filter(|(_, &is_available)| is_available)
-            .map(|(&value, _)| value)
+            .filter_map(|(key, _)| key.parse::<u8>().ok())
             .collect();
         
         // Sort for consistent ordering

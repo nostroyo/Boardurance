@@ -48,6 +48,8 @@ pub enum CarValidationError {
     DatabaseConnectionError(String),
     #[error("Database query error: {0}")]
     DatabaseQueryError(String),
+    #[error("Invalid car configuration: {0}")]
+    InvalidConfiguration(String),
     #[error("Database serialization error: {0}")]
     DatabaseSerializationError(String),
 }
@@ -71,6 +73,7 @@ impl CarValidationError {
             CarValidationError::DatabaseConnectionError(_) => "DATABASE_CONNECTION_ERROR",
             CarValidationError::DatabaseQueryError(_) => "DATABASE_QUERY_ERROR",
             CarValidationError::DatabaseSerializationError(_) => "DATABASE_SERIALIZATION_ERROR",
+            CarValidationError::InvalidConfiguration(_) => "INVALID_CAR_CONFIGURATION",
         }
     }
 
@@ -119,6 +122,9 @@ impl CarValidationError {
             }
             CarValidationError::DatabaseSerializationError(_) => {
                 "Data processing error. Please try again later.".to_string()
+            }
+            CarValidationError::InvalidConfiguration(msg) => {
+                format!("Invalid car configuration: {msg}")
             }
         }
     }
@@ -170,6 +176,10 @@ impl CarValidationError {
             | CarValidationError::DatabaseQueryError(_)
             | CarValidationError::DatabaseSerializationError(_) => Some(
                 "Please try again in a few moments. If the problem persists, contact support."
+                    .to_string(),
+            ),
+            CarValidationError::InvalidConfiguration(_) => Some(
+                "Please check your car configuration and ensure all pilots are properly assigned."
                     .to_string(),
             ),
         }
@@ -289,12 +299,16 @@ impl CarValidationService {
         })
     }
 
-    /// Gets the pilot component for the car
+    /// Gets the primary pilot component for the car (first pilot in the list)
     fn get_car_pilot(car: &Car, player: &Player) -> Result<Pilot, CarValidationError> {
-        let pilot_uuid = car.pilot_uuid.ok_or(CarValidationError::MissingPilot)?;
+        // Validate that car has exactly 3 pilots
+        car.validate_pilots().map_err(|e| CarValidationError::InvalidConfiguration(e))?;
+        
+        // Use the first pilot as the primary pilot for validation
+        let pilot_uuid = car.pilot_uuids.first().ok_or(CarValidationError::MissingPilot)?;
 
         // First try to find the pilot in the player's inventory
-        if let Some(pilot) = player.pilots.iter().find(|p| p.uuid == pilot_uuid) {
+        if let Some(pilot) = player.pilots.iter().find(|p| p.uuid == *pilot_uuid) {
             return Ok(pilot.clone());
         }
 
@@ -302,7 +316,7 @@ impl CarValidationService {
         // The car references a pilot that doesn't belong to the player
         Err(CarValidationError::ComponentOwnershipMismatch {
             component_type: "pilot".to_string(),
-            component_uuid: pilot_uuid,
+            component_uuid: *pilot_uuid,
             player_uuid: player.uuid,
         })
     }

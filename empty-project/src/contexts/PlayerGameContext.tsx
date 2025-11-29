@@ -101,7 +101,7 @@ function playerGameReducer(state: PlayerGameState, action: PlayerGameAction): Pl
   }
 }
 
-// Utility function to calculate local view
+// Enhanced utility function to calculate local view (current sector ±2 sectors)
 function calculateLocalView(race: Race, playerParticipant: RaceParticipant | null): LocalRaceView {
   if (!race || !playerParticipant) {
     return {
@@ -112,15 +112,30 @@ function calculateLocalView(race: Race, playerParticipant: RaceParticipant | nul
   }
 
   const centerSector = playerParticipant.current_sector;
-  const allSectors = race.track.sectors;
+  const allSectors = race.track.sectors.sort((a, b) => a.id - b.id);
+  const totalSectors = allSectors.length;
   
-  // Get 5 sectors: center ±2
-  const startIndex = Math.max(0, centerSector - 2);
-  const endIndex = Math.min(allSectors.length - 1, centerSector + 2);
-  const visibleSectors = allSectors.slice(startIndex, endIndex + 1);
+  // Calculate visible sector IDs (center ±2, handling circular tracks)
+  const visibleSectorIds: number[] = [];
+  for (let offset = -2; offset <= 2; offset++) {
+    let sectorId = centerSector + offset;
+    
+    // Handle wrapping for circular tracks
+    if (sectorId < 0) {
+      sectorId = totalSectors + sectorId;
+    } else if (sectorId >= totalSectors) {
+      sectorId = sectorId - totalSectors;
+    }
+    
+    visibleSectorIds.push(sectorId);
+  }
+  
+  // Get visible sectors in order
+  const visibleSectors = visibleSectorIds
+    .map(id => allSectors.find(s => s.id === id))
+    .filter(sector => sector !== undefined) as import('../types/race').Sector[];
   
   // Get participants in visible sectors
-  const visibleSectorIds = visibleSectors.map(s => s.id);
   const visibleParticipants = race.participants.filter(p => 
     visibleSectorIds.includes(p.current_sector)
   );

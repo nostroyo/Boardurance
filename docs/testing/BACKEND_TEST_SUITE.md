@@ -2,12 +2,10 @@
 
 This directory contains all PowerShell test scripts for the Rust backend, organized by category and updated for the new authentication system.
 
-> **📚 Full Documentation**: See [docs/testing/BACKEND_TEST_SUITE.md](../../docs/testing/BACKEND_TEST_SUITE.md) for comprehensive testing documentation.
-
 ## Directory Structure
 
 ```
-tests/
+rust-backend/tests/
 ├── api/                           # API endpoint tests
 │   ├── test-auth-endpoints.ps1    # Authentication (register/login) tests
 │   ├── test-general-endpoints.ps1 # Health check, OpenAPI, basic endpoints
@@ -18,7 +16,7 @@ tests/
 │   ├── test-with-mongodb.ps1      # Full integration test with MongoDB
 │   └── verify-docker-setup.ps1    # Docker setup file verification
 ├── run-all-tests.ps1             # Comprehensive test runner
-└── README.md                     # This file
+└── README.md                     # Test suite documentation
 ```
 
 ## Running Tests

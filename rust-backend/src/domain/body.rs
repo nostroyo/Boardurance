@@ -104,7 +104,6 @@ impl AsRef<str> for BodyName {
         &self.0
     }
 }
-
 mod uuid_as_string {
     use serde::{Deserialize, Deserializer, Serializer};
     use uuid::Uuid;

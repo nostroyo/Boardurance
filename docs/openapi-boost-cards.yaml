@@ -1,0 +1,612 @@
+openapi: 3.0.3
+info:
+  title: Web3 Racing Game - Boost Card System API
+  description: |
+    Strategic boost card management system for the Web3 Racing Game.
+    
+    ## Boost Card System Overview
+    
+    The boost card system introduces strategic resource management where players have 5 specific boost cards (values 0-4) that can be used once per cycle. When all cards are exhausted, the entire hand replenishes automatically.
+    
+    ### Key Features
+    - **5 boost cards per cycle** with values 0, 1, 2, 3, 4
+    - **One-time use per cycle** - each card becomes unavailable after use
+    - **Automatic replenishment** when all 5 cards are used
+    - **Performance multipliers** - boost cards multiply base performance
+    - **Strategic depth** - players must plan boost usage timing
+    
+    ### Performance Calculation
+    ```
+    final_performance = base_performance * (1 + boost_value * 0.08)
+    ```
+    
+    | Boost Value | Multiplier | Performance Increase |
+    |-------------|------------|---------------------|
+    | 0           | 1.00x      | No boost            |
+    | 1           | 1.08x      | +8%                 |
+    | 2           | 1.16x      | +16%                |
+    | 3           | 1.24x      | +24%                |
+    | 4           | 1.32x      | +32%                |
+  version: 1.0.0
+  contact:
+    name: Web3 Racing Game API
+    url: https://github.com/your-repo/web3-racing-game
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Development server
+  - url: https://api.racing-game.com/api/v1
+    description: Production server
+
+tags:
+  - name: boost-cards
+    description: Boost card system endpoints with strategic resource management
+  - name: races
+    description: General race management endpoints
+
+paths:
+  /races/{race_uuid}/apply-lap:
+    post:
+      tags:
+        - boost-cards
+      summary: Apply lap action with boost card validation
+      description: |
+        Processes a player's lap action including boost card selection with full validation.
+        
+        ## Boost Card Validation
+        - Validates boost card is available in current cycle
+        - Marks card as used after successful validation
+        - Triggers replenishment if all cards used
+        - Returns updated boost hand state
+        
+        ## Error Handling
+        Returns specific error codes for different validation failures:
+        - `BOOST_CARD_NOT_AVAILABLE`: Card already used in current cycle
+        - `INVALID_BOOST_VALUE`: Boost value outside 0-4 range
+        - `CAR_VALIDATION_FAILED`: Invalid car/player combination
+      parameters:
+        - name: race_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the race
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyLapRequest'
+            examples:
+              basic_boost:
+                summary: Basic boost card usage
+                description: Player uses boost card 3 for 24% performance increase
+                value:
+                  player_uuid: "550e8400-e29b-41d4-a716-446655440000"
+                  car_uuid: "550e8400-e29b-41d4-a716-446655440001"
+                  boost_value: 3
+              no_boost:
+                summary: No boost usage
+                description: Player uses boost card 0 for no performance increase
+                value:
+                  player_uuid: "550e8400-e29b-41d4-a716-446655440000"
+                  car_uuid: "550e8400-e29b-41d4-a716-446655440001"
+                  boost_value: 0
+              max_boost:
+                summary: Maximum boost usage
+                description: Player uses boost card 4 for 32% performance increase
+                value:
+                  player_uuid: "550e8400-e29b-41d4-a716-446655440000"
+                  car_uuid: "550e8400-e29b-41d4-a716-446655440001"
+                  boost_value: 4
+      responses:
+        '200':
+          description: Lap action processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedRaceStatusResponse'
+              examples:
+                successful_boost_usage:
+                  summary: Successful boost card usage
+                  description: Player successfully used boost card 3, now unavailable
+                  value:
+                    race_progress:
+                      status: "Ongoing"
+                      current_lap: 2
+                      total_laps: 5
+                      participants_count: 4
+                      finished_participants: 0
+                    player_data:
+                      boost_availability:
+                        available_cards: [0, 1, 2, 4]
+                        hand_state:
+                          "0": true
+                          "1": true
+                          "2": true
+                          "3": false
+                          "4": true
+                        current_cycle: 1
+                        cycles_completed: 0
+                        cards_remaining: 4
+                        next_replenishment_at: 4
+                replenishment_triggered:
+                  summary: Replenishment triggered
+                  description: Player used last card, triggering replenishment
+                  value:
+                    race_progress:
+                      status: "Ongoing"
+                      current_lap: 5
+                      total_laps: 5
+                    player_data:
+                      boost_availability:
+                        available_cards: [0, 1, 2, 3, 4]
+                        hand_state:
+                          "0": true
+                          "1": true
+                          "2": true
+                          "3": true
+                          "4": true
+                        current_cycle: 2
+                        cycles_completed: 1
+                        cards_remaining: 5
+                        next_replenishment_at: 5
+        '400':
+          description: Boost card validation error or invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoostCardErrorResponse'
+              examples:
+                card_not_available:
+                  summary: Boost card already used
+                  description: Player tried to use a boost card that was already used in the current cycle
+                  value:
+                    error_code: "BOOST_CARD_NOT_AVAILABLE"
+                    message: "Boost card 3 is not available. Available cards: [0, 1, 2, 4]"
+                    available_cards: [0, 1, 2, 4]
+                    current_cycle: 1
+                    cards_remaining: 4
+                invalid_boost_value:
+                  summary: Invalid boost value
+                  description: Player provided boost value outside the valid range (0-4)
+                  value:
+                    error_code: "INVALID_BOOST_VALUE"
+                    message: "Invalid boost value: 5. Must be between 0 and 4"
+                    available_cards: [0, 1, 2, 3, 4]
+                    current_cycle: 1
+                    cards_remaining: 5
+                car_validation_failed:
+                  summary: Car validation failed
+                  description: Invalid car/player combination
+                  value:
+                    error_code: "CAR_VALIDATION_FAILED"
+                    message: "Car validation failed: Player does not own this car"
+                    available_cards: [0, 1, 2, 3, 4]
+                    current_cycle: 1
+                    cards_remaining: 5
+        '404':
+          description: Race not found
+        '409':
+          description: Cannot process action (race not in progress, etc.)
+        '500':
+          description: Internal server error
+
+  /races/{race_uuid}/status-detailed:
+    get:
+      tags:
+        - boost-cards
+      summary: Get detailed race status with boost hand information
+      description: |
+        Returns comprehensive race status including complete boost card system state.
+        
+        ## Boost Hand Information
+        When `player_uuid` is provided, includes:
+        - Current boost hand state (available/used cards)
+        - Boost cycle information (current cycle, cycles completed)
+        - Boost usage history and cycle summaries
+        - Performance impact preview for each boost card
+        
+        ## Usage History
+        Provides detailed analytics:
+        - Lap-by-lap boost card usage records
+        - Cycle-level statistics and summaries
+        - Strategic analysis data for decision making
+      parameters:
+        - name: race_uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the race
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: player_uuid
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Player UUID for player-specific boost hand data
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        - name: include_history
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include detailed lap and boost usage history
+          example: true
+      responses:
+        '200':
+          description: Detailed race status with boost hand information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedRaceStatusResponse'
+              examples:
+                partial_cycle:
+                  summary: Partial boost cycle
+                  description: Player has used some boost cards in current cycle
+                  value:
+                    race_progress:
+                      status: "Ongoing"
+                      current_lap: 3
+                      total_laps: 5
+                      participants_count: 2
+                      finished_participants: 0
+                    player_data:
+                      boost_availability:
+                        available_cards: [1, 4]
+                        hand_state:
+                          "0": false
+                          "1": true
+                          "2": false
+                          "3": false
+                          "4": true
+                        current_cycle: 1
+                        cycles_completed: 0
+                        cards_remaining: 2
+                        next_replenishment_at: 2
+                      boost_usage_history:
+                        - lap_number: 1
+                          boost_value: 2
+                          cycle_number: 1
+                          cards_remaining_after: 3
+                          replenishment_occurred: false
+                        - lap_number: 2
+                          boost_value: 0
+                          cycle_number: 1
+                          cards_remaining_after: 2
+                          replenishment_occurred: false
+                multiple_cycles:
+                  summary: Multiple completed cycles
+                  description: Player has completed multiple boost cycles
+                  value:
+                    race_progress:
+                      status: "Ongoing"
+                      current_lap: 8
+                      total_laps: 10
+                    player_data:
+                      boost_availability:
+                        available_cards: [0, 2, 3]
+                        current_cycle: 3
+                        cycles_completed: 2
+                        cards_remaining: 3
+                      boost_cycle_summaries:
+                        - cycle_number: 1
+                          cards_used: [2, 0, 4, 1, 3]
+                          laps_in_cycle: [1, 2, 3, 4, 5]
+                          average_boost: 2.0
+                        - cycle_number: 2
+                          cards_used: [3, 4, 0, 2, 1]
+                          laps_in_cycle: [6, 7, 8, 9, 10]
+                          average_boost: 2.0
+        '404':
+          description: Race not found
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    ApplyLapRequest:
+      type: object
+      required:
+        - player_uuid
+        - car_uuid
+        - boost_value
+      properties:
+        player_uuid:
+          type: string
+          format: uuid
+          description: UUID of the player making the lap action
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        car_uuid:
+          type: string
+          format: uuid
+          description: UUID of the car being used for this lap
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        boost_value:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: |
+            Boost card value to use (0-4). Must be available in current cycle.
+            
+            Performance multipliers:
+            - 0: No boost (1.0x)
+            - 1: +8% boost (1.08x)
+            - 2: +16% boost (1.16x)
+            - 3: +24% boost (1.24x)
+            - 4: +32% boost (1.32x)
+          example: 3
+
+    BoostAvailability:
+      type: object
+      required:
+        - available_cards
+        - hand_state
+        - current_cycle
+        - cycles_completed
+        - cards_remaining
+        - boost_impact_preview
+      properties:
+        available_cards:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 4
+          description: List of boost card values currently available for use
+          example: [0, 1, 4]
+        hand_state:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Boolean map of each card's availability (0-4)
+          example:
+            "0": true
+            "1": true
+            "2": false
+            "3": false
+            "4": true
+        current_cycle:
+          type: integer
+          minimum: 1
+          description: Current boost cycle number (starts at 1)
+          example: 1
+        cycles_completed:
+          type: integer
+          minimum: 0
+          description: Number of complete cycles finished
+          example: 0
+        cards_remaining:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: Number of cards left before next replenishment
+          example: 3
+        next_replenishment_at:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 5
+          description: Cards remaining until replenishment (null if hand empty)
+          example: 3
+        boost_impact_preview:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoostImpactOption'
+          description: Performance prediction for each boost option (0-4)
+
+    BoostImpactOption:
+      type: object
+      required:
+        - boost_value
+        - is_available
+        - predicted_final_value
+        - movement_probability
+      properties:
+        boost_value:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: The boost card value
+          example: 2
+        is_available:
+          type: boolean
+          description: Whether this card can currently be used
+          example: true
+        predicted_final_value:
+          type: integer
+          minimum: 0
+          description: Expected performance after applying boost
+          example: 25
+        movement_probability:
+          type: string
+          enum: [Stay, MoveUp, MoveDown]
+          description: Likely sector movement based on predicted performance
+          example: "MoveUp"
+
+    BoostUsageRecord:
+      type: object
+      required:
+        - lap_number
+        - boost_value
+        - cycle_number
+        - cards_remaining_after
+        - replenishment_occurred
+      properties:
+        lap_number:
+          type: integer
+          minimum: 1
+          description: Lap number when the boost was used
+          example: 3
+        boost_value:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: Which boost card was used
+          example: 2
+        cycle_number:
+          type: integer
+          minimum: 1
+          description: Which cycle the usage occurred in
+          example: 1
+        cards_remaining_after:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: Cards left in hand after this usage
+          example: 2
+        replenishment_occurred:
+          type: boolean
+          description: Whether replenishment happened after this usage
+          example: false
+
+    BoostCycleSummary:
+      type: object
+      required:
+        - cycle_number
+        - cards_used
+        - laps_in_cycle
+        - average_boost
+      properties:
+        cycle_number:
+          type: integer
+          minimum: 1
+          description: The cycle number
+          example: 1
+        cards_used:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 4
+          description: Boost cards used in order during this cycle
+          example: [2, 0, 4, 1, 3]
+        laps_in_cycle:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          description: Lap numbers when cards were used in this cycle
+          example: [1, 2, 3, 4, 5]
+        average_boost:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 4
+          description: Average boost value for this cycle
+          example: 2.0
+
+    BoostCardErrorResponse:
+      type: object
+      required:
+        - error_code
+        - message
+        - available_cards
+        - current_cycle
+        - cards_remaining
+      properties:
+        error_code:
+          type: string
+          enum:
+            - BOOST_CARD_NOT_AVAILABLE
+            - INVALID_BOOST_VALUE
+            - CAR_VALIDATION_FAILED
+            - INVALID_UUID
+          description: Specific error code for programmatic handling
+          example: "BOOST_CARD_NOT_AVAILABLE"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Boost card 3 is not available. Available cards: [0, 1, 2, 4]"
+        available_cards:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 4
+          description: Currently available boost cards
+          example: [0, 1, 2, 4]
+        current_cycle:
+          type: integer
+          minimum: 1
+          description: Current boost cycle number
+          example: 1
+        cards_remaining:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: Cards remaining in current cycle
+          example: 4
+
+    DetailedRaceStatusResponse:
+      type: object
+      required:
+        - race_progress
+        - track_situation
+        - race_metadata
+      properties:
+        race_progress:
+          $ref: '#/components/schemas/RaceProgressStatus'
+        track_situation:
+          $ref: '#/components/schemas/TrackSituationData'
+        player_data:
+          $ref: '#/components/schemas/PlayerSpecificData'
+          nullable: true
+          description: Player-specific data (only when player_uuid provided)
+        race_metadata:
+          $ref: '#/components/schemas/RaceMetadata'
+
+    PlayerSpecificData:
+      type: object
+      required:
+        - boost_availability
+        - performance_preview
+        - current_position
+        - boost_usage_history
+        - boost_cycle_summaries
+      properties:
+        boost_availability:
+          $ref: '#/components/schemas/BoostAvailability'
+        performance_preview:
+          type: object
+          description: Performance calculation breakdown
+        current_position:
+          type: object
+          description: Current player position in race
+        lap_history:
+          type: array
+          items:
+            type: object
+          nullable: true
+          description: Historical lap performance data
+        boost_usage_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoostUsageRecord'
+          description: Complete boost card usage history
+        boost_cycle_summaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/BoostCycleSummary'
+          description: Aggregated statistics per boost cycle
+
+    RaceProgressStatus:
+      type: object
+      description: General race progress information
+      # Simplified for this boost card documentation
+
+    TrackSituationData:
+      type: object
+      description: Current track and participant situation
+      # Simplified for this boost card documentation
+
+    RaceMetadata:
+      type: object
+      description: Race metadata and information
+      # Simplified for this boost card documentation

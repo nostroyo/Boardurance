@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { PlayerGameProvider } from './contexts/PlayerGameContext';
 import ErrorNotification from './components/ErrorNotification';
 import MainPage from './components/MainPage';
 import RegistrationPage from './components/RegistrationPage';
@@ -9,6 +10,8 @@ import TeamPage from './components/TeamPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminDashboard from './components/AdminDashboard';
+import GameLobby from './components/GameLobby';
+import GameWrapper from './components/GameWrapper';
 import './App.css';
 
 function App() {
@@ -43,6 +46,22 @@ function App() {
                 <AdminRoute>
                   <AdminDashboard />
                 </AdminRoute>
+              } 
+            />
+            <Route 
+              path="/game/:raceUuid" 
+              element={
+                <ProtectedRoute>
+                  <GameWrapper />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/game" 
+              element={
+                <ProtectedRoute>
+                  <GameLobby />
+                </ProtectedRoute>
               } 
             />
           </Routes>
