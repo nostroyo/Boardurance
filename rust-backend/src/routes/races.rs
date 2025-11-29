@@ -511,7 +511,7 @@ fn build_race_metadata(race: &Race) -> RaceMetadata {
         race_name: race.name.clone(),
         track_name: race.track.name.clone(),
         start_time: if race.status == RaceStatus::InProgress || race.status == RaceStatus::Finished {
-            Some(race.created_at) // Placeholder - should track actual start time
+            Some(DateTime::from_timestamp(race.created_at.timestamp_millis() / 1000, 0).unwrap_or_default())
         } else {
             None
         },

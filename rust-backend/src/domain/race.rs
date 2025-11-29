@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
+use mongodb::bson::DateTime as BsonDateTime;
 
 use crate::services::car_validation::ValidatedCarData;
 
@@ -152,9 +153,9 @@ pub struct Race {
     pub total_laps: u32,
     pub status: RaceStatus,
     #[schema(value_type = String, format = "date-time")]
-    pub created_at: DateTime<Utc>,
+    pub created_at: BsonDateTime,
     #[schema(value_type = String, format = "date-time")]
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: BsonDateTime,
     // Individual lap action processing fields
     pub pending_actions: Vec<LapAction>,
     pub action_submissions: HashMap<Uuid, i64>, // Track submission times as Unix timestamps
@@ -300,7 +301,7 @@ pub struct PerformanceCalculation {
 impl Race {
     #[must_use]
     pub fn new(name: String, track: Track, total_laps: u32) -> Self {
-        let now = Utc::now();
+        let now = BsonDateTime::now();
         Self {
             id: None,
             uuid: Uuid::new_v4(),
@@ -347,7 +348,7 @@ impl Race {
         };
 
         self.participants.push(participant);
-        self.updated_at = Utc::now();
+        self.updated_at = BsonDateTime::now();
         Ok(())
     }
 
@@ -378,7 +379,7 @@ impl Race {
         // Sort participants in their starting sectors
         self.sort_participants_in_sectors();
         
-        self.updated_at = Utc::now();
+        self.updated_at = BsonDateTime::now();
         Ok(())
     }
 
@@ -525,7 +526,7 @@ impl Race {
             }
         }
 
-        self.updated_at = Utc::now();
+        self.updated_at = BsonDateTime::now();
 
         LapResult {
             lap: processed_lap,
