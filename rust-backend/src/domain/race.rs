@@ -157,7 +157,7 @@ pub struct Race {
     pub updated_at: DateTime<Utc>,
     // Individual lap action processing fields
     pub pending_actions: Vec<LapAction>,
-    pub action_submissions: HashMap<Uuid, DateTime<Utc>>, // Track submission times
+    pub action_submissions: HashMap<Uuid, i64>, // Track submission times as Unix timestamps
     pub pending_performance_calculations: HashMap<Uuid, PerformanceCalculation>, // Store performance calculations
 }
 
@@ -605,7 +605,7 @@ impl Race {
             boost_value,
         };
         self.pending_actions.push(action);
-        self.action_submissions.insert(player_uuid, Utc::now());
+        self.action_submissions.insert(player_uuid, Utc::now().timestamp());
         self.pending_performance_calculations.insert(player_uuid, performance.clone());
 
         // 7. Check if all participants have submitted actions
