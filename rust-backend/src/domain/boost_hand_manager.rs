@@ -34,7 +34,8 @@ pub struct BoostAvailability {
     pub available_cards: Vec<u8>,
     
     /// Full hand state (for detailed view)
-    pub hand_state: HashMap<u8, bool>,
+    /// Using String keys for MongoDB compatibility
+    pub hand_state: HashMap<String, bool>,
     
     /// Current cycle information
     pub current_cycle: u32,
