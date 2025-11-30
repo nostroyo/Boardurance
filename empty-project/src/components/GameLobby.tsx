@@ -207,7 +207,7 @@ function GameLobby() {
                       <div className="grid grid-cols-2 gap-4 text-sm text-gray-300 mb-4">
                         <div>
                           <span className="text-gray-400">Participants:</span>
-                          <span className="ml-2 font-medium">{race.participants || 0}</span>
+                          <span className="ml-2 font-medium">{race.participants?.length || 0}</span>
                         </div>
                         <div>
                           <span className="text-gray-400">Lap:</span>
