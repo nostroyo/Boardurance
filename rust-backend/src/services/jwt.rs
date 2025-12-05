@@ -169,18 +169,71 @@ impl JwtService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{Email, TeamName, HashedPassword};
+    use crate::domain::{Email, TeamName, HashedPassword, Car, CarName, Pilot, PilotName, PilotClass, PilotRarity, PilotSkills, PilotPerformance, Engine, EngineName, Body, BodyName, ComponentRarity};
     
     fn create_test_player() -> Player {
-        Player::new_with_assets(
-            Email::parse("test@example.com").unwrap(),
-            HashedPassword::from_hash("test_hash".to_string()),
-            TeamName::parse("Test Team").unwrap(),
-            vec![], // cars
-            vec![], // pilots
-            vec![], // engines
-            vec![], // bodies
-        ).unwrap()
+        {
+            let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
+            let performance = PilotPerformance::new(3, 3).unwrap();
+            
+            let pilot1 = Pilot::new(
+                PilotName::parse("Pilot 1").unwrap(),
+                PilotClass::AllRounder,
+                PilotRarity::Professional,
+                skills.clone(),
+                performance.clone(),
+                None,
+            ).unwrap();
+            
+            let pilot2 = Pilot::new(
+                PilotName::parse("Pilot 2").unwrap(),
+                PilotClass::AllRounder,
+                PilotRarity::Professional,
+                skills.clone(),
+                performance.clone(),
+                None,
+            ).unwrap();
+            
+            let pilot3 = Pilot::new(
+                PilotName::parse("Pilot 3").unwrap(),
+                PilotClass::AllRounder,
+                PilotRarity::Professional,
+                skills,
+                performance,
+                None,
+            ).unwrap();
+            
+            let engine = Engine::new(
+                EngineName::parse("Test Engine").unwrap(),
+                ComponentRarity::Common,
+                5,
+                4,
+                None,
+            ).unwrap();
+            
+            let body = Body::new(
+                BodyName::parse("Test Body").unwrap(),
+                ComponentRarity::Common,
+                4,
+                5,
+                None,
+            ).unwrap();
+            
+            let mut car = Car::new(CarName::parse("Test Car").unwrap(), None).unwrap();
+            car.assign_pilots(vec![pilot1.uuid, pilot2.uuid, pilot3.uuid]).unwrap();
+            car.assign_engine(engine.uuid);
+            car.assign_body(body.uuid);
+            
+            Player::new_with_assets(
+                Email::parse("test@example.com").unwrap(),
+                HashedPassword::from_hash("test_hash".to_string()),
+                TeamName::parse("Test Team").unwrap(),
+                vec![car], // cars
+                vec![pilot1, pilot2, pilot3], // pilots
+                vec![engine], // engines
+                vec![body], // bodies
+            ).unwrap()
+        }
     }
     
     #[test]

@@ -732,21 +732,8 @@ impl Race {
         let current_sector = &self.track.sectors[participant.current_sector as usize];
         let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
         
-        // Apply boost as a multiplier to make it more significant
-        // Boost multiplier: 1.0 + (boost_value * 0.08)
-        // This gives:
-        // - Boost 0: 1.0x (no change)
-        // - Boost 1: 1.08x (+8%)
-        // - Boost 2: 1.16x (+16%)
-        // - Boost 3: 1.24x (+24%)
-        // - Boost 4: 1.32x (+32%)
-        // - Boost 5: 1.40x (+40%)
-        let boost_multiplier = 1.0 + (f64::from(boost_value) * 0.08);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let boosted_value = (f64::from(capped_base_value) * boost_multiplier).round() as u32;
-        
-        // Final value is the boosted value
-        let final_value = boosted_value;
+        // Add boost value directly to capped base value
+        let final_value = capped_base_value + boost_value;
         
         PerformanceCalculation {
             engine_contribution: engine_value,

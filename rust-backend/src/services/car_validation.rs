@@ -367,12 +367,12 @@ mod tests {
         .unwrap()
     }
 
-    fn create_test_car_with_components(engine: &Engine, body: &Body, pilot: &Pilot) -> Car {
+    fn create_test_car_with_components(engine: &Engine, body: &Body, pilots: &[Pilot; 3]) -> Car {
         let mut car = Car::new(CarName::parse("Test Car").unwrap(), None).unwrap();
 
         car.assign_engine(engine.uuid);
         car.assign_body(body.uuid);
-        car.assign_pilot(pilot.uuid);
+        car.assign_pilots(vec![pilots[0].uuid, pilots[1].uuid, pilots[2].uuid]).unwrap();
 
         car
     }
@@ -381,7 +381,7 @@ mod tests {
         car: Car,
         engine: Engine,
         body: Body,
-        pilot: Pilot,
+        pilots: [Pilot; 3],
     ) -> Player {
         let email = Email::parse("test@example.com").unwrap();
         let password_hash = Password::new("TestPassword123".to_string())
@@ -395,7 +395,7 @@ mod tests {
             password_hash,
             team_name,
             vec![car],
-            vec![pilot],
+            vec![pilots[0].clone(), pilots[1].clone(), pilots[2].clone()],
             vec![engine],
             vec![body],
         )
@@ -406,9 +406,9 @@ mod tests {
     fn test_verify_car_ownership_success() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilot = create_test_pilot();
-        let car = create_test_car_with_components(&engine, &body, &pilot);
-        let player = create_test_player_with_assets(car.clone(), engine, body, pilot);
+        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
+        let car = create_test_car_with_components(&engine, &body, &pilots);
+        let player = create_test_player_with_assets(car.clone(), engine, body, pilots);
 
         let result = CarValidationService::verify_car_ownership(&player, car.uuid);
         assert!(result.is_ok());
@@ -419,9 +419,9 @@ mod tests {
     fn test_verify_car_ownership_car_not_found() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilot = create_test_pilot();
-        let car = create_test_car_with_components(&engine, &body, &pilot);
-        let player = create_test_player_with_assets(car, engine, body, pilot);
+        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
+        let car = create_test_car_with_components(&engine, &body, &pilots);
+        let player = create_test_player_with_assets(car, engine, body, pilots);
 
         let non_existent_car_uuid = Uuid::new_v4();
         let result = CarValidationService::verify_car_ownership(&player, non_existent_car_uuid);
@@ -437,11 +437,11 @@ mod tests {
     fn test_car_missing_components() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilot = create_test_pilot();
+        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
 
         // Create car without components
         let car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
-        let _player = create_test_player_with_assets(car.clone(), engine, body, pilot);
+        let _player = create_test_player_with_assets(car.clone(), engine, body, pilots);
 
         // Test missing engine
         assert!(car.engine_uuid.is_none());
@@ -449,24 +449,29 @@ mod tests {
         // Test missing body
         assert!(car.body_uuid.is_none());
 
-        // Test missing pilot
-        assert!(car.pilot_uuid.is_none());
+        // Test missing pilots
+        assert!(car.pilot_uuids.is_empty());
 
         // Verify car is not complete
         assert!(!car.is_complete());
     }
 
     #[test]
+    #[test]
     fn test_incomplete_car_configuration_error() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilot = create_test_pilot();
+        let pilot1 = create_test_pilot();
+        let pilot2 = create_test_pilot();
+        let pilot3 = create_test_pilot();
 
-        // Create car without components
-        let car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
-        let _unused_player = create_test_player_with_assets(car.clone(), engine, body, pilot);
+        // Create a complete car first (required by new_with_assets)
+        let complete_car = Car::new(CarName::parse("Complete Car").unwrap(), None).unwrap();
+        
+        // Create an incomplete second car
+        let incomplete_car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
 
-        // Create a minimal player with just the incomplete car
+        // Create a player with both cars - new_with_assets will complete the first car
         let email = Email::parse("test@example.com").unwrap();
         let password_hash = Password::new("TestPassword123".to_string())
             .unwrap()
@@ -477,15 +482,17 @@ mod tests {
             email,
             password_hash,
             team_name,
-            vec![car.clone()],
-            vec![],
-            vec![],
-            vec![],
+            vec![complete_car, incomplete_car.clone()],
+            vec![pilot1, pilot2, pilot3],
+            vec![engine],
+            vec![body],
         )
         .unwrap();
 
+        // Try to verify ownership of the incomplete car (second car)
         let result =
-            CarValidationService::verify_car_ownership(&player_with_incomplete_car, car.uuid);
+            CarValidationService::verify_car_ownership(&player_with_incomplete_car, incomplete_car.uuid);
+        
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
