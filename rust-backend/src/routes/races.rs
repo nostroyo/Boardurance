@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 
 use crate::domain::{
     Race, Track, Sector, SectorType, RaceStatus, LapAction, LapResult, LapCharacteristic,
-    MovementType,
+    MovementType, MovementProbability,
 };
 use crate::domain::boost_hand_manager::{BoostHandManager, BoostAvailability, BoostCardErrorResponse};
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
@@ -277,7 +277,215 @@ pub struct RaceMetadata {
     pub total_turns: u32,
 }
 
+// Car Data Endpoint Response Models
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CarDataResponse {
+    pub car: CarInfo,
+    pub pilot: PilotInfo,
+    pub engine: EngineInfo,
+    pub body: BodyInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CarInfo {
+    pub uuid: String,
+    pub name: String,
+    pub nft_mint_address: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PilotInfo {
+    pub uuid: String,
+    pub name: String,
+    pub pilot_class: String,
+    pub rarity: String,
+    pub skills: PilotSkills,
+    pub performance: PilotPerformance,
+    pub nft_mint_address: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PilotSkills {
+    pub reaction_time: u8,
+    pub precision: u8,
+    pub focus: u8,
+    pub stamina: u8,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PilotPerformance {
+    pub straight_value: u8,
+    pub curve_value: u8,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EngineInfo {
+    pub uuid: String,
+    pub name: String,
+    pub rarity: String,
+    pub straight_value: u8,
+    pub curve_value: u8,
+    pub nft_mint_address: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BodyInfo {
+    pub uuid: String,
+    pub name: String,
+    pub rarity: String,
+    pub straight_value: u8,
+    pub curve_value: u8,
+    pub nft_mint_address: Option<String>,
+}
+
+// Turn Phase Endpoint Response Models
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TurnPhaseResponse {
+    pub turn_phase: String, // "WaitingForPlayers", "AllSubmitted", "Processing", "Complete"
+    pub current_lap: u32,
+    pub lap_characteristic: String,
+    pub submitted_players: Vec<String>, // UUIDs
+    pub pending_players: Vec<String>,   // UUIDs
+    pub total_active_players: u32,
+}
+
+// Local View Endpoint Response Models
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LocalViewResponse {
+    pub center_sector: u32,
+    pub visible_sectors: Vec<SectorInfo>,
+    pub visible_participants: Vec<ParticipantInfo>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SectorInfo {
+    pub id: u32,
+    pub name: String,
+    pub min_value: u32,
+    pub max_value: u32,
+    pub slot_capacity: Option<u32>,
+    pub sector_type: String,
+    pub current_occupancy: u32,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ParticipantInfo {
+    pub player_uuid: String,
+    pub player_name: Option<String>,
+    pub car_name: String,
+    pub current_sector: u32,
+    pub position_in_sector: u32,
+    pub total_value: u32,
+    pub current_lap: u32,
+    pub is_finished: bool,
+}
+
+// Performance Preview Endpoint Response Models
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PerformancePreviewResponse {
+    pub base_performance: BasePerformance,
+    pub boost_options: Vec<BoostOption>,
+    pub boost_cycle_info: BoostCycleInfo,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BasePerformance {
+    pub engine_contribution: u32,
+    pub body_contribution: u32,
+    pub pilot_contribution: u32,
+    pub base_value: u32,
+    pub sector_ceiling: u32,
+    pub capped_base_value: u32,
+    pub lap_characteristic: String, // "Straight" or "Curve"
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BoostOption {
+    pub boost_value: u8,
+    pub is_available: bool,
+    pub final_value: u32,
+    pub movement_probability: String, // "MoveUp", "Stay", "MoveDown"
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BoostCycleInfo {
+    pub current_cycle: u32,
+    pub cycles_completed: u32,
+    pub cards_remaining: u32,
+    pub available_cards: Vec<u8>,
+}
+
+// Boost Availability Endpoint Response Models
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BoostAvailabilityResponse {
+    pub available_cards: Vec<u8>,
+    pub hand_state: std::collections::HashMap<String, bool>,
+    pub current_cycle: u32,
+    pub cycles_completed: u32,
+    pub cards_remaining: u32,
+    pub next_replenishment_at: Option<u32>,
+}
+
+
+
+// Helper Functions
+
+/// Calculate movement probability based on performance value and sector thresholds
+/// 
+/// # Arguments
+/// * `final_value` - The final performance value after boost
+/// * `sector` - The current sector with min/max thresholds
+/// 
+/// # Returns
+/// * `MovementProbability` - MoveUp if >= max, Stay if between min/max, MoveDown if < min
+fn calculate_movement_probability(
+    final_value: u32,
+    sector: &Sector,
+) -> MovementProbability {
+    if final_value >= sector.max_value {
+        MovementProbability::MoveUp
+    } else if final_value < sector.min_value {
+        MovementProbability::MoveDown
+    } else {
+        MovementProbability::Stay
+    }
+}
+
+/// Calculate visible sector IDs for local view (center ±2 sectors)
+/// 
+/// This function handles circular track wrapping by using modulo arithmetic.
+/// For a track with N sectors, it returns 5 sector IDs centered on the given sector.
+/// 
+/// # Arguments
+/// * `center` - The center sector ID (player's current sector)
+/// * `total_sectors` - Total number of sectors in the track
+/// 
+/// # Returns
+/// * `Vec<u32>` - Vector of 5 sector IDs in order (center-2, center-1, center, center+1, center+2)
+/// 
+/// # Examples
+/// ```
+/// // For a track with 10 sectors, player at sector 1:
+/// // Returns [9, 0, 1, 2, 3] (wraps around at track boundaries)
+/// let visible = get_visible_sector_ids(1, 10);
+/// ```
+fn get_visible_sector_ids(center: u32, total_sectors: usize) -> Vec<u32> {
+    let mut ids = Vec::new();
+    let total = total_sectors as i32;
+    
+    // Calculate center ±2 sectors with proper wrapping
+    for offset in -2..=2 {
+        let sector_id = (center as i32 + offset).rem_euclid(total) as u32;
+        ids.push(sector_id);
+    }
+    
+    ids
+}
 
 pub fn routes() -> Router<Database> {
     Router::new()
@@ -290,6 +498,15 @@ pub fn routes() -> Router<Database> {
         .route("/races/:race_uuid/register", post(register_player))
         .route("/races/:race_uuid/status-detailed", get(get_race_status_detailed))
         .route("/races/:race_uuid/apply-lap", post(apply_lap_action))
+        
+        // New player-specific endpoints
+        .route("/races/:race_uuid/players/:player_uuid/car-data", get(get_car_data))
+        .route("/races/:race_uuid/players/:player_uuid/performance-preview", get(get_performance_preview))
+        .route("/races/:race_uuid/players/:player_uuid/local-view", get(get_local_view))
+        .route("/races/:race_uuid/players/:player_uuid/boost-availability", get(get_boost_availability))
+        
+        // Race-level endpoint
+        .route("/races/:race_uuid/turn-phase", get(get_turn_phase))
         
         // Protected routes - These should be protected with AuthMiddleware
         // TODO: Apply middleware layers in startup.rs:
@@ -1249,6 +1466,912 @@ pub async fn apply_lap_action(
         player_data,
         race_metadata,
     }))
+}
+
+// New Car Data Endpoint Implementation
+
+/// Get complete car data for a player in a race
+/// 
+/// This endpoint returns comprehensive car information including:
+/// - Car details (name, UUID, NFT address)
+/// - Pilot information (skills, performance, class, rarity)
+/// - Engine specifications (straight/curve values, rarity)
+/// - Body specifications (straight/curve values, rarity)
+/// 
+/// The data is retrieved using the `CarValidationService` which ensures
+/// the car belongs to the player and has all required components.
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/players/{player_uuid}/car-data",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID"),
+        ("player_uuid" = String, Path, description = "Player UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Car data retrieved successfully",
+            body = CarDataResponse,
+            example = json!({
+                "car": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440001",
+                    "name": "Lightning Bolt",
+                    "nft_mint_address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+                },
+                "pilot": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440002",
+                    "name": "Max Speed",
+                    "pilot_class": "SpeedDemon",
+                    "rarity": "Professional",
+                    "skills": {
+                        "reaction_time": 8,
+                        "precision": 7,
+                        "focus": 6,
+                        "stamina": 7
+                    },
+                    "performance": {
+                        "straight_value": 5,
+                        "curve_value": 4
+                    },
+                    "nft_mint_address": null
+                },
+                "engine": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440003",
+                    "name": "V8 Turbo",
+                    "rarity": "Rare",
+                    "straight_value": 8,
+                    "curve_value": 6,
+                    "nft_mint_address": null
+                },
+                "body": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440004",
+                    "name": "Aerodynamic Frame",
+                    "rarity": "Rare",
+                    "straight_value": 7,
+                    "curve_value": 8,
+                    "nft_mint_address": null
+                }
+            })
+        ),
+        (status = 400, description = "Invalid UUID format"),
+        (status = 404, description = "Player not found in race"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting car data for player in race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str,
+        player_uuid = %player_uuid_str
+    )
+)]
+pub async fn get_car_data(
+    State(database): State<Database>,
+    Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
+) -> Result<Json<CarDataResponse>, StatusCode> {
+    // 1. Parse and validate UUIDs
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    // 2. Fetch race and find participant
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 3. Find participant by player_uuid
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid)
+        .ok_or_else(|| {
+            tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    // 4. Use CarValidationService to get car data
+    let car_data = match CarValidationService::validate_car_for_race(
+        &database,
+        player_uuid,
+        participant.car_uuid,
+    ).await {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Failed to validate car: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 5. Transform domain models to API response models
+    let response = CarDataResponse {
+        car: CarInfo {
+            uuid: car_data.car.uuid.to_string(),
+            name: car_data.car.name.as_ref().to_string(),
+            nft_mint_address: car_data.car.nft_mint_address.clone(),
+        },
+        pilot: PilotInfo {
+            uuid: car_data.pilot.uuid.to_string(),
+            name: car_data.pilot.name.as_ref().to_string(),
+            pilot_class: format!("{:?}", car_data.pilot.pilot_class),
+            rarity: format!("{:?}", car_data.pilot.rarity),
+            skills: PilotSkills {
+                reaction_time: car_data.pilot.skills.reaction_time,
+                precision: car_data.pilot.skills.precision,
+                focus: car_data.pilot.skills.focus,
+                stamina: car_data.pilot.skills.stamina,
+            },
+            performance: PilotPerformance {
+                straight_value: car_data.pilot.performance.straight_value,
+                curve_value: car_data.pilot.performance.curve_value,
+            },
+            nft_mint_address: car_data.pilot.nft_mint_address.clone(),
+        },
+        engine: EngineInfo {
+            uuid: car_data.engine.uuid.to_string(),
+            name: car_data.engine.name.as_ref().to_string(),
+            rarity: format!("{:?}", car_data.engine.rarity),
+            straight_value: car_data.engine.straight_value,
+            curve_value: car_data.engine.curve_value,
+            nft_mint_address: car_data.engine.nft_mint_address.clone(),
+        },
+        body: BodyInfo {
+            uuid: car_data.body.uuid.to_string(),
+            name: car_data.body.name.as_ref().to_string(),
+            rarity: format!("{:?}", car_data.body.rarity),
+            straight_value: car_data.body.straight_value,
+            curve_value: car_data.body.curve_value,
+            nft_mint_address: car_data.body.nft_mint_address.clone(),
+        },
+    };
+    
+    tracing::info!("Car data retrieved for player {} in race {}", player_uuid, race_uuid);
+    Ok(Json(response))
+}
+
+/// Get performance preview for all boost options
+/// 
+/// This endpoint calculates and returns performance predictions for all boost card options (0-4).
+/// It provides:
+/// - Base performance breakdown (engine, body, pilot contributions)
+/// - Sector ceiling application
+/// - Final performance values for each boost option
+/// - Movement probability for each boost option
+/// - Boost cycle information (available cards, cycle status)
+/// 
+/// The performance calculation follows the boost multiplier formula:
+/// `final_value = base_value * (1.0 + boost_value * 0.08)`
+/// 
+/// Movement probabilities are determined by comparing final values to sector thresholds:
+/// - MoveUp: final_value >= sector.max_value
+/// - Stay: sector.min_value <= final_value < sector.max_value
+/// - MoveDown: final_value < sector.min_value
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/players/{player_uuid}/performance-preview",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID"),
+        ("player_uuid" = String, Path, description = "Player UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Performance preview calculated successfully",
+            body = PerformancePreviewResponse,
+            example = json!({
+                "base_performance": {
+                    "engine_contribution": 8,
+                    "body_contribution": 7,
+                    "pilot_contribution": 5,
+                    "base_value": 20,
+                    "sector_ceiling": 25,
+                    "capped_base_value": 20,
+                    "lap_characteristic": "Straight"
+                },
+                "boost_options": [
+                    {
+                        "boost_value": 0,
+                        "is_available": false,
+                        "final_value": 20,
+                        "movement_probability": "Stay"
+                    },
+                    {
+                        "boost_value": 1,
+                        "is_available": true,
+                        "final_value": 22,
+                        "movement_probability": "Stay"
+                    },
+                    {
+                        "boost_value": 2,
+                        "is_available": true,
+                        "final_value": 23,
+                        "movement_probability": "Stay"
+                    },
+                    {
+                        "boost_value": 3,
+                        "is_available": true,
+                        "final_value": 25,
+                        "movement_probability": "MoveUp"
+                    },
+                    {
+                        "boost_value": 4,
+                        "is_available": true,
+                        "final_value": 26,
+                        "movement_probability": "MoveUp"
+                    }
+                ],
+                "boost_cycle_info": {
+                    "current_cycle": 1,
+                    "cycles_completed": 0,
+                    "cards_remaining": 4,
+                    "available_cards": [1, 2, 3, 4]
+                }
+            })
+        ),
+        (status = 400, description = "Invalid UUID format"),
+        (status = 404, description = "Player not found in race or race not found"),
+        (status = 409, description = "Race not in progress or player already finished"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting performance preview for player in race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str,
+        player_uuid = %player_uuid_str
+    )
+)]
+pub async fn get_performance_preview(
+    State(database): State<Database>,
+    Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
+) -> Result<Json<PerformancePreviewResponse>, StatusCode> {
+    // 1. Parse and validate UUIDs
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    // 2. Fetch race
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 3. Validate race is in progress
+    if race.status != RaceStatus::InProgress {
+        tracing::warn!("Race {} is not in progress", race_uuid);
+        return Err(StatusCode::CONFLICT);
+    }
+    
+    // 4. Find participant by player_uuid
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid)
+        .ok_or_else(|| {
+            tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    // 5. Check if player has already finished
+    if participant.is_finished {
+        tracing::warn!("Player {} has already finished the race", player_uuid);
+        return Err(StatusCode::CONFLICT);
+    }
+    
+    // 6. Validate car data using CarValidationService
+    let car_data = match CarValidationService::validate_car_for_race(
+        &database,
+        player_uuid,
+        participant.car_uuid,
+    ).await {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::error!("Failed to validate car: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 7. Calculate base performance using Race::calculate_performance_with_car_data()
+    // We need to create a temporary PerformanceCalculation with boost 0 to get base values
+    let current_sector = &race.track.sectors[participant.current_sector as usize];
+    
+    // Get performance values based on lap characteristic
+    let (engine_contribution, body_contribution, pilot_contribution) = match race.lap_characteristic {
+        LapCharacteristic::Straight => (
+            u32::from(car_data.engine.straight_value),
+            u32::from(car_data.body.straight_value),
+            u32::from(car_data.pilot.performance.straight_value),
+        ),
+        LapCharacteristic::Curve => (
+            u32::from(car_data.engine.curve_value),
+            u32::from(car_data.body.curve_value),
+            u32::from(car_data.pilot.performance.curve_value),
+        ),
+    };
+    
+    let base_value = engine_contribution + body_contribution + pilot_contribution;
+    let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
+    
+    // 8. Build base performance response
+    let base_performance = BasePerformance {
+        engine_contribution,
+        body_contribution,
+        pilot_contribution,
+        base_value,
+        sector_ceiling: current_sector.max_value,
+        capped_base_value,
+        lap_characteristic: format!("{:?}", race.lap_characteristic),
+    };
+    
+    // 9. Calculate boost options for each boost card (0-4)
+    let mut boost_options = Vec::new();
+    
+    for boost_value in 0..=4 {
+        let is_available = participant.boost_hand.is_card_available(boost_value);
+        
+        // Calculate final value using boost multiplier formula: base * (1.0 + boost * 0.08)
+        let boost_multiplier = 1.0 + (f64::from(boost_value) * 0.08);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let final_value = (f64::from(capped_base_value) * boost_multiplier).round() as u32;
+        
+        // Determine movement probability
+        let movement_probability = calculate_movement_probability(final_value, current_sector);
+        
+        boost_options.push(BoostOption {
+            boost_value,
+            is_available,
+            final_value,
+            movement_probability: format!("{:?}", movement_probability),
+        });
+    }
+    
+    // 10. Get boost cycle info from participant's boost_hand
+    let boost_cycle_info = BoostCycleInfo {
+        current_cycle: participant.boost_hand.current_cycle,
+        cycles_completed: participant.boost_hand.cycles_completed,
+        cards_remaining: participant.boost_hand.cards_remaining,
+        available_cards: participant.boost_hand.get_available_cards(),
+    };
+    
+    // 11. Return complete preview
+    let response = PerformancePreviewResponse {
+        base_performance,
+        boost_options,
+        boost_cycle_info,
+    };
+    
+    tracing::info!("Performance preview calculated for player {} in race {}", player_uuid, race_uuid);
+    Ok(Json(response))
+}
+
+/// Get turn phase information for a race
+/// 
+/// This endpoint returns the current turn phase state for simultaneous turn resolution.
+/// It provides information about:
+/// - Current turn phase (WaitingForPlayers, AllSubmitted, Processing, Complete)
+/// - Current lap number and lap characteristic
+/// - List of players who have submitted actions
+/// - List of players who are still pending action submission
+/// - Total number of active players
+/// 
+/// Turn phases are determined by:
+/// - Complete: Race status is not InProgress
+/// - AllSubmitted: All active participants have submitted actions
+/// - WaitingForPlayers: Some participants haven't submitted actions yet
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/turn-phase",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Turn phase information retrieved successfully",
+            body = TurnPhaseResponse,
+            example = json!({
+                "turn_phase": "WaitingForPlayers",
+                "current_lap": 2,
+                "lap_characteristic": "Straight",
+                "submitted_players": [
+                    "550e8400-e29b-41d4-a716-446655440000",
+                    "550e8400-e29b-41d4-a716-446655440001"
+                ],
+                "pending_players": [
+                    "550e8400-e29b-41d4-a716-446655440002"
+                ],
+                "total_active_players": 3
+            })
+        ),
+        (status = 400, description = "Invalid UUID format"),
+        (status = 404, description = "Race not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting turn phase for race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str
+    )
+)]
+pub async fn get_turn_phase(
+    State(database): State<Database>,
+    Path(race_uuid_str): Path<String>,
+) -> Result<Json<TurnPhaseResponse>, StatusCode> {
+    // 1. Parse and validate UUID
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    // 2. Fetch race from database
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 3. Determine turn phase using race.all_actions_submitted() and race status
+    let turn_phase = if race.status != RaceStatus::InProgress {
+        "Complete".to_string()
+    } else if race.all_actions_submitted() {
+        "AllSubmitted".to_string()
+    } else {
+        "WaitingForPlayers".to_string()
+    };
+    
+    // 4. Get submitted players from race.pending_actions
+    let submitted_players: Vec<String> = race.pending_actions
+        .iter()
+        .map(|action| action.player_uuid.to_string())
+        .collect();
+    
+    // 5. Get pending players using race.get_pending_players()
+    let pending_players: Vec<String> = race.get_pending_players()
+        .iter()
+        .map(|uuid| uuid.to_string())
+        .collect();
+    
+    // 6. Calculate total active players (not finished)
+    #[allow(clippy::cast_possible_truncation)]
+    let total_active_players = race.participants
+        .iter()
+        .filter(|p| !p.is_finished)
+        .count() as u32;
+    
+    // 7. Return phase information with player lists
+    let response = TurnPhaseResponse {
+        turn_phase,
+        current_lap: race.current_lap,
+        lap_characteristic: format!("{:?}", race.lap_characteristic),
+        submitted_players,
+        pending_players,
+        total_active_players,
+    };
+    
+    tracing::info!("Turn phase retrieved for race {}: {}", race_uuid, response.turn_phase);
+    Ok(Json(response))
+}
+
+/// Get local view for a player in a race
+/// 
+/// This endpoint calculates and returns the player's 5-sector local view (current sector ±2).
+/// It provides:
+/// - The player's current sector as the center
+/// - 5 visible sectors with their details (id, name, thresholds, capacity, type)
+/// - All participants within the visible range with their positions
+/// - Current occupancy for each visible sector
+/// 
+/// The local view handles circular track wrapping automatically, so sectors at the
+/// beginning/end of the track are properly included when the player is near track boundaries.
+/// 
+/// # Sector Range Calculation
+/// For a player at sector N on a track with M sectors:
+/// - Visible sectors: [N-2, N-1, N, N+1, N+2] (with modulo wrapping)
+/// - Example: Player at sector 1 on 10-sector track sees [9, 0, 1, 2, 3]
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/players/{player_uuid}/local-view",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID"),
+        ("player_uuid" = String, Path, description = "Player UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Local view calculated successfully",
+            body = LocalViewResponse,
+            example = json!({
+                "center_sector": 5,
+                "visible_sectors": [
+                    {
+                        "id": 3,
+                        "name": "Sector 3",
+                        "min_value": 15,
+                        "max_value": 25,
+                        "slot_capacity": 3,
+                        "sector_type": "Normal",
+                        "current_occupancy": 1
+                    },
+                    {
+                        "id": 4,
+                        "name": "Sector 4",
+                        "min_value": 20,
+                        "max_value": 30,
+                        "slot_capacity": 3,
+                        "sector_type": "Normal",
+                        "current_occupancy": 2
+                    },
+                    {
+                        "id": 5,
+                        "name": "Sector 5",
+                        "min_value": 25,
+                        "max_value": 35,
+                        "slot_capacity": 3,
+                        "sector_type": "Normal",
+                        "current_occupancy": 1
+                    },
+                    {
+                        "id": 6,
+                        "name": "Sector 6",
+                        "min_value": 30,
+                        "max_value": 40,
+                        "slot_capacity": 3,
+                        "sector_type": "Normal",
+                        "current_occupancy": 0
+                    },
+                    {
+                        "id": 7,
+                        "name": "Sector 7",
+                        "min_value": 35,
+                        "max_value": 45,
+                        "slot_capacity": 3,
+                        "sector_type": "Normal",
+                        "current_occupancy": 1
+                    }
+                ],
+                "visible_participants": [
+                    {
+                        "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                        "player_name": "Player 1",
+                        "car_name": "Lightning Bolt",
+                        "current_sector": 5,
+                        "position_in_sector": 1,
+                        "total_value": 45,
+                        "current_lap": 2,
+                        "is_finished": false
+                    },
+                    {
+                        "player_uuid": "550e8400-e29b-41d4-a716-446655440001",
+                        "player_name": "Player 2",
+                        "car_name": "Thunder Strike",
+                        "current_sector": 4,
+                        "position_in_sector": 1,
+                        "total_value": 42,
+                        "current_lap": 2,
+                        "is_finished": false
+                    }
+                ]
+            })
+        ),
+        (status = 400, description = "Invalid UUID format"),
+        (status = 404, description = "Player not found in race or race not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting local view for player in race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str,
+        player_uuid = %player_uuid_str
+    )
+)]
+pub async fn get_local_view(
+    State(database): State<Database>,
+    Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
+) -> Result<Json<LocalViewResponse>, StatusCode> {
+    // 1. Parse and validate UUIDs
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    // 2. Fetch race from database
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 3. Find participant by player_uuid
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid)
+        .ok_or_else(|| {
+            tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    let center_sector = participant.current_sector;
+    
+    // 4. Calculate visible sector IDs using helper function
+    let visible_sector_ids = get_visible_sector_ids(center_sector, race.track.sectors.len());
+    
+    // 5. Filter sectors to visible range
+    let mut visible_sectors = Vec::new();
+    for sector_id in &visible_sector_ids {
+        if let Some(sector) = race.track.sectors.iter().find(|s| s.id == *sector_id) {
+            // Count participants in this sector
+            #[allow(clippy::cast_possible_truncation)]
+            let current_occupancy = race.participants
+                .iter()
+                .filter(|p| p.current_sector == *sector_id && !p.is_finished)
+                .count() as u32;
+            
+            visible_sectors.push(SectorInfo {
+                id: sector.id,
+                name: sector.name.clone(),
+                min_value: sector.min_value,
+                max_value: sector.max_value,
+                slot_capacity: sector.slot_capacity,
+                sector_type: format!("{:?}", sector.sector_type),
+                current_occupancy,
+            });
+        }
+    }
+    
+    // 6. Filter participants to visible range
+    let mut visible_participants = Vec::new();
+    for participant in &race.participants {
+        if visible_sector_ids.contains(&participant.current_sector) && !participant.is_finished {
+            // TODO: Optionally fetch player names from database
+            let player_name = None; // Placeholder for now
+            
+            // TODO: Fetch car name from database
+            let car_name = format!("Car {}", participant.car_uuid);
+            
+            visible_participants.push(ParticipantInfo {
+                player_uuid: participant.player_uuid.to_string(),
+                player_name,
+                car_name,
+                current_sector: participant.current_sector,
+                position_in_sector: participant.current_position_in_sector,
+                total_value: participant.total_value,
+                current_lap: participant.current_lap,
+                is_finished: participant.is_finished,
+            });
+        }
+    }
+    
+    // Sort participants by sector (descending) then by position in sector (ascending)
+    visible_participants.sort_by(|a, b| {
+        b.current_sector.cmp(&a.current_sector)
+            .then_with(|| a.position_in_sector.cmp(&b.position_in_sector))
+    });
+    
+    // 7. Return local view data with 5 sectors
+    let response = LocalViewResponse {
+        center_sector,
+        visible_sectors,
+        visible_participants,
+    };
+    
+    tracing::info!("Local view calculated for player {} in race {}", player_uuid, race_uuid);
+    Ok(Json(response))
+}
+
+/// Get boost card availability for a player in a race
+/// 
+/// This endpoint returns the current boost hand state for a player, including:
+/// - Available boost cards (0-4) that can be used
+/// - Complete hand state showing which cards are available/used
+/// - Current cycle information (cycle number, cycles completed)
+/// - Cards remaining before next replenishment
+/// - Next replenishment lap number
+/// 
+/// The boost hand system manages 5 cards per cycle. When all cards are used,
+/// the hand automatically replenishes for the next cycle. This endpoint helps
+/// the frontend display which boost options are currently available to the player.
+/// 
+/// # Boost Hand Mechanics
+/// - Each player has 5 boost cards (values 0-4) per cycle
+/// - Cards can only be used once per cycle
+/// - When all 5 cards are used, the hand replenishes automatically
+/// - Next replenishment occurs when cards_remaining reaches 0
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/players/{player_uuid}/boost-availability",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID"),
+        ("player_uuid" = String, Path, description = "Player UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Boost availability retrieved successfully",
+            body = BoostAvailabilityResponse,
+            example = json!({
+                "available_cards": [1, 2, 4],
+                "hand_state": {
+                    "0": false,
+                    "1": true,
+                    "2": true,
+                    "3": false,
+                    "4": true
+                },
+                "current_cycle": 1,
+                "cycles_completed": 0,
+                "cards_remaining": 3,
+                "next_replenishment_at": 3
+            })
+        ),
+        (status = 400, description = "Invalid UUID format"),
+        (status = 404, description = "Player not found in race or race not found"),
+        (status = 409, description = "Race not in progress or player already finished"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting boost availability for player in race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str,
+        player_uuid = %player_uuid_str
+    )
+)]
+pub async fn get_boost_availability(
+    State(database): State<Database>,
+    Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
+) -> Result<Json<BoostAvailabilityResponse>, StatusCode> {
+    // 1. Parse and validate UUIDs
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    
+    // 2. Fetch race from database
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // 3. Validate race is in progress
+    if race.status != RaceStatus::InProgress {
+        tracing::warn!("Race {} is not in progress", race_uuid);
+        return Err(StatusCode::CONFLICT);
+    }
+    
+    // 4. Find participant by player_uuid
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid)
+        .ok_or_else(|| {
+            tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    // 5. Check if player has already finished
+    if participant.is_finished {
+        tracing::warn!("Player {} has already finished the race", player_uuid);
+        return Err(StatusCode::CONFLICT);
+    }
+    
+    // 6. Get boost hand from participant
+    let boost_hand = &participant.boost_hand;
+    
+    // 7. Extract availability information
+    let available_cards = boost_hand.get_available_cards();
+    let hand_state = boost_hand.cards.clone();
+    
+    // 8. Calculate next replenishment lap (current_lap + cards_remaining)
+    // When cards_remaining reaches 0, replenishment happens automatically
+    let next_replenishment_at = if boost_hand.cards_remaining > 0 {
+        Some(boost_hand.cards_remaining)
+    } else {
+        None
+    };
+    
+    // 9. Return availability data
+    let response = BoostAvailabilityResponse {
+        available_cards,
+        hand_state,
+        current_cycle: boost_hand.current_cycle,
+        cycles_completed: boost_hand.cycles_completed,
+        cards_remaining: boost_hand.cards_remaining,
+        next_replenishment_at,
+    };
+    
+    tracing::info!("Boost availability retrieved for player {} in race {}", player_uuid, race_uuid);
+    Ok(Json(response))
 }
 
 // Existing endpoint implementations...
