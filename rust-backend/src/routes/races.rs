@@ -431,6 +431,51 @@ pub struct BoostAvailabilityResponse {
     pub next_replenishment_at: Option<u32>,
 }
 
+// Lap History Endpoint Response Models
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LapHistoryResponse {
+    pub laps: Vec<LapRecord>,
+    pub cycle_summaries: Vec<CycleSummary>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LapRecord {
+    pub lap_number: u32,
+    pub lap_characteristic: String,
+    pub boost_used: u8,
+    pub boost_cycle: u32,
+    pub base_value: u32,
+    pub final_value: u32,
+    pub from_sector: u32,
+    pub to_sector: u32,
+    pub movement_type: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CycleSummary {
+    pub cycle_number: u32,
+    pub cards_used: Vec<u8>,
+    pub laps_in_cycle: Vec<u32>,
+    pub average_boost: f32,
+}
+
+// Error Response Model
+
+/// Standard error response format used across all endpoints
+/// 
+/// This struct provides a consistent error response format with:
+/// - error: A short error code or category
+/// - message: A human-readable error message
+/// - details: Optional additional information about the error
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<String>,
+}
+
 
 
 // Helper Functions
@@ -504,6 +549,7 @@ pub fn routes() -> Router<Database> {
         .route("/races/:race_uuid/players/:player_uuid/performance-preview", get(get_performance_preview))
         .route("/races/:race_uuid/players/:player_uuid/local-view", get(get_local_view))
         .route("/races/:race_uuid/players/:player_uuid/boost-availability", get(get_boost_availability))
+        .route("/races/:race_uuid/players/:player_uuid/lap-history", get(get_lap_history))
         
         // Race-level endpoint
         .route("/races/:race_uuid/turn-phase", get(get_turn_phase))
@@ -1533,9 +1579,36 @@ pub async fn apply_lap_action(
                 }
             })
         ),
-        (status = 400, description = "Invalid UUID format"),
-        (status = 404, description = "Player not found in race"),
-        (status = 500, description = "Internal server error")
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Player not found in race", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_NOT_FOUND",
+                "message": "Player not found in race",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
     ),
     tag = "races"
 )]
@@ -1550,21 +1623,35 @@ pub async fn apply_lap_action(
 pub async fn get_car_data(
     State(database): State<Database>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
-) -> Result<Json<CarDataResponse>, StatusCode> {
+) -> Result<Json<CarDataResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
@@ -1573,11 +1660,25 @@ pub async fn get_car_data(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
         }
         Err(e) => {
             tracing::error!("Failed to fetch race: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
         }
     };
     
@@ -1587,7 +1688,14 @@ pub async fn get_car_data(
         .find(|p| p.player_uuid == player_uuid)
         .ok_or_else(|| {
             tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
-            StatusCode::NOT_FOUND
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            )
         })?;
     
     // 4. Use CarValidationService to get car data
@@ -1599,7 +1707,14 @@ pub async fn get_car_data(
         Ok(data) => data,
         Err(e) => {
             tracing::error!("Failed to validate car: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "CAR_VALIDATION_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to validate car: {}", e)),
+                }),
+            ));
         }
     };
     
@@ -1728,10 +1843,46 @@ pub async fn get_car_data(
                 }
             })
         ),
-        (status = 400, description = "Invalid UUID format"),
-        (status = 404, description = "Player not found in race or race not found"),
-        (status = 409, description = "Race not in progress or player already finished"),
-        (status = 500, description = "Internal server error")
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Player not found in race or race not found", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_NOT_FOUND",
+                "message": "Player not found in race",
+                "details": null
+            })
+        ),
+        (
+            status = 409, 
+            description = "Race not in progress or player already finished", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "RACE_NOT_IN_PROGRESS",
+                "message": "Race is not in progress",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
     ),
     tag = "races"
 )]
@@ -1746,21 +1897,35 @@ pub async fn get_car_data(
 pub async fn get_performance_preview(
     State(database): State<Database>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
-) -> Result<Json<PerformancePreviewResponse>, StatusCode> {
+) -> Result<Json<PerformancePreviewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
@@ -1769,18 +1934,39 @@ pub async fn get_performance_preview(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
         }
         Err(e) => {
             tracing::error!("Failed to fetch race: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
         }
     };
     
     // 3. Validate race is in progress
     if race.status != RaceStatus::InProgress {
         tracing::warn!("Race {} is not in progress", race_uuid);
-        return Err(StatusCode::CONFLICT);
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "RACE_NOT_IN_PROGRESS".to_string(),
+                message: "Race is not in progress".to_string(),
+                details: None,
+            }),
+        ));
     }
     
     // 4. Find participant by player_uuid
@@ -1789,13 +1975,27 @@ pub async fn get_performance_preview(
         .find(|p| p.player_uuid == player_uuid)
         .ok_or_else(|| {
             tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
-            StatusCode::NOT_FOUND
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            )
         })?;
     
     // 5. Check if player has already finished
     if participant.is_finished {
         tracing::warn!("Player {} has already finished the race", player_uuid);
-        return Err(StatusCode::CONFLICT);
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "PLAYER_FINISHED".to_string(),
+                message: "Player has already finished the race".to_string(),
+                details: None,
+            }),
+        ));
     }
     
     // 6. Validate car data using CarValidationService
@@ -1807,7 +2007,14 @@ pub async fn get_performance_preview(
         Ok(data) => data,
         Err(e) => {
             tracing::error!("Failed to validate car: {}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "CAR_VALIDATION_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to validate car: {}", e)),
+                }),
+            ));
         }
     };
     
@@ -1923,9 +2130,36 @@ pub async fn get_performance_preview(
                 "total_active_players": 3
             })
         ),
-        (status = 400, description = "Invalid UUID format"),
-        (status = 404, description = "Race not found"),
-        (status = 500, description = "Internal server error")
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Race not found", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "RACE_NOT_FOUND",
+                "message": "Race not found",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
     ),
     tag = "races"
 )]
@@ -1939,13 +2173,20 @@ pub async fn get_performance_preview(
 pub async fn get_turn_phase(
     State(database): State<Database>,
     Path(race_uuid_str): Path<String>,
-) -> Result<Json<TurnPhaseResponse>, StatusCode> {
+) -> Result<Json<TurnPhaseResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUID
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
@@ -1954,11 +2195,25 @@ pub async fn get_turn_phase(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
         }
         Err(e) => {
             tracing::error!("Failed to fetch race: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
         }
     };
     
@@ -2105,9 +2360,36 @@ pub async fn get_turn_phase(
                 ]
             })
         ),
-        (status = 400, description = "Invalid UUID format"),
-        (status = 404, description = "Player not found in race or race not found"),
-        (status = 500, description = "Internal server error")
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Player not found in race or race not found", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_NOT_FOUND",
+                "message": "Player not found in race",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
     ),
     tag = "races"
 )]
@@ -2122,21 +2404,35 @@ pub async fn get_turn_phase(
 pub async fn get_local_view(
     State(database): State<Database>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
-) -> Result<Json<LocalViewResponse>, StatusCode> {
+) -> Result<Json<LocalViewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
@@ -2145,11 +2441,25 @@ pub async fn get_local_view(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
         }
         Err(e) => {
             tracing::error!("Failed to fetch race: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
         }
     };
     
@@ -2159,7 +2469,14 @@ pub async fn get_local_view(
         .find(|p| p.player_uuid == player_uuid)
         .ok_or_else(|| {
             tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
-            StatusCode::NOT_FOUND
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            )
         })?;
     
     let center_sector = participant.current_sector;
@@ -2275,10 +2592,46 @@ pub async fn get_local_view(
                 "next_replenishment_at": 3
             })
         ),
-        (status = 400, description = "Invalid UUID format"),
-        (status = 404, description = "Player not found in race or race not found"),
-        (status = 409, description = "Race not in progress or player already finished"),
-        (status = 500, description = "Internal server error")
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Player not found in race or race not found", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_NOT_FOUND",
+                "message": "Player not found in race",
+                "details": null
+            })
+        ),
+        (
+            status = 409, 
+            description = "Race not in progress or player already finished", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_FINISHED",
+                "message": "Player has already finished the race",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
     ),
     tag = "races"
 )]
@@ -2293,21 +2646,35 @@ pub async fn get_local_view(
 pub async fn get_boost_availability(
     State(database): State<Database>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
-) -> Result<Json<BoostAvailabilityResponse>, StatusCode> {
+) -> Result<Json<BoostAvailabilityResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid race UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
+        Err(_) => {
+            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
         }
     };
     
@@ -2316,18 +2683,39 @@ pub async fn get_boost_availability(
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
         }
         Err(e) => {
             tracing::error!("Failed to fetch race: {:?}", e);
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
         }
     };
     
     // 3. Validate race is in progress
     if race.status != RaceStatus::InProgress {
         tracing::warn!("Race {} is not in progress", race_uuid);
-        return Err(StatusCode::CONFLICT);
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "RACE_NOT_IN_PROGRESS".to_string(),
+                message: "Race is not in progress".to_string(),
+                details: None,
+            }),
+        ));
     }
     
     // 4. Find participant by player_uuid
@@ -2336,13 +2724,27 @@ pub async fn get_boost_availability(
         .find(|p| p.player_uuid == player_uuid)
         .ok_or_else(|| {
             tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
-            StatusCode::NOT_FOUND
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            )
         })?;
     
     // 5. Check if player has already finished
     if participant.is_finished {
         tracing::warn!("Player {} has already finished the race", player_uuid);
-        return Err(StatusCode::CONFLICT);
+        return Err((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse {
+                error: "PLAYER_FINISHED".to_string(),
+                message: "Player has already finished the race".to_string(),
+                details: None,
+            }),
+        ));
     }
     
     // 6. Get boost hand from participant
@@ -2371,6 +2773,251 @@ pub async fn get_boost_availability(
     };
     
     tracing::info!("Boost availability retrieved for player {} in race {}", player_uuid, race_uuid);
+    Ok(Json(response))
+}
+
+/// Get lap history for a player in a race
+/// 
+/// This endpoint returns the player's lap-by-lap performance history for the current race.
+/// It provides:
+/// - Lap records with boost usage, performance values, and movement information
+/// - Boost cycle summaries with aggregated statistics per cycle
+/// 
+/// The lap history helps players analyze their performance trends and boost card
+/// usage patterns throughout the race. Each lap record includes:
+/// - Lap number and lap characteristic (Straight/Curve)
+/// - Boost card used and which cycle it was from
+/// - Base and final performance values
+/// - Movement information (from/to sectors, movement type)
+/// 
+/// Cycle summaries provide aggregated statistics:
+/// - Cards used in each cycle
+/// - Laps when cards were used
+/// - Average boost value per cycle
+/// 
+/// # Note
+/// Historical performance and movement data is currently limited to boost usage tracking.
+/// Full lap-by-lap performance reconstruction would require storing additional historical data.
+#[utoipa::path(
+    get,
+    path = "/api/v1/races/{race_uuid}/players/{player_uuid}/lap-history",
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID"),
+        ("player_uuid" = String, Path, description = "Player UUID")
+    ),
+    responses(
+        (
+            status = 200,
+            description = "Lap history retrieved successfully",
+            body = LapHistoryResponse,
+            example = json!({
+                "laps": [
+                    {
+                        "lap_number": 1,
+                        "lap_characteristic": "Straight",
+                        "boost_used": 2,
+                        "boost_cycle": 1,
+                        "base_value": 20,
+                        "final_value": 23,
+                        "from_sector": 0,
+                        "to_sector": 3,
+                        "movement_type": "MovedUp"
+                    },
+                    {
+                        "lap_number": 2,
+                        "lap_characteristic": "Curve",
+                        "boost_used": 0,
+                        "boost_cycle": 1,
+                        "base_value": 18,
+                        "final_value": 18,
+                        "from_sector": 3,
+                        "to_sector": 4,
+                        "movement_type": "StayedInSector"
+                    }
+                ],
+                "cycle_summaries": [
+                    {
+                        "cycle_number": 1,
+                        "cards_used": [2, 0, 3],
+                        "laps_in_cycle": [1, 2, 3],
+                        "average_boost": 1.67
+                    }
+                ]
+            })
+        ),
+        (
+            status = 400, 
+            description = "Invalid UUID format", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "INVALID_UUID",
+                "message": "Invalid UUID format",
+                "details": null
+            })
+        ),
+        (
+            status = 404, 
+            description = "Player not found in race or race not found", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "PLAYER_NOT_FOUND",
+                "message": "Player not found in race",
+                "details": null
+            })
+        ),
+        (
+            status = 500, 
+            description = "Internal server error", 
+            body = ErrorResponse,
+            example = json!({
+                "error": "DATABASE_ERROR",
+                "message": "Internal server error",
+                "details": "Failed to fetch race: connection timeout"
+            })
+        )
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(
+    name = "Getting lap history for player in race",
+    skip(database),
+    fields(
+        race_uuid = %race_uuid_str,
+        player_uuid = %player_uuid_str
+    )
+)]
+pub async fn get_lap_history(
+    State(database): State<Database>,
+    Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
+) -> Result<Json<LapHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // 1. Parse and validate UUIDs
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
+        }
+    };
+    
+    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "INVALID_UUID".to_string(),
+                    message: "Invalid UUID format".to_string(),
+                    details: None,
+                }),
+            ));
+        }
+    };
+    
+    // 2. Fetch race from database
+    let race = match get_race_by_uuid(&database, race_uuid).await {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "RACE_NOT_FOUND".to_string(),
+                    message: "Race not found".to_string(),
+                    details: None,
+                }),
+            ));
+        }
+        Err(e) => {
+            tracing::error!("Failed to fetch race: {:?}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "DATABASE_ERROR".to_string(),
+                    message: "Internal server error".to_string(),
+                    details: Some(format!("Failed to fetch race: {}", e)),
+                }),
+            ));
+        }
+    };
+    
+    // 3. Find participant by player_uuid
+    let participant = race.participants
+        .iter()
+        .find(|p| p.player_uuid == player_uuid)
+        .ok_or_else(|| {
+            tracing::warn!("Player {} not found in race {}", player_uuid, race_uuid);
+            (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            )
+        })?;
+    
+    // 4. Get boost usage history from participant
+    let boost_usage_history = &participant.boost_usage_history;
+    
+    // 5. Build lap records from usage history
+    // Note: We only have boost usage data. Historical performance values and movements
+    // are not currently stored, so we use placeholder values.
+    let mut lap_records = Vec::new();
+    
+    for usage_record in boost_usage_history {
+        // Determine lap characteristic based on lap number
+        // This is a simplified approach - ideally we'd store historical lap characteristics
+        let lap_characteristic = if usage_record.lap_number % 2 == 1 {
+            "Straight"
+        } else {
+            "Curve"
+        };
+        
+        // Create lap record with available data
+        // Note: base_value, final_value, from_sector, to_sector, and movement_type
+        // are not historically tracked, so we use placeholder values
+        lap_records.push(LapRecord {
+            lap_number: usage_record.lap_number,
+            lap_characteristic: lap_characteristic.to_string(),
+            boost_used: usage_record.boost_value,
+            boost_cycle: usage_record.cycle_number,
+            base_value: 0, // Historical base value not tracked
+            final_value: 0, // Historical final value not tracked
+            from_sector: 0, // Historical sector movement not tracked
+            to_sector: 0, // Historical sector movement not tracked
+            movement_type: "Unknown".to_string(), // Historical movement type not tracked
+        });
+    }
+    
+    // 6. Get cycle summaries using participant.get_boost_cycle_summaries()
+    let cycle_summaries_domain = participant.get_boost_cycle_summaries();
+    
+    // 7. Convert domain cycle summaries to API response format
+    let cycle_summaries: Vec<CycleSummary> = cycle_summaries_domain
+        .into_iter()
+        .map(|summary| CycleSummary {
+            cycle_number: summary.cycle_number,
+            cards_used: summary.cards_used,
+            laps_in_cycle: summary.laps_in_cycle,
+            average_boost: summary.average_boost,
+        })
+        .collect();
+    
+    // 8. Return history data with lap records and cycle summaries
+    let response = LapHistoryResponse {
+        laps: lap_records,
+        cycle_summaries,
+    };
+    
+    tracing::info!("Lap history retrieved for player {} in race {}", player_uuid, race_uuid);
     Ok(Json(response))
 }
 

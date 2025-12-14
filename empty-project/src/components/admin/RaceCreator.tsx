@@ -27,7 +27,7 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
     raceName: '',
     trackName: '',
     totalLaps: 3,
-    sectors: []
+    sectors: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,14 +35,14 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: name === 'totalLaps' ? parseInt(value) || 1 : value
+      [name]: name === 'totalLaps' ? parseInt(value) || 1 : value,
     }));
   };
 
   const handleTrackLoad = (sectors: Sector[]) => {
-    setFormData(prev => ({ ...prev, sectors }));
+    setFormData((prev) => ({ ...prev, sectors }));
     setError(null);
   };
 
@@ -64,12 +64,12 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
     if (formData.sectors.length < 2) {
       return 'Track must have at least 2 sectors (Start and Finish)';
     }
-    
+
     // Validate first sector is Start type
     if (formData.sectors[0].sector_type !== 'Start') {
       return 'First sector must be of type "Start"';
     }
-    
+
     // Validate last sector is Finish type
     const lastSector = formData.sectors[formData.sectors.length - 1];
     if (lastSector.sector_type !== 'Finish') {
@@ -81,7 +81,7 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
@@ -97,14 +97,14 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
         name: formData.raceName,
         track_name: formData.trackName,
         total_laps: formData.totalLaps,
-        sectors: formData.sectors.map(sector => ({
+        sectors: formData.sectors.map((sector) => ({
           id: sector.id,
           name: sector.name,
           min_value: sector.min_value,
           max_value: sector.max_value,
           slot_capacity: sector.slot_capacity,
-          sector_type: sector.sector_type
-        }))
+          sector_type: sector.sector_type,
+        })),
       });
 
       if (result.success) {
@@ -114,7 +114,7 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
           raceName: '',
           trackName: '',
           totalLaps: 3,
-          sectors: []
+          sectors: [],
         });
         // Notify parent component
         setTimeout(() => {
@@ -134,16 +134,18 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
     <div className="max-w-4xl mx-auto">
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6">
-            Create New Race
-          </h3>
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-6">Create New Race</h3>
 
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </div>
                 <div className="ml-3">
@@ -158,7 +160,11 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                 </div>
                 <div className="ml-3">
@@ -239,17 +245,24 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
                           <span className="text-sm font-medium text-gray-900">
                             {index + 1}. {sector.name}
                           </span>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            sector.sector_type === 'Start' ? 'bg-green-100 text-green-800' :
-                            sector.sector_type === 'Finish' ? 'bg-red-100 text-red-800' :
-                            sector.sector_type === 'Straight' ? 'bg-blue-100 text-blue-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              sector.sector_type === 'Start'
+                                ? 'bg-green-100 text-green-800'
+                                : sector.sector_type === 'Finish'
+                                  ? 'bg-red-100 text-red-800'
+                                  : sector.sector_type === 'Straight'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
                             {sector.sector_type}
                           </span>
                         </div>
                         <div className="text-xs text-gray-500">
-                          <div>Range: {sector.min_value} - {sector.max_value}</div>
+                          <div>
+                            Range: {sector.min_value} - {sector.max_value}
+                          </div>
                           <div>Capacity: {sector.slot_capacity || 'Unlimited'}</div>
                         </div>
                       </div>
@@ -268,9 +281,25 @@ const RaceCreator: React.FC<RaceCreatorProps> = ({ onRaceCreated }) => {
               >
                 {isSubmitting ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Creating Race...
                   </>

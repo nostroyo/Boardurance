@@ -55,7 +55,7 @@ interface RaceResponse {
   message: string;
 }
 
-interface APIResponse<T = any> {
+interface APIResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -75,7 +75,7 @@ export interface RacePollingConfig {
 export const DEFAULT_POLLING_CONFIG: RacePollingConfig = {
   interval: 2000, // 2 seconds
   maxRetries: 3,
-  retryDelay: 1000 // 1 second base delay
+  retryDelay: 1000, // 1 second base delay
 };
 
 export const raceAPI = {
@@ -98,81 +98,72 @@ export const raceAPI = {
   async handleResponse<T>(response: Response): Promise<APIResponse<T>> {
     try {
       const data = await response.json();
-      
+
       if (response.ok) {
         return { success: true, data };
       } else {
-        return { 
-          success: false, 
-          error: data.error || data.message || `Request failed with status ${response.status}` 
+        return {
+          success: false,
+          error: data.error || data.message || `Request failed with status ${response.status}`,
         };
       }
-    } catch (error) {
+    } catch {
       if (response.ok) {
         return { success: true, data: null as T };
       } else {
-        return { 
-          success: false, 
-          error: `Request failed with status ${response.status}` 
+        return {
+          success: false,
+          error: `Request failed with status ${response.status}`,
         };
       }
     }
   },
 
   // Make authenticated request
-  async makeAuthenticatedRequest<T>(url: string, options: RequestInit = {}): Promise<APIResponse<T>> {
+  async makeAuthenticatedRequest<T>(
+    url: string,
+    options: RequestInit = {},
+  ): Promise<APIResponse<T>> {
     const authOptions = this.getAuthenticatedFetchOptions(options);
-    
+
     try {
       const response = await fetch(url, authOptions);
       return await this.handleResponse<T>(response);
-    } catch (error) {
-      return { 
-        success: false, 
-        error: 'Network error. Please check your connection.' 
+    } catch {
+      return {
+        success: false,
+        error: 'Network error. Please check your connection.',
       };
     }
   },
 
   // Create new race
   async createRace(raceData: CreateRaceRequest): Promise<APIResponse<RaceResponse>> {
-    return await this.makeAuthenticatedRequest<RaceResponse>(
-      `${this.baseUrl}/races`,
-      {
-        method: 'POST',
-        body: JSON.stringify(raceData),
-      }
-    );
+    return await this.makeAuthenticatedRequest<RaceResponse>(`${this.baseUrl}/races`, {
+      method: 'POST',
+      body: JSON.stringify(raceData),
+    });
   },
 
   // Get all races
   async getAllRaces(): Promise<APIResponse<Race[]>> {
-    return await this.makeAuthenticatedRequest<Race[]>(
-      `${this.baseUrl}/races`,
-      {
-        method: 'GET',
-      }
-    );
+    return await this.makeAuthenticatedRequest<Race[]>(`${this.baseUrl}/races`, {
+      method: 'GET',
+    });
   },
 
   // Get specific race
   async getRace(raceUuid: string): Promise<APIResponse<Race>> {
-    return await this.makeAuthenticatedRequest<Race>(
-      `${this.baseUrl}/races/${raceUuid}`,
-      {
-        method: 'GET',
-      }
-    );
+    return await this.makeAuthenticatedRequest<Race>(`${this.baseUrl}/races/${raceUuid}`, {
+      method: 'GET',
+    });
   },
 
   // Get race status
   async getRaceStatus(raceUuid: string): Promise<APIResponse<string>> {
-    return await this.makeAuthenticatedRequest<string>(
-      `${this.baseUrl}/races/${raceUuid}/status`,
-      {
-        method: 'GET',
-      }
-    );
+    return await this.makeAuthenticatedRequest<string>(`${this.baseUrl}/races/${raceUuid}/status`, {
+      method: 'GET',
+    });
   },
 
   // Start race
@@ -181,12 +172,17 @@ export const raceAPI = {
       `${this.baseUrl}/races/${raceUuid}/start`,
       {
         method: 'POST',
-      }
+      },
     );
   },
 
   // Join race
-  async joinRace(raceUuid: string, playerUuid: string, carUuid: string, pilotUuid: string): Promise<APIResponse<RaceResponse>> {
+  async joinRace(
+    raceUuid: string,
+    playerUuid: string,
+    carUuid: string,
+    pilotUuid: string,
+  ): Promise<APIResponse<RaceResponse>> {
     return await this.makeAuthenticatedRequest<RaceResponse>(
       `${this.baseUrl}/races/${raceUuid}/join`,
       {
@@ -196,44 +192,45 @@ export const raceAPI = {
           car_uuid: carUuid,
           pilot_uuid: pilotUuid,
         }),
-      }
+      },
     );
   },
 
   // Process race turn
-  async processRaceTurn(raceUuid: string, actions: Array<{ player_uuid: string; boost_value: number }>): Promise<APIResponse<any>> {
-    return await this.makeAuthenticatedRequest(
-      `${this.baseUrl}/races/${raceUuid}/turn`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          actions: actions,
-        }),
-      }
-    );
+  async processRaceTurn(
+    raceUuid: string,
+    actions: Array<{ player_uuid: string; boost_value: number }>,
+  ): Promise<APIResponse<RaceResponse>> {
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/races/${raceUuid}/turn`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actions: actions,
+      }),
+    });
   },
 
   // Player Game Interface specific API methods
 
   // Submit boost action for a player
-  async submitBoostAction(raceUuid: string, playerUuid: string, boostValue: number): Promise<APIResponse<any>> {
+  async submitBoostAction(
+    raceUuid: string,
+    playerUuid: string,
+    boostValue: number,
+  ): Promise<APIResponse<RaceResponse>> {
     if (boostValue < 0 || boostValue > 5) {
       return {
         success: false,
-        error: 'Boost value must be between 0 and 5'
+        error: 'Boost value must be between 0 and 5',
       };
     }
 
-    return await this.makeAuthenticatedRequest(
-      `${this.baseUrl}/races/${raceUuid}/boost`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          player_uuid: playerUuid,
-          boost_value: boostValue,
-        }),
-      }
-    );
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/races/${raceUuid}/boost`, {
+      method: 'POST',
+      body: JSON.stringify({
+        player_uuid: playerUuid,
+        boost_value: boostValue,
+      }),
+    });
   },
 
   // Get current turn phase for a race
@@ -242,7 +239,7 @@ export const raceAPI = {
       `${this.baseUrl}/races/${raceUuid}/turn-phase`,
       {
         method: 'GET',
-      }
+      },
     );
   },
 
@@ -253,38 +250,42 @@ export const raceAPI = {
 
     try {
       const response = await this.getRace(raceUuid);
-      
+
       if (!response.success && retryCount < maxRetries) {
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
         return await this.pollRaceData(raceUuid, retryCount + 1);
       }
-      
+
       return response;
-    } catch (error) {
+    } catch {
       if (retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
         return await this.pollRaceData(raceUuid, retryCount + 1);
       }
-      
+
       return {
         success: false,
-        error: 'Failed to fetch race data after multiple attempts'
+        error: 'Failed to fetch race data after multiple attempts',
       };
     }
   },
 
   // Start real-time polling for race updates
-  startRacePolling(raceUuid: string, onUpdate: (race: Race) => void, onError: (error: string) => void): () => void {
+  startRacePolling(
+    raceUuid: string,
+    onUpdate: (race: Race) => void,
+    onError: (error: string) => void,
+  ): () => void {
     let isPolling = true;
     let pollCount = 0;
-    
+
     const poll = async () => {
       if (!isPolling) return;
-      
+
       try {
         const response = await this.pollRaceData(raceUuid);
-        
+
         if (response.success && response.data) {
           onUpdate(response.data);
           pollCount = 0; // Reset error count on success
@@ -295,23 +296,23 @@ export const raceAPI = {
             return;
           }
         }
-      } catch (error) {
+      } catch {
         pollCount++;
         if (pollCount >= 3) {
           onError('Network error during race polling');
           return;
         }
       }
-      
+
       // Schedule next poll (2-second intervals)
       if (isPolling) {
         setTimeout(poll, 2000);
       }
     };
-    
+
     // Start polling
     poll();
-    
+
     // Return cleanup function
     return () => {
       isPolling = false;
@@ -319,22 +320,22 @@ export const raceAPI = {
   },
 
   // Get player's performance breakdown for current lap
-  async getPlayerPerformance(raceUuid: string, playerUuid: string): Promise<APIResponse<any>> {
+  async getPlayerPerformance(raceUuid: string, playerUuid: string): Promise<APIResponse<unknown>> {
     return await this.makeAuthenticatedRequest(
       `${this.baseUrl}/races/${raceUuid}/players/${playerUuid}/performance`,
       {
         method: 'GET',
-      }
+      },
     );
   },
 
   // Get race history for a player
-  async getPlayerRaceHistory(raceUuid: string, playerUuid: string): Promise<APIResponse<any>> {
+  async getPlayerRaceHistory(raceUuid: string, playerUuid: string): Promise<APIResponse<unknown>> {
     return await this.makeAuthenticatedRequest(
       `${this.baseUrl}/races/${raceUuid}/players/${playerUuid}/history`,
       {
         method: 'GET',
-      }
+      },
     );
   },
 
@@ -344,7 +345,7 @@ export const raceAPI = {
       `${this.baseUrl}/races/${raceUuid}/players/${playerUuid}/submitted`,
       {
         method: 'GET',
-      }
+      },
     );
   },
 
@@ -354,7 +355,7 @@ export const raceAPI = {
       `${this.baseUrl}/races/${raceUuid}/turn-time-remaining`,
       {
         method: 'GET',
-      }
+      },
     );
   },
 };
@@ -392,11 +393,11 @@ export const raceStatusUtils = {
     if (race.status === 'Waiting') {
       return 'Race is waiting to start';
     }
-    
+
     if (race.status === 'Finished') {
       return 'Race has finished';
     }
-    
+
     if (race.status === 'Cancelled') {
       return 'Race has been cancelled';
     }
@@ -404,7 +405,7 @@ export const raceStatusUtils = {
     // Race is in progress
     switch (turnPhase) {
       case 'WaitingForPlayers':
-        return hasSubmitted 
+        return hasSubmitted
           ? 'Waiting for other players to submit their actions'
           : 'Submit your boost action for this lap';
       case 'AllSubmitted':
@@ -421,10 +422,10 @@ export const raceStatusUtils = {
   // Get appropriate UI color for turn phase
   getTurnPhaseColor(turnPhase: TurnPhase): string {
     const colors: Record<TurnPhase, string> = {
-      'WaitingForPlayers': '#10B981', // Green
-      'AllSubmitted': '#F59E0B',      // Yellow
-      'Processing': '#3B82F6',        // Blue
-      'Complete': '#6B7280'           // Gray
+      WaitingForPlayers: '#10B981', // Green
+      AllSubmitted: '#F59E0B', // Yellow
+      Processing: '#3B82F6', // Blue
+      Complete: '#6B7280', // Gray
     };
     return colors[turnPhase] || '#6B7280';
   },
@@ -448,11 +449,11 @@ export const raceStatusUtils = {
   // Get lap characteristic icon
   getLapCharacteristicIcon(characteristic: string): string {
     const icons: Record<string, string> = {
-      'Straight': '🏁',
-      'Curve': '🌀'
+      Straight: '🏁',
+      Curve: '🌀',
     };
     return icons[characteristic] || '🏁';
-  }
+  },
 };
 
 // Error handling utilities for race API
@@ -463,10 +464,10 @@ export const raceErrorUtils = {
       'Network error',
       'Connection timeout',
       'Server temporarily unavailable',
-      'Rate limit exceeded'
+      'Rate limit exceeded',
     ];
-    return retryableErrors.some(retryableError => 
-      error.toLowerCase().includes(retryableError.toLowerCase())
+    return retryableErrors.some((retryableError) =>
+      error.toLowerCase().includes(retryableError.toLowerCase()),
     );
   },
 
@@ -479,7 +480,7 @@ export const raceErrorUtils = {
       'Invalid boost value': 'Boost value must be between 0 and 5.',
       'Turn phase mismatch': 'Race state has changed. Refreshing...',
       'Action already submitted': 'You have already submitted your action for this turn.',
-      'Race not in progress': 'This race is not currently active.'
+      'Race not in progress': 'This race is not currently active.',
     };
 
     // Check for exact matches first
@@ -504,10 +505,10 @@ export const raceErrorUtils = {
       'Player not in race',
       'Invalid boost value',
       'Action already submitted',
-      'Race not in progress'
+      'Race not in progress',
     ];
-    return userActionErrors.some(actionError => 
-      error.toLowerCase().includes(actionError.toLowerCase())
+    return userActionErrors.some((actionError) =>
+      error.toLowerCase().includes(actionError.toLowerCase()),
     );
-  }
+  },
 };

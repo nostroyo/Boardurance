@@ -2,6 +2,8 @@
 inclusion: always
 ---
 
+Name features with a number to easily track changes and documentations
+
 When you start a new feature create a new branch on git with the name of the feature. This will allow you to have a clean working directory and not have to worry about conflicts when you merge your changes back into the main branch.
 
 ```sh
@@ -21,6 +23,14 @@ git commit -m "feat: #1234 Add new feature"
 All your documentation (ie .md) should be in the docs folder. This will allow you to have a clean working directory and not have to worry about conflicts when you merge your changes back into the main branch.
 Try to use sub directory to stay clean in the repository
 
+In the docs folder you can have a folder for each feature. This will allow you to have a clean working directory and not have to worry about conflicts when you merge your changes back into the main branch.
+
+```sh
+docs/feature/my-feature
+```
+When you finish a task inside your feature branch always commit with the task number and the name of the task. This will allow you to have a clean working directory and not have to worry about conflicts when you merge your changes back into the feature branch.
+
+```sh
 
 ---
 inclusion: always

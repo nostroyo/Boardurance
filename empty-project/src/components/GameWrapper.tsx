@@ -31,7 +31,7 @@ function GameWrapper() {
 
   return (
     <PlayerGameProvider>
-      <PlayerGameInterface 
+      <PlayerGameInterface
         raceUuid={raceUuid}
         playerUuid={user.uuid}
         onRaceComplete={(position) => {

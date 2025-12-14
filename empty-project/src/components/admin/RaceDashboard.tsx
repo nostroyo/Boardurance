@@ -49,10 +49,10 @@ const RaceDashboard: React.FC = () => {
   const loadRaces = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await raceAPI.getAllRaces();
-      
+
       if (result.success) {
         setRaces(result.data || []);
       } else {
@@ -75,21 +75,21 @@ const RaceDashboard: React.FC = () => {
     // Apply status filter
     if (filter !== 'all') {
       const statusMap: Record<RaceFilter, string> = {
-        'waiting': 'Waiting',
+        waiting: 'Waiting',
         'in-progress': 'InProgress',
-        'finished': 'Finished',
-        'cancelled': 'Cancelled',
-        'all': ''
+        finished: 'Finished',
+        cancelled: 'Cancelled',
+        all: '',
       };
-      filtered = filtered.filter(race => race.status === statusMap[filter]);
+      filtered = filtered.filter((race) => race.status === statusMap[filter]);
     }
 
     // Apply search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(race => 
-        race.name.toLowerCase().includes(term) ||
-        race.track.name.toLowerCase().includes(term)
+      filtered = filtered.filter(
+        (race) =>
+          race.name.toLowerCase().includes(term) || race.track.name.toLowerCase().includes(term),
       );
     }
 
@@ -99,10 +99,10 @@ const RaceDashboard: React.FC = () => {
   const getStatusCounts = () => {
     return {
       all: races.length,
-      waiting: races.filter(r => r.status === 'Waiting').length,
-      'in-progress': races.filter(r => r.status === 'InProgress').length,
-      finished: races.filter(r => r.status === 'Finished').length,
-      cancelled: races.filter(r => r.status === 'Cancelled').length,
+      waiting: races.filter((r) => r.status === 'Waiting').length,
+      'in-progress': races.filter((r) => r.status === 'InProgress').length,
+      finished: races.filter((r) => r.status === 'Finished').length,
+      cancelled: races.filter((r) => r.status === 'Cancelled').length,
     };
   };
 
@@ -145,7 +145,12 @@ const RaceDashboard: React.FC = () => {
           className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
           </svg>
           Refresh
         </button>
@@ -157,7 +162,11 @@ const RaceDashboard: React.FC = () => {
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
@@ -169,7 +178,11 @@ const RaceDashboard: React.FC = () => {
                 className="inline-flex text-red-400 hover:text-red-600"
               >
                 <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </button>
             </div>
@@ -193,9 +206,7 @@ const RaceDashboard: React.FC = () => {
                 }`}
               >
                 {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-                <span className="ml-1 bg-white rounded-full px-2 py-0.5 text-xs">
-                  {count}
-                </span>
+                <span className="ml-1 bg-white rounded-full px-2 py-0.5 text-xs">{count}</span>
               </button>
             ))}
           </div>
@@ -203,8 +214,18 @@ const RaceDashboard: React.FC = () => {
           {/* Search */}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </div>
             <input
@@ -221,25 +242,30 @@ const RaceDashboard: React.FC = () => {
       {/* Race List */}
       {filteredRaces.length === 0 ? (
         <div className="text-center py-12">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          <svg
+            className="mx-auto h-12 w-12 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            />
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No races found</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {races.length === 0 
-              ? "Get started by creating your first race."
-              : "Try adjusting your filters or search terms."
-            }
+            {races.length === 0
+              ? 'Get started by creating your first race.'
+              : 'Try adjusting your filters or search terms.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filteredRaces.map((race) => (
-            <RaceCard
-              key={race.uuid}
-              race={race}
-              onAction={handleRaceAction}
-            />
+            <RaceCard key={race.uuid} race={race} onAction={handleRaceAction} />
           ))}
         </div>
       )}

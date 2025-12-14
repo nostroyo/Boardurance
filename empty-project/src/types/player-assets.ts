@@ -160,21 +160,21 @@ export const validateBody = (body: any): body is Body => {
 // Utility functions for display purposes (no calculations)
 export const getRarityColor = (rarity: string): string => {
   const rarityColors: Record<string, string> = {
-    'Common': '#9CA3AF',
-    'Uncommon': '#10B981',
-    'Rare': '#3B82F6',
-    'Epic': '#8B5CF6',
-    'Legendary': '#F59E0B'
+    Common: '#9CA3AF',
+    Uncommon: '#10B981',
+    Rare: '#3B82F6',
+    Epic: '#8B5CF6',
+    Legendary: '#F59E0B',
   };
   return rarityColors[rarity] || '#9CA3AF';
 };
 
 export const getPilotClassIcon = (pilotClass: string): string => {
   const classIcons: Record<string, string> = {
-    'Rookie': '🟢',
-    'Veteran': '🔵',
-    'Elite': '🟣',
-    'Champion': '🟡'
+    Rookie: '🟢',
+    Veteran: '🔵',
+    Elite: '🟣',
+    Champion: '🟡',
   };
   return classIcons[pilotClass] || '🟢';
 };

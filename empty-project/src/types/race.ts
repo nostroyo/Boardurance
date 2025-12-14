@@ -54,7 +54,7 @@ export const TurnPhase = {
   WaitingForPlayers: 'WaitingForPlayers' as const,
   AllSubmitted: 'AllSubmitted' as const,
   Processing: 'Processing' as const,
-  Complete: 'Complete' as const
+  Complete: 'Complete' as const,
 } as const;
 
 // Movement tracking for animations
@@ -140,41 +140,38 @@ export const validateRaceParticipant = (participant: any): participant is RacePa
 };
 
 // Utility functions for local view calculations (player sector ±2)
-export const calculateLocalView = (
-  race: Race,
-  playerUuid: string
-): LocalRaceView | null => {
-  const playerParticipant = race.participants.find(p => p.player_uuid === playerUuid);
-  
+export const calculateLocalView = (race: Race, playerUuid: string): LocalRaceView | null => {
+  const playerParticipant = race.participants.find((p) => p.player_uuid === playerUuid);
+
   if (!playerParticipant) {
     return null;
   }
 
   const centerSector = playerParticipant.current_sector;
   const visibleSectorIds = getVisibleSectorIds(centerSector, race.track.sectors.length);
-  
-  const visibleSectors = race.track.sectors.filter(sector => 
-    visibleSectorIds.includes(sector.id)
+
+  const visibleSectors = race.track.sectors.filter((sector) =>
+    visibleSectorIds.includes(sector.id),
   );
 
-  const visibleParticipants = race.participants.filter(participant =>
-    visibleSectorIds.includes(participant.current_sector)
+  const visibleParticipants = race.participants.filter((participant) =>
+    visibleSectorIds.includes(participant.current_sector),
   );
 
   return {
     centerSector,
     visibleSectors,
-    visibleParticipants
+    visibleParticipants,
   };
 };
 
 export const getVisibleSectorIds = (centerSector: number, totalSectors: number): number[] => {
   const visibleIds: number[] = [];
-  
+
   // Add center sector ±2 (5 sectors total)
   for (let offset = -2; offset <= 2; offset++) {
     const sectorId = centerSector + offset;
-    
+
     // Handle wrapping for circular tracks
     if (sectorId < 0) {
       visibleIds.push(totalSectors + sectorId);
@@ -184,18 +181,18 @@ export const getVisibleSectorIds = (centerSector: number, totalSectors: number):
       visibleIds.push(sectorId);
     }
   }
-  
+
   return visibleIds;
 };
 
 export const getPlayerParticipant = (race: Race, playerUuid: string): RaceParticipant | null => {
-  return race.participants.find(p => p.player_uuid === playerUuid) || null;
+  return race.participants.find((p) => p.player_uuid === playerUuid) || null;
 };
 
 export const getSectorById = (track: Track, sectorId: number): Sector | null => {
-  return track.sectors.find(s => s.id === sectorId) || null;
+  return track.sectors.find((s) => s.id === sectorId) || null;
 };
 
 export const getParticipantsInSector = (race: Race, sectorId: number): RaceParticipant[] => {
-  return race.participants.filter(p => p.current_sector === sectorId);
+  return race.participants.filter((p) => p.current_sector === sectorId);
 };

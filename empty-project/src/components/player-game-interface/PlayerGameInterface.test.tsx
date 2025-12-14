@@ -33,11 +33,46 @@ const mockRace = {
     uuid: 'test-track-uuid',
     name: 'Test Track',
     sectors: [
-      { id: 0, name: 'Start', min_value: 0, max_value: 10, slot_capacity: null, sector_type: 'Start' },
-      { id: 1, name: 'Sector 1', min_value: 5, max_value: 15, slot_capacity: 5, sector_type: 'Straight' },
-      { id: 2, name: 'Sector 2', min_value: 10, max_value: 20, slot_capacity: 5, sector_type: 'Curve' },
-      { id: 3, name: 'Sector 3', min_value: 15, max_value: 25, slot_capacity: 5, sector_type: 'Straight' },
-      { id: 4, name: 'Finish', min_value: 20, max_value: 30, slot_capacity: null, sector_type: 'Finish' },
+      {
+        id: 0,
+        name: 'Start',
+        min_value: 0,
+        max_value: 10,
+        slot_capacity: null,
+        sector_type: 'Start',
+      },
+      {
+        id: 1,
+        name: 'Sector 1',
+        min_value: 5,
+        max_value: 15,
+        slot_capacity: 5,
+        sector_type: 'Straight',
+      },
+      {
+        id: 2,
+        name: 'Sector 2',
+        min_value: 10,
+        max_value: 20,
+        slot_capacity: 5,
+        sector_type: 'Curve',
+      },
+      {
+        id: 3,
+        name: 'Sector 3',
+        min_value: 15,
+        max_value: 25,
+        slot_capacity: 5,
+        sector_type: 'Straight',
+      },
+      {
+        id: 4,
+        name: 'Finish',
+        min_value: 20,
+        max_value: 30,
+        slot_capacity: null,
+        sector_type: 'Finish',
+      },
     ],
   },
   participants: [
@@ -69,7 +104,7 @@ describe('PlayerGameInterface', () => {
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+
     // Setup default mock responses
     const { raceAPI } = require('../../utils/raceAPI');
     raceAPI.getRace.mockResolvedValue({ success: true, data: mockRace });
@@ -79,11 +114,8 @@ describe('PlayerGameInterface', () => {
   test('renders loading state initially', () => {
     render(
       <TestWrapper>
-        <PlayerGameInterface
-          raceUuid="test-race-uuid"
-          playerUuid="test-player-uuid"
-        />
-      </TestWrapper>
+        <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
+      </TestWrapper>,
     );
 
     expect(screen.getByText('Loading race data...')).toBeInTheDocument();
@@ -92,11 +124,8 @@ describe('PlayerGameInterface', () => {
   test('renders race interface after loading', async () => {
     render(
       <TestWrapper>
-        <PlayerGameInterface
-          raceUuid="test-race-uuid"
-          playerUuid="test-player-uuid"
-        />
-      </TestWrapper>
+        <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
+      </TestWrapper>,
     );
 
     // Wait for race data to load
@@ -114,11 +143,8 @@ describe('PlayerGameInterface', () => {
   test('displays local sector view correctly', async () => {
     render(
       <TestWrapper>
-        <PlayerGameInterface
-          raceUuid="test-race-uuid"
-          playerUuid="test-player-uuid"
-        />
-      </TestWrapper>
+        <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
+      </TestWrapper>,
     );
 
     await waitFor(() => {
@@ -139,11 +165,8 @@ describe('PlayerGameInterface', () => {
   test('displays boost selection interface', async () => {
     render(
       <TestWrapper>
-        <PlayerGameInterface
-          raceUuid="test-race-uuid"
-          playerUuid="test-player-uuid"
-        />
-      </TestWrapper>
+        <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
+      </TestWrapper>,
     );
 
     await waitFor(() => {
@@ -152,7 +175,7 @@ describe('PlayerGameInterface', () => {
 
     // Should show boost selection buttons
     expect(screen.getByText('Select Boost Value (0-5):')).toBeInTheDocument();
-    
+
     // Check all boost buttons are present
     for (let i = 0; i <= 5; i++) {
       expect(screen.getByRole('button', { name: i.toString() })).toBeInTheDocument();
@@ -172,7 +195,7 @@ describe('PlayerGameInterface', () => {
           playerUuid="test-player-uuid"
           onError={jest.fn()}
         />
-      </TestWrapper>
+      </TestWrapper>,
     );
 
     await waitFor(() => {
@@ -194,18 +217,17 @@ describe('PlayerGameInterface', () => {
 
     render(
       <TestWrapper>
-        <PlayerGameInterface
-          raceUuid="test-race-uuid"
-          playerUuid="test-player-uuid"
-        />
-      </TestWrapper>
+        <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
+      </TestWrapper>,
     );
 
     await waitFor(() => {
       expect(screen.getByText('Not Participating')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('You are not registered as a participant in this race.')).toBeInTheDocument();
+    expect(
+      screen.getByText('You are not registered as a participant in this race.'),
+    ).toBeInTheDocument();
   });
 
   test('calls onRaceComplete when race finishes', async () => {
@@ -233,7 +255,7 @@ describe('PlayerGameInterface', () => {
           playerUuid="test-player-uuid"
           onRaceComplete={onRaceComplete}
         />
-      </TestWrapper>
+      </TestWrapper>,
     );
 
     await waitFor(() => {

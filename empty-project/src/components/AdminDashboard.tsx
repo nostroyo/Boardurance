@@ -58,9 +58,7 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-sm text-gray-500 mr-4">
-                  Welcome, {user?.email} (Admin)
-                </span>
+                <span className="text-sm text-gray-500 mr-4">Welcome, {user?.email} (Admin)</span>
                 <button
                   onClick={handleLogout}
                   className="bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -101,9 +99,7 @@ const AdminDashboard: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          {renderContent()}
-        </div>
+        <div className="px-4 py-6 sm:px-0">{renderContent()}</div>
       </main>
     </div>
   );

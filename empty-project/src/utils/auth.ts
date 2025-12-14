@@ -22,7 +22,7 @@ const loadAuthStateFromStorage = (): AuthState => {
       return {
         user: parsed.user,
         isAuthenticated: !!parsed.user,
-        isLoading: false
+        isLoading: false,
       };
     }
   } catch (error) {
@@ -31,7 +31,7 @@ const loadAuthStateFromStorage = (): AuthState => {
   return {
     user: null,
     isAuthenticated: false,
-    isLoading: false
+    isLoading: false,
   };
 };
 
@@ -63,14 +63,17 @@ export const authUtils = {
     authState = { ...authState, ...updates };
     // Save to localStorage
     try {
-      localStorage.setItem('authState', JSON.stringify({
-        user: authState.user,
-        isAuthenticated: authState.isAuthenticated
-      }));
+      localStorage.setItem(
+        'authState',
+        JSON.stringify({
+          user: authState.user,
+          isAuthenticated: authState.isAuthenticated,
+        }),
+      );
     } catch (error) {
       console.error('Failed to save auth state to storage:', error);
     }
-    authStateListeners.forEach(listener => listener(authState));
+    authStateListeners.forEach((listener) => listener(authState));
   },
 
   // Set current user (from successful login/register)
@@ -78,7 +81,7 @@ export const authUtils = {
     this.updateAuthState({
       user,
       isAuthenticated: true,
-      isLoading: false
+      isLoading: false,
     });
   },
 
@@ -93,7 +96,7 @@ export const authUtils = {
     this.updateAuthState({
       user: null,
       isAuthenticated: false,
-      isLoading: false
+      isLoading: false,
     });
   },
 
@@ -130,7 +133,7 @@ export const authUtils = {
     } finally {
       this.clearCurrentUser();
     }
-  }
+  },
 };
 
 // API utility functions with cookie-based authentication
@@ -151,14 +154,20 @@ export const apiUtils = {
   },
 
   // Handle API responses with automatic token refresh
-  async handleAuthenticatedResponse(response: Response): Promise<{ success: boolean; data?: any; error?: string }> {
+  async handleAuthenticatedResponse(
+    response: Response,
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     if (response.status === 401) {
       // Try to refresh token
       const refreshResult = await this.refreshToken();
       if (refreshResult.success) {
         // Token refreshed successfully, but the original request still failed
         // The caller should retry the request
-        return { success: false, error: 'Authentication expired, please retry', shouldRetry: true } as any;
+        return {
+          success: false,
+          error: 'Authentication expired, please retry',
+          shouldRetry: true,
+        } as any;
       } else {
         // Refresh failed, user needs to login again
         authUtils.clearCurrentUser();
@@ -171,7 +180,10 @@ export const apiUtils = {
       if (response.ok) {
         return { success: true, data };
       } else {
-        return { success: false, error: data.error || `Request failed with status ${response.status}` };
+        return {
+          success: false,
+          error: data.error || `Request failed with status ${response.status}`,
+        };
       }
     } catch (error) {
       if (response.ok) {
@@ -183,19 +195,22 @@ export const apiUtils = {
   },
 
   // Make authenticated request with automatic retry on token refresh
-  async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<{ success: boolean; data?: any; error?: string }> {
+  async makeAuthenticatedRequest(
+    url: string,
+    options: RequestInit = {},
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     const authOptions = this.getAuthenticatedFetchOptions(options);
-    
+
     try {
       const response = await fetch(url, authOptions);
       const result = await this.handleAuthenticatedResponse(response);
-      
+
       // If we should retry (token was refreshed), try once more
       if (!result.success && (result as any).shouldRetry) {
         const retryResponse = await fetch(url, authOptions);
         return await this.handleAuthenticatedResponse(retryResponse);
       }
-      
+
       return result;
     } catch (error) {
       return { success: false, error: 'Network error. Please check your connection.' };
@@ -203,7 +218,11 @@ export const apiUtils = {
   },
 
   // Register new user
-  async register(email: string, password: string, teamName: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async register(
+    email: string,
+    password: string,
+    teamName: string,
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     console.log('Attempting registration with URL:', `${this.baseUrl}/auth/register`);
     try {
       const response = await fetch(`${this.baseUrl}/auth/register`, {
@@ -215,7 +234,7 @@ export const apiUtils = {
         body: JSON.stringify({
           email,
           password,
-          team_name: teamName
+          team_name: teamName,
         }),
       });
 
@@ -236,7 +255,10 @@ export const apiUtils = {
   },
 
   // Login user
-  async login(email: string, password: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async login(
+    email: string,
+    password: string,
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/auth/login`, {
         method: 'POST',
@@ -246,7 +268,7 @@ export const apiUtils = {
         },
         body: JSON.stringify({
           email,
-          password
+          password,
         }),
       });
 
@@ -316,11 +338,14 @@ export const apiUtils = {
   },
 
   // Update player team name
-  async updatePlayerTeamName(uuid: string, teamName: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  async updatePlayerTeamName(
+    uuid: string,
+    teamName: string,
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
     return await this.makeAuthenticatedRequest(`${this.baseUrl}/api/v1/players/${uuid}`, {
       method: 'PUT',
       body: JSON.stringify({
-        team_name: teamName
+        team_name: teamName,
       }),
     });
   },
@@ -363,5 +388,5 @@ export const apiUtils = {
       authUtils.clearCurrentUser();
       return { success: false, error: 'Authentication check failed' };
     }
-  }
+  },
 };

@@ -1,23 +1,23 @@
 // UI state management types for the player game interface
 
 import type { Race, RaceParticipant, LocalRaceView, TurnPhase, AnimationState } from './race';
-import type { Car, Pilot, Engine, Body, LapPerformance, RaceStatistics } from './player-assets';
+import type { Car, Pilot, Engine, Body } from './player-assets';
 
 // Main player game state
 export interface PlayerGameState {
   // Race Data
   race: Race | null;
   localView: LocalRaceView;
-  
+
   // Player Context
   playerUuid: string;
   playerParticipant: RaceParticipant | null;
-  
+
   // Turn Management
   currentTurnPhase: TurnPhase;
   selectedBoost: number;
   hasSubmittedAction: boolean;
-  
+
   // UI State
   isLoading: boolean;
   error: string | null;
@@ -52,14 +52,7 @@ export interface SectorCardProps {
   position: 'above' | 'center' | 'below';
 }
 
-export interface PlayerCarCardProps {
-  car: Car;
-  pilot: Pilot;
-  engine: Engine;
-  body: Body;
-  raceHistory: LapPerformance[];
-  currentRaceStats: RaceStatistics;
-}
+// PlayerCarCardProps moved to component file to use backend API types
 
 export interface PerformanceCalculatorProps {
   car: Car;

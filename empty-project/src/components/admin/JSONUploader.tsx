@@ -50,11 +50,16 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
       if (typeof sector.max_value !== 'number' || sector.max_value <= sector.min_value) {
         throw new Error(`Sector ${index + 1}: "max_value" must be greater than min_value`);
       }
-      if (sector.slot_capacity !== null && (typeof sector.slot_capacity !== 'number' || sector.slot_capacity < 1)) {
+      if (
+        sector.slot_capacity !== null &&
+        (typeof sector.slot_capacity !== 'number' || sector.slot_capacity < 1)
+      ) {
         throw new Error(`Sector ${index + 1}: "slot_capacity" must be null or a positive number`);
       }
       if (!['Start', 'Straight', 'Curve', 'Finish'].includes(sector.sector_type)) {
-        throw new Error(`Sector ${index + 1}: "sector_type" must be one of: Start, Straight, Curve, Finish`);
+        throw new Error(
+          `Sector ${index + 1}: "sector_type" must be one of: Start, Straight, Curve, Finish`,
+        );
       }
 
       return {
@@ -63,7 +68,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
         min_value: sector.min_value,
         max_value: sector.max_value,
         slot_capacity: sector.slot_capacity,
-        sector_type: sector.sector_type
+        sector_type: sector.sector_type,
       };
     });
 
@@ -86,7 +91,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
     }
 
     // Validate unique IDs
-    const ids = validatedSectors.map(s => s.id);
+    const ids = validatedSectors.map((s) => s.id);
     const uniqueIds = new Set(ids);
     if (ids.length !== uniqueIds.size) {
       throw new Error('All sector IDs must be unique');
@@ -97,7 +102,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
 
   const processFile = async (file: File) => {
     setIsProcessing(true);
-    
+
     try {
       // Check file type
       if (!file.name.toLowerCase().endsWith('.json')) {
@@ -111,7 +116,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
 
       // Read file content
       const text = await file.text();
-      
+
       // Parse JSON
       let jsonData: TrackJSON;
       try {
@@ -125,7 +130,6 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
 
       // Success - call onTrackLoad
       onTrackLoad(validatedSectors);
-      
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Failed to process file');
     } finally {
@@ -153,7 +157,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const file = e.dataTransfer.files[0];
     if (file) {
       processFile(file);
@@ -169,37 +173,37 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
       sectors: [
         {
           id: 0,
-          name: "Start Line",
+          name: 'Start Line',
           min_value: 0,
           max_value: 10,
           slot_capacity: null,
-          sector_type: "Start"
+          sector_type: 'Start',
         },
         {
           id: 1,
-          name: "Casino Corner",
+          name: 'Casino Corner',
           min_value: 8,
           max_value: 15,
           slot_capacity: 3,
-          sector_type: "Curve"
+          sector_type: 'Curve',
         },
         {
           id: 2,
-          name: "Tunnel Straight",
+          name: 'Tunnel Straight',
           min_value: 12,
           max_value: 20,
           slot_capacity: 2,
-          sector_type: "Straight"
+          sector_type: 'Straight',
         },
         {
           id: 3,
-          name: "Finish Line",
+          name: 'Finish Line',
           min_value: 18,
           max_value: 25,
           slot_capacity: null,
-          sector_type: "Finish"
-        }
-      ]
+          sector_type: 'Finish',
+        },
+      ],
     };
 
     const blob = new Blob([JSON.stringify(sampleTrack, null, 2)], { type: 'application/json' });
@@ -218,9 +222,7 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
       {/* File Upload Area */}
       <div
         className={`relative border-2 border-dashed rounded-lg p-6 transition-colors ${
-          isDragOver
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+          isDragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
         } ${isProcessing ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -234,24 +236,51 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
           onChange={handleFileSelect}
           className="hidden"
         />
-        
+
         <div className="text-center">
           {isProcessing ? (
             <div className="flex flex-col items-center">
-              <svg className="animate-spin h-8 w-8 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <svg
+                className="animate-spin h-8 w-8 text-blue-500 mb-2"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
               </svg>
               <p className="text-sm text-gray-600">Processing track file...</p>
             </div>
           ) : (
             <div>
-              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                stroke="currentColor"
+                fill="none"
+                viewBox="0 0 48 48"
+              >
+                <path
+                  d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               <div className="mt-4">
                 <p className="text-sm text-gray-600">
-                  <span className="font-medium">Click to upload</span> or drag and drop your track JSON file
+                  <span className="font-medium">Click to upload</span> or drag and drop your track
+                  JSON file
                 </p>
                 <p className="text-xs text-gray-500 mt-1">JSON files only, max 1MB</p>
               </div>
@@ -270,14 +299,19 @@ const JSONUploader: React.FC<JSONUploaderProps> = ({ onTrackLoad, onError }) => 
           <p>• Each sector needs: id, name, min_value, max_value, slot_capacity, sector_type</p>
           <p>• Sector types: "Start", "Straight", "Curve", "Finish"</p>
         </div>
-        
+
         <div className="mt-3">
           <button
             onClick={generateSampleJSON}
             className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
             </svg>
             Download Sample JSON
           </button>

@@ -8,7 +8,11 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, teamName: string) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    email: string,
+    password: string,
+    teamName: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
   checkAuthStatus: () => Promise<void>;
@@ -48,13 +52,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (
+    email: string,
+    password: string,
+  ): Promise<{ success: boolean; error?: string }> => {
     setError(null);
     authUtils.setLoading(true);
-    
+
     try {
       const result = await apiUtils.login(email, password);
-      
+
       if (result.success) {
         return { success: true };
       } else {
@@ -70,13 +77,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const register = async (email: string, password: string, teamName: string): Promise<{ success: boolean; error?: string }> => {
+  const register = async (
+    email: string,
+    password: string,
+    teamName: string,
+  ): Promise<{ success: boolean; error?: string }> => {
     setError(null);
     authUtils.setLoading(true);
-    
+
     try {
       const result = await apiUtils.register(email, password, teamName);
-      
+
       if (result.success) {
         return { success: true };
       } else {
@@ -95,7 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async (): Promise<void> => {
     setError(null);
     authUtils.setLoading(true);
-    
+
     try {
       await authUtils.logout();
     } catch (error) {
@@ -115,11 +126,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('Starting auth status check...');
     setError(null);
     authUtils.setLoading(true);
-    
+
     try {
       const result = await apiUtils.checkAuthStatus();
       console.log('Auth status check result:', result);
-      
+
       if (!result.success) {
         // Clear auth state if check failed
         authUtils.clearCurrentUser();
@@ -155,9 +166,5 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     clearError,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

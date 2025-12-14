@@ -9,8 +9,18 @@ function Dashboard() {
         <div className="text-center mb-8">
           <div className="mb-4">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="w-8 h-8 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
           </div>
@@ -20,11 +30,9 @@ function Dashboard() {
           <p className="text-gray-600 mb-2">
             Ready to dominate the track? Your racing empire awaits!
           </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Logged in as: {user?.email}
-          </p>
+          <p className="text-sm text-gray-500 mb-6">Logged in as: {user?.email}</p>
         </div>
-        
+
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div className="bg-gray-50 p-6 rounded-lg">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Next Steps</h3>
@@ -35,7 +43,7 @@ function Dashboard() {
               <li>• Join your first race</li>
             </ul>
           </div>
-          
+
           <div className="bg-gray-50 p-6 rounded-lg">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Game Features</h3>
             <ul className="text-sm text-gray-600 space-y-2">
@@ -46,7 +54,7 @@ function Dashboard() {
             </ul>
           </div>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200">
             Connect Wallet
@@ -64,7 +72,7 @@ function Dashboard() {
             Start Racing
           </Link>
         </div>
-        
+
         <div className="mt-6 text-center">
           <button
             onClick={async () => {

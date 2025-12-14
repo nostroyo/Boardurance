@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, checkAuthStatus } = useAuthContext();
+  const { isAuthenticated, checkAuthStatus } = useAuthContext();
   const location = useLocation();
 
   useEffect(() => {

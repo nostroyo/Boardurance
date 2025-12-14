@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import type { 
-  PlayerGameState, 
-  Race, 
-  RaceParticipant, 
+import type {
+  PlayerGameState,
+  Race,
+  RaceParticipant,
   LocalRaceView,
   AnimationState,
-  APIResponse,
-  TurnPhase
+  TurnPhase,
 } from '../types';
 import { raceAPI } from '../utils/raceAPI';
 
@@ -30,7 +29,7 @@ const initialState: PlayerGameState = {
   localView: {
     centerSector: 0,
     visibleSectors: [],
-    visibleParticipants: []
+    visibleParticipants: [],
   },
   playerUuid: '',
   playerParticipant: null,
@@ -42,8 +41,8 @@ const initialState: PlayerGameState = {
   animationState: {
     isAnimating: false,
     movements: [],
-    duration: 0
-  }
+    duration: 0,
+  },
 };
 
 // Action types
@@ -65,37 +64,37 @@ function playerGameReducer(state: PlayerGameState, action: PlayerGameAction): Pl
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
-    
+
     case 'SET_ERROR':
       return { ...state, error: action.payload, isLoading: false };
-    
+
     case 'SET_RACE_DATA':
       return { ...state, race: action.payload };
-    
+
     case 'SET_PLAYER_UUID':
       return { ...state, playerUuid: action.payload };
-    
+
     case 'SET_PLAYER_PARTICIPANT':
       return { ...state, playerParticipant: action.payload };
-    
+
     case 'SET_LOCAL_VIEW':
       return { ...state, localView: action.payload };
-    
+
     case 'SET_TURN_PHASE':
       return { ...state, currentTurnPhase: action.payload };
-    
+
     case 'SET_SELECTED_BOOST':
       return { ...state, selectedBoost: action.payload };
-    
+
     case 'SET_HAS_SUBMITTED':
       return { ...state, hasSubmittedAction: action.payload };
-    
+
     case 'SET_ANIMATION_STATE':
       return { ...state, animationState: action.payload };
-    
+
     case 'RESET_STATE':
       return { ...initialState };
-    
+
     default:
       return state;
   }
@@ -107,43 +106,43 @@ function calculateLocalView(race: Race, playerParticipant: RaceParticipant | nul
     return {
       centerSector: 0,
       visibleSectors: [],
-      visibleParticipants: []
+      visibleParticipants: [],
     };
   }
 
   const centerSector = playerParticipant.current_sector;
   const allSectors = race.track.sectors.sort((a, b) => a.id - b.id);
   const totalSectors = allSectors.length;
-  
+
   // Calculate visible sector IDs (center ±2, handling circular tracks)
   const visibleSectorIds: number[] = [];
   for (let offset = -2; offset <= 2; offset++) {
     let sectorId = centerSector + offset;
-    
+
     // Handle wrapping for circular tracks
     if (sectorId < 0) {
       sectorId = totalSectors + sectorId;
     } else if (sectorId >= totalSectors) {
       sectorId = sectorId - totalSectors;
     }
-    
+
     visibleSectorIds.push(sectorId);
   }
-  
+
   // Get visible sectors in order
   const visibleSectors = visibleSectorIds
-    .map(id => allSectors.find(s => s.id === id))
-    .filter(sector => sector !== undefined) as import('../types/race').Sector[];
-  
+    .map((id) => allSectors.find((s) => s.id === id))
+    .filter((sector) => sector !== undefined) as import('../types/race').Sector[];
+
   // Get participants in visible sectors
-  const visibleParticipants = race.participants.filter(p => 
-    visibleSectorIds.includes(p.current_sector)
+  const visibleParticipants = race.participants.filter((p) =>
+    visibleSectorIds.includes(p.current_sector),
   );
 
   return {
     centerSector,
     visibleSectors,
-    visibleParticipants
+    visibleParticipants,
   };
 }
 
@@ -174,20 +173,21 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     dispatch({ type: 'SET_PLAYER_UUID', payload: playerUuid });
 
     try {
-      const response: APIResponse<Race> = await raceAPI.getRace(raceUuid);
-      
+      const response: any = await raceAPI.getRace(raceUuid);
+
       if (response.success && response.data) {
         const race = response.data;
         dispatch({ type: 'SET_RACE_DATA', payload: race });
-        
+
         // Find player participant
-        const playerParticipant = race.participants.find(p => p.player_uuid === playerUuid) || null;
+        const playerParticipant =
+          race.participants.find((p: any) => p.player_uuid === playerUuid) || null;
         dispatch({ type: 'SET_PLAYER_PARTICIPANT', payload: playerParticipant });
-        
+
         // Calculate local view
         const localView = calculateLocalView(race, playerParticipant);
         dispatch({ type: 'SET_LOCAL_VIEW', payload: localView });
-        
+
         // Determine turn phase based on race status
         let turnPhase: TurnPhase = 'WaitingForPlayers';
         if (race.status === 'InProgress') {
@@ -196,7 +196,6 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
           turnPhase = 'Complete';
         }
         dispatch({ type: 'SET_TURN_PHASE', payload: turnPhase });
-        
       } else {
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load race data' });
       }
@@ -212,16 +211,17 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     if (!state.race) return;
 
     try {
-      const response: APIResponse<Race> = await raceAPI.getRace(state.race.uuid);
-      
+      const response: any = await raceAPI.getRace(state.race.uuid);
+
       if (response.success && response.data) {
         const race = response.data;
         dispatch({ type: 'SET_RACE_DATA', payload: race });
-        
+
         // Update player participant
-        const playerParticipant = race.participants.find(p => p.player_uuid === state.playerUuid) || null;
+        const playerParticipant =
+          race.participants.find((p: any) => p.player_uuid === state.playerUuid) || null;
         dispatch({ type: 'SET_PLAYER_PARTICIPANT', payload: playerParticipant });
-        
+
         // Recalculate local view
         const localView = calculateLocalView(race, playerParticipant);
         dispatch({ type: 'SET_LOCAL_VIEW', payload: localView });
@@ -249,13 +249,15 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     dispatch({ type: 'SET_ERROR', payload: null });
 
     try {
-      const actions = [{
-        player_uuid: state.playerUuid,
-        boost_value: state.selectedBoost
-      }];
+      const actions = [
+        {
+          player_uuid: state.playerUuid,
+          boost_value: state.selectedBoost,
+        },
+      ];
 
       const response = await raceAPI.processRaceTurn(state.race.uuid, actions);
-      
+
       if (response.success) {
         dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
         dispatch({ type: 'SET_TURN_PHASE', payload: 'AllSubmitted' });
@@ -267,7 +269,13 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, [state.race, state.playerParticipant, state.playerUuid, state.selectedBoost, state.hasSubmittedAction]);
+  }, [
+    state.race,
+    state.playerParticipant,
+    state.playerUuid,
+    state.selectedBoost,
+    state.hasSubmittedAction,
+  ]);
 
   // Set error
   const setError = useCallback((error: string | null) => {
@@ -306,13 +314,9 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
       submitBoostAction,
       setError,
       clearError,
-      setAnimationState
-    }
+      setAnimationState,
+    },
   };
 
-  return (
-    <PlayerGameContext.Provider value={contextValue}>
-      {children}
-    </PlayerGameContext.Provider>
-  );
+  return <PlayerGameContext.Provider value={contextValue}>{children}</PlayerGameContext.Provider>;
 };

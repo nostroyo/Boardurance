@@ -14,10 +14,10 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   raceUuid,
   playerUuid,
   onRaceComplete,
-  onError
+  onError,
 }) => {
   const { state, actions } = usePlayerGameContext();
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<number | null>(null);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
 
@@ -28,11 +28,11 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
       retryCountRef.current = 0; // Reset retry count on success
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize race';
-      
+
       if (retryCountRef.current < maxRetries && raceErrorUtils.isRetryableError(errorMessage)) {
         retryCountRef.current++;
         const delay = 1000 * Math.pow(2, retryCountRef.current - 1); // Exponential backoff
-        
+
         setTimeout(() => {
           initializeRaceWithRetry();
         }, delay);
@@ -62,7 +62,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
       try {
         // Update race data
         await actions.updateRaceData();
-        
+
         // Check turn phase if race is in progress
         if (state.race?.status === 'InProgress') {
           const turnPhaseResponse = await raceAPI.getTurnPhase(raceUuid);
@@ -98,7 +98,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         clearInterval(pollingRef.current);
         pollingRef.current = null;
       }
-      
+
       if (onRaceComplete) {
         onRaceComplete(state.playerParticipant.finish_position);
       }
@@ -153,14 +153,14 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   if (state.error && !state.race) {
     const isRetryable = raceErrorUtils.isRetryableError(state.error);
     const requiresAction = raceErrorUtils.requiresUserAction(state.error);
-    
+
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold mb-2">Error Loading Race</h2>
           <p className="text-gray-300 mb-4">{raceErrorUtils.getUserFriendlyError(state.error)}</p>
-          
+
           <div className="space-y-3">
             {isRetryable && (
               <button
@@ -171,13 +171,14 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 {state.isLoading ? 'Retrying...' : 'Retry'}
               </button>
             )}
-            
+
             {requiresAction && (
               <p className="text-sm text-yellow-400">
-                This error requires manual intervention. Please check your race participation status.
+                This error requires manual intervention. Please check your race participation
+                status.
               </p>
             )}
-            
+
             <button
               onClick={() => window.location.reload()}
               className="bg-gray-600 hover:bg-gray-700 px-6 py-2 rounded-lg font-medium transition-colors w-full"
@@ -185,10 +186,11 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               Refresh Page
             </button>
           </div>
-          
+
           {retryCountRef.current >= maxRetries && (
             <p className="text-sm text-red-400 mt-4">
-              Maximum retry attempts reached. Please check your connection and try refreshing the page.
+              Maximum retry attempts reached. Please check your connection and try refreshing the
+              page.
             </p>
           )}
         </div>
@@ -203,7 +205,9 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         <div className="text-center">
           <div className="text-gray-500 text-6xl mb-4">🏁</div>
           <h2 className="text-2xl font-bold mb-2">Race Not Found</h2>
-          <p className="text-gray-300 mb-4">Unable to load race data. The race may not exist or may have been removed.</p>
+          <p className="text-gray-300 mb-4">
+            Unable to load race data. The race may not exist or may have been removed.
+          </p>
           <button
             onClick={handleRetry}
             className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition-colors"
@@ -239,23 +243,28 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Main game interface container */}
       <div className="container mx-auto px-4 py-6">
-        
         {/* Enhanced Race Status Panel - Top section */}
         <div className="mb-6">
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Race Status</h2>
               <div className="flex items-center space-x-2">
-                <div 
+                <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: raceStatusUtils.getTurnPhaseColor(state.currentTurnPhase) }}
+                  style={{
+                    backgroundColor: raceStatusUtils.getTurnPhaseColor(state.currentTurnPhase),
+                  }}
                 ></div>
                 <span className="text-sm font-medium">
-                  {raceStatusUtils.getStatusMessage(state.race, state.currentTurnPhase, state.hasSubmittedAction)}
+                  {raceStatusUtils.getStatusMessage(
+                    state.race,
+                    state.currentTurnPhase,
+                    state.hasSubmittedAction,
+                  )}
                 </span>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div>
                 <span className="text-gray-400">Race:</span>
@@ -273,16 +282,23 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               <div>
                 <span className="text-gray-400">Characteristic:</span>
                 <p className="font-medium">
-                  {raceStatusUtils.getLapCharacteristicIcon(state.race.lap_characteristic)} {state.race.lap_characteristic}
+                  {raceStatusUtils.getLapCharacteristicIcon(state.race.lap_characteristic)}{' '}
+                  {state.race.lap_characteristic}
                 </p>
               </div>
               <div>
                 <span className="text-gray-400">Race Status:</span>
-                <p className={`font-medium ${
-                  state.race.status === 'InProgress' ? 'text-green-400' :
-                  state.race.status === 'Finished' ? 'text-blue-400' :
-                  state.race.status === 'Waiting' ? 'text-yellow-400' : 'text-red-400'
-                }`}>
+                <p
+                  className={`font-medium ${
+                    state.race.status === 'InProgress'
+                      ? 'text-green-400'
+                      : state.race.status === 'Finished'
+                        ? 'text-blue-400'
+                        : state.race.status === 'Waiting'
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                  }`}
+                >
                   {state.race.status}
                 </p>
               </div>
@@ -290,7 +306,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 <span className="text-gray-400">Progress:</span>
                 <div className="flex items-center space-x-2">
                   <div className="flex-1 bg-gray-700 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${raceStatusUtils.getLapProgress(state.race)}%` }}
                     ></div>
@@ -306,39 +322,38 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
 
         {/* Main game layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
           {/* Enhanced Left column - Local Sector Display with improved calculations */}
           <div className="lg:col-span-2">
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Local Sector View</h2>
                 <div className="text-sm text-gray-400">
-                  Showing sectors {Math.max(0, state.localView.centerSector - 2)} - {Math.min(state.race.track.sectors.length - 1, state.localView.centerSector + 2)}
+                  Showing sectors {Math.max(0, state.localView.centerSector - 2)} -{' '}
+                  {Math.min(state.race.track.sectors.length - 1, state.localView.centerSector + 2)}
                 </div>
               </div>
-              
+
               <div className="space-y-3">
-                {state.localView.visibleSectors.map((sector, index) => {
+                {state.localView.visibleSectors.map((sector) => {
                   const isPlayerSector = sector.id === state.playerParticipant?.current_sector;
-                  const participantsInSector = state.localView.visibleParticipants.filter(
-                    p => p.current_sector === sector.id
-                  ).sort((a, b) => a.current_position_in_sector - b.current_position_in_sector);
-                  
+                  const participantsInSector = state.localView.visibleParticipants
+                    .filter((p) => p.current_sector === sector.id)
+                    .sort((a, b) => a.current_position_in_sector - b.current_position_in_sector);
+
                   // Calculate position relative to player sector for visual emphasis
                   const relativePosition = sector.id - state.localView.centerSector;
-                  const positionClass = 
-                    relativePosition === 0 ? 'center' :
-                    relativePosition < 0 ? 'above' : 'below';
-                  
+                  const positionClass =
+                    relativePosition === 0 ? 'center' : relativePosition < 0 ? 'above' : 'below';
+
                   return (
                     <div
                       key={sector.id}
                       className={`p-4 rounded-lg border transition-all duration-300 ${
-                        isPlayerSector 
-                          ? 'bg-blue-900 border-blue-500 shadow-lg shadow-blue-500/20' 
+                        isPlayerSector
+                          ? 'bg-blue-900 border-blue-500 shadow-lg shadow-blue-500/20'
                           : positionClass === 'above' || positionClass === 'below'
-                          ? 'bg-gray-700 border-gray-600 opacity-90'
-                          : 'bg-gray-700 border-gray-600'
+                            ? 'bg-gray-700 border-gray-600 opacity-90'
+                            : 'bg-gray-700 border-gray-600'
                       }`}
                     >
                       <div className="flex justify-between items-center mb-3">
@@ -353,21 +368,28 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                           )}
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className={`text-sm px-2 py-1 rounded ${
-                            sector.sector_type === 'Start' ? 'bg-green-600 text-white' :
-                            sector.sector_type === 'Finish' ? 'bg-purple-600 text-white' :
-                            sector.sector_type === 'Straight' ? 'bg-blue-600 text-white' :
-                            'bg-orange-600 text-white'
-                          }`}>
+                          <span
+                            className={`text-sm px-2 py-1 rounded ${
+                              sector.sector_type === 'Start'
+                                ? 'bg-green-600 text-white'
+                                : sector.sector_type === 'Finish'
+                                  ? 'bg-purple-600 text-white'
+                                  : sector.sector_type === 'Straight'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-orange-600 text-white'
+                            }`}
+                          >
                             {sector.sector_type}
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 text-sm text-gray-300 mb-3">
                         <div>
                           <span className="text-gray-400">Value Range:</span>
-                          <p className="font-medium">{sector.min_value} - {sector.max_value}</p>
+                          <p className="font-medium">
+                            {sector.min_value} - {sector.max_value}
+                          </p>
                         </div>
                         {sector.slot_capacity && (
                           <div>
@@ -381,7 +403,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                           </div>
                         )}
                       </div>
-                      
+
                       {participantsInSector.length > 0 ? (
                         <div>
                           <span className="text-gray-400 text-sm block mb-2">
@@ -389,11 +411,11 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                           </span>
                           <div className="grid grid-cols-1 gap-2">
                             {participantsInSector.map((participant, i) => (
-                              <div 
+                              <div
                                 key={participant.player_uuid}
                                 className={`flex items-center justify-between p-2 rounded text-sm ${
-                                  participant.player_uuid === playerUuid 
-                                    ? 'bg-blue-800 border border-blue-600' 
+                                  participant.player_uuid === playerUuid
+                                    ? 'bg-blue-800 border border-blue-600'
                                     : 'bg-gray-600'
                                 }`}
                               >
@@ -401,12 +423,16 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                                   <span className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-xs font-bold">
                                     {i + 1}
                                   </span>
-                                  <span className={
-                                    participant.player_uuid === playerUuid 
-                                      ? 'text-blue-200 font-medium' 
-                                      : 'text-gray-200'
-                                  }>
-                                    {participant.player_uuid === playerUuid ? 'You' : `Player ${participant.player_uuid.slice(-4)}`}
+                                  <span
+                                    className={
+                                      participant.player_uuid === playerUuid
+                                        ? 'text-blue-200 font-medium'
+                                        : 'text-gray-200'
+                                    }
+                                  >
+                                    {participant.player_uuid === playerUuid
+                                      ? 'You'
+                                      : `Player ${participant.player_uuid.slice(-4)}`}
                                   </span>
                                 </div>
                                 <div className="text-right">
@@ -430,17 +456,17 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   );
                 })}
               </div>
-              
+
               {/* Local view navigation hint */}
               <div className="mt-4 text-center text-xs text-gray-500">
-                Showing your current sector ± 2 sectors ({state.localView.visibleSectors.length} total)
+                Showing your current sector ± 2 sectors ({state.localView.visibleSectors.length}{' '}
+                total)
               </div>
             </div>
           </div>
 
           {/* Right column - Player info and controls */}
           <div className="space-y-6">
-            
             {/* Player Car Card */}
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <h2 className="text-xl font-bold mb-4">Your Car</h2>
@@ -451,7 +477,9 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 </div>
                 <div>
                   <span className="text-gray-400">Position in Sector:</span>
-                  <p className="font-medium">{state.playerParticipant.current_position_in_sector}</p>
+                  <p className="font-medium">
+                    {state.playerParticipant.current_position_in_sector}
+                  </p>
                 </div>
                 <div>
                   <span className="text-gray-400">Current Lap:</span>
@@ -468,19 +496,19 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Turn Actions</h2>
-                <div className="text-sm text-gray-400">
-                  Phase: {state.currentTurnPhase}
-                </div>
+                <div className="text-sm text-gray-400">Phase: {state.currentTurnPhase}</div>
               </div>
-              
-              {raceStatusUtils.canSubmitActions(state.race) && state.currentTurnPhase === 'WaitingForPlayers' && !state.hasSubmittedAction ? (
+
+              {raceStatusUtils.canSubmitActions(state.race) &&
+              state.currentTurnPhase === 'WaitingForPlayers' &&
+              !state.hasSubmittedAction ? (
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-3">
                       Select Boost Value (0-5):
                     </label>
                     <div className="grid grid-cols-6 gap-2">
-                      {[0, 1, 2, 3, 4, 5].map(boost => (
+                      {[0, 1, 2, 3, 4, 5].map((boost) => (
                         <button
                           key={boost}
                           onClick={() => actions.selectBoost(boost)}
@@ -495,20 +523,26 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                       ))}
                     </div>
                     <div className="mt-2 text-xs text-gray-400">
-                      Selected boost: <span className="font-medium text-blue-400">{state.selectedBoost}</span>
+                      Selected boost:{' '}
+                      <span className="font-medium text-blue-400">{state.selectedBoost}</span>
                     </div>
                   </div>
-                  
+
                   {/* Performance preview */}
                   <div className="bg-gray-700 rounded-lg p-3">
                     <div className="text-sm font-medium mb-2">Performance Preview:</div>
                     <div className="text-xs text-gray-300 space-y-1">
                       <div>Base performance will be calculated from your car stats</div>
-                      <div>Sector ceiling: {state.localView.visibleSectors.find(s => s.id === state.playerParticipant?.current_sector)?.max_value || 'N/A'}</div>
+                      <div>
+                        Sector ceiling:{' '}
+                        {state.localView.visibleSectors.find(
+                          (s) => s.id === state.playerParticipant?.current_sector,
+                        )?.max_value || 'N/A'}
+                      </div>
                       <div>Boost addition: +{state.selectedBoost}</div>
                     </div>
                   </div>
-                  
+
                   <button
                     onClick={actions.submitBoostAction}
                     disabled={state.isLoading}
@@ -530,13 +564,19 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               ) : state.hasSubmittedAction ? (
                 <div className="text-center py-6">
                   <div className="text-green-400 text-4xl mb-3">✓</div>
-                  <p className="text-green-400 font-medium text-lg mb-2">Action Submitted Successfully</p>
+                  <p className="text-green-400 font-medium text-lg mb-2">
+                    Action Submitted Successfully
+                  </p>
                   <p className="text-gray-400 text-sm mb-3">
                     Boost value: <span className="font-medium">{state.selectedBoost}</span>
                   </p>
                   <div className="bg-gray-700 rounded-lg p-3">
                     <p className="text-gray-300 text-sm">
-                      {raceStatusUtils.getStatusMessage(state.race, state.currentTurnPhase, state.hasSubmittedAction)}
+                      {raceStatusUtils.getStatusMessage(
+                        state.race,
+                        state.currentTurnPhase,
+                        state.hasSubmittedAction,
+                      )}
                     </p>
                   </div>
                 </div>
@@ -546,7 +586,10 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   <p className="text-blue-400 font-medium text-lg mb-2">Race Finished</p>
                   {state.playerParticipant?.finish_position && (
                     <p className="text-gray-300">
-                      Final Position: <span className="font-bold text-yellow-400">#{state.playerParticipant.finish_position}</span>
+                      Final Position:{' '}
+                      <span className="font-bold text-yellow-400">
+                        #{state.playerParticipant.finish_position}
+                      </span>
                     </p>
                   )}
                 </div>
@@ -566,7 +609,6 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 </div>
               )}
             </div>
-
           </div>
         </div>
 
@@ -578,7 +620,9 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 <div className="text-red-200 text-xl">⚠️</div>
                 <div className="flex-1">
                   <h4 className="font-medium mb-1">Error</h4>
-                  <p className="text-sm text-red-100">{raceErrorUtils.getUserFriendlyError(state.error)}</p>
+                  <p className="text-sm text-red-100">
+                    {raceErrorUtils.getUserFriendlyError(state.error)}
+                  </p>
                   {raceErrorUtils.isRetryableError(state.error) && (
                     <button
                       onClick={handleRetry}

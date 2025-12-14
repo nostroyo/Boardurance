@@ -7,7 +7,7 @@ function RegistrationPage() {
     email: '',
     password: '',
     teamName: '',
-    terms: false
+    terms: false,
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -22,9 +22,9 @@ function RegistrationPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
     }));
   };
 
@@ -45,7 +45,7 @@ function RegistrationPage() {
 
     try {
       const result = await register(formData.email, formData.password, formData.teamName);
-      
+
       if (result.success) {
         console.log('User registered successfully');
         // Navigation will happen automatically via useEffect when isAuthenticated becomes true
@@ -62,12 +62,8 @@ function RegistrationPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            Create Your Account
-          </h1>
-          <p className="text-gray-600">
-            Join the Web3 Racing Game community
-          </p>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Create Your Account</h1>
+          <p className="text-gray-600">Join the Web3 Racing Game community</p>
         </div>
 
         {error && (
@@ -162,10 +158,7 @@ function RegistrationPage() {
               Sign in
             </Link>
           </p>
-          <Link
-            to="/"
-            className="inline-block mt-2 text-sm text-gray-500 hover:text-gray-700"
-          >
+          <Link to="/" className="inline-block mt-2 text-sm text-gray-500 hover:text-gray-700">
             ← Back to Home
           </Link>
         </div>

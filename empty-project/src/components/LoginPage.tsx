@@ -5,7 +5,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 function LoginPage() {
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -20,9 +20,9 @@ function LoginPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -32,7 +32,7 @@ function LoginPage() {
 
     try {
       const result = await login(formData.email, formData.password);
-      
+
       if (result.success) {
         console.log('Login successful');
         // Navigation will happen automatically via useEffect when isAuthenticated becomes true
@@ -49,20 +49,16 @@ function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            Welcome Back
-          </h1>
-          <p className="text-gray-600">
-            Sign in with your email to access your racing team
-          </p>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Welcome Back</h1>
+          <p className="text-gray-600">Sign in with your email to access your racing team</p>
         </div>
-        
+
         {error && (
           <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
             {error}
           </div>
         )}
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
@@ -79,7 +75,7 @@ function LoginPage() {
               required
             />
           </div>
-          
+
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
@@ -95,7 +91,7 @@ function LoginPage() {
               required
             />
           </div>
-          
+
           <button
             type="submit"
             disabled={isLoading}
@@ -104,7 +100,7 @@ function LoginPage() {
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
-        
+
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}
@@ -112,10 +108,7 @@ function LoginPage() {
               Create one
             </Link>
           </p>
-          <Link
-            to="/"
-            className="inline-block mt-2 text-sm text-gray-500 hover:text-gray-700"
-          >
+          <Link to="/" className="inline-block mt-2 text-sm text-gray-500 hover:text-gray-700">
             ← Back to Home
           </Link>
         </div>
