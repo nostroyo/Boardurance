@@ -18,9 +18,9 @@ import type {
 } from '../../types/race-api';
 import { PerformancePreview as PerformancePreviewComponent } from './PerformancePreview';
 import { PlayerCarCard } from './PlayerCarCard';
-import { LocalSectorDisplay } from './LocalSectorDisplay';
+import { TrackDisplayRedesign } from './TrackDisplayRedesign';
 import { RaceStatusPanel } from './RaceStatusPanel';
-import { BoostSelector } from './BoostSelector';
+import { BoostControlPanel } from './BoostControlPanel';
 import { RaceLoadingState, PollingIndicator } from './RaceLoadingState';
 
 export interface RaceInterfaceProps {
@@ -121,13 +121,27 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
 
             {/* Center Column - Track View */}
             <div className="space-y-6">
-              {/* Local Sector Display */}
-              {localView && <LocalSectorDisplay localView={localView} playerUuid={playerUuid} />}
+              {/* Redesigned Track Display */}
+              {localView && (
+                <TrackDisplayRedesign
+                  localView={localView}
+                  playerUuid={playerUuid}
+                  animationState={undefined} // TODO: Add animation state support
+                  onSectorClick={(sectorId) => {
+                    console.log('Sector clicked:', sectorId);
+                    // Future enhancement: show sector details
+                  }}
+                  onSlotClick={(sectorId, slotNumber) => {
+                    console.log('Slot clicked:', sectorId, slotNumber);
+                    // Future enhancement: show participant details
+                  }}
+                />
+              )}
             </div>
 
             {/* Right Column - Actions and Status */}
             <div className="space-y-6">
-              {/* Boost Selection and Submission */}
+              {/* Redesigned Boost Control Panel */}
               <div className="bg-gray-800 rounded-lg p-4">
                 <h2 className="text-xl font-semibold mb-4">Boost Selection</h2>
 
@@ -142,14 +156,16 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                     <RaceLoadingState type="action" message="Submitting your boost selection..." />
                   </div>
                 ) : (
-                  boostAvailability && (
-                    <BoostSelector
+                  boostAvailability &&
+                  turnPhase && (
+                    <BoostControlPanel
                       selectedBoost={selectedBoost}
                       availableBoosts={boostAvailability.available_cards}
                       onBoostSelect={onBoostSelect}
-                      onSubmit={onSubmitAction}
+                      onValidateTurn={onSubmitAction}
                       isSubmitting={isSubmitting}
                       hasSubmitted={hasSubmittedThisTurn}
+                      turnPhase={turnPhase.turn_phase}
                     />
                   )
                 )}

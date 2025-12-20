@@ -358,6 +358,26 @@ export const raceAPI = {
       },
     );
   },
+
+  // Get local view for player (redesigned interface)
+  async getLocalView(raceUuid: string, playerUuid: string): Promise<APIResponse<unknown>> {
+    return await this.makeAuthenticatedRequest(
+      `${this.baseUrl}/races/${raceUuid}/players/${playerUuid}/local-view`,
+      {
+        method: 'GET',
+      },
+    );
+  },
+
+  // Get boost availability for player (redesigned interface)
+  async getBoostAvailability(raceUuid: string, playerUuid: string): Promise<APIResponse<unknown>> {
+    return await this.makeAuthenticatedRequest(
+      `${this.baseUrl}/races/${raceUuid}/players/${playerUuid}/boost-availability`,
+      {
+        method: 'GET',
+      },
+    );
+  },
 };
 
 // Utility functions for race status monitoring and turn phase detection

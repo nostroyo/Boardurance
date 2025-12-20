@@ -1,14 +1,15 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import type { PlayerGameInterfaceProps } from '../../types';
 import { usePlayerGameContext } from '../../contexts/PlayerGameContext';
 import { raceAPI, raceStatusUtils, raceErrorUtils } from '../../utils/raceAPI';
+import type { LocalView, BoostAvailability, TurnPhaseStatus } from '../../types/race-api';
 
-// Component imports (to be created in subsequent tasks)
-// import { RaceStatusPanel } from './RaceStatusPanel';
-// import { LocalSectorDisplay } from './LocalSectorDisplay';
-// import { PlayerCarCard } from './PlayerCarCard';
-// import { PerformanceCalculator } from './PerformanceCalculator';
-// import { SimultaneousTurnController } from './SimultaneousTurnController';
+// Redesigned component imports
+import { TrackDisplayRedesign } from './TrackDisplayRedesign';
+import { BoostControlPanel } from './BoostControlPanel';
+
+// Existing component imports
+import { RaceStatusPanel } from './RaceStatusPanel';
 
 const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   raceUuid,
@@ -21,10 +22,44 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   const retryCountRef = useRef(0);
   const maxRetries = 3;
 
+  // State for redesigned interface data
+  const [localView, setLocalView] = useState<LocalView | null>(null);
+  const [boostAvailability, setBoostAvailability] = useState<BoostAvailability | null>(null);
+  const [currentTurnPhase, setCurrentTurnPhase] = useState<TurnPhaseStatus>('WaitingForPlayers');
+
+  // Fetch local view data from API
+  const fetchLocalView = useCallback(async () => {
+    try {
+      const response = await raceAPI.getLocalView(raceUuid, playerUuid);
+      if (response.success && response.data) {
+        setLocalView(response.data as LocalView);
+      }
+    } catch (error) {
+      console.error('Failed to fetch local view:', error);
+    }
+  }, [raceUuid, playerUuid]);
+
+  // Fetch boost availability from API
+  const fetchBoostAvailability = useCallback(async () => {
+    try {
+      const response = await raceAPI.getBoostAvailability(raceUuid, playerUuid);
+      if (response.success && response.data) {
+        setBoostAvailability(response.data as BoostAvailability);
+      }
+    } catch (error) {
+      console.error('Failed to fetch boost availability:', error);
+    }
+  }, [raceUuid, playerUuid]);
+
   // Enhanced race initialization with error recovery
   const initializeRaceWithRetry = useCallback(async () => {
     try {
       await actions.initializeRace(raceUuid, playerUuid);
+      // Fetch additional data for redesigned interface
+      await Promise.all([
+        fetchLocalView(),
+        fetchBoostAvailability()
+      ]);
       retryCountRef.current = 0; // Reset retry count on success
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize race';
@@ -40,7 +75,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         actions.setError(raceErrorUtils.getUserFriendlyError(errorMessage));
       }
     }
-  }, [raceUuid, playerUuid, actions]);
+  }, [raceUuid, playerUuid, actions, fetchLocalView, fetchBoostAvailability]);
 
   // Initialize race on component mount
   useEffect(() => {
@@ -62,12 +97,19 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
       try {
         // Update race data
         await actions.updateRaceData();
+        
+        // Update redesigned interface data
+        await Promise.all([
+          fetchLocalView(),
+          fetchBoostAvailability()
+        ]);
 
         // Check turn phase if race is in progress
         if (state.race?.status === 'InProgress') {
           const turnPhaseResponse = await raceAPI.getTurnPhase(raceUuid);
           if (turnPhaseResponse.success && turnPhaseResponse.data) {
-            const newTurnPhase = turnPhaseResponse.data as any;
+            const newTurnPhase = (turnPhaseResponse.data as any).turn_phase;
+            setCurrentTurnPhase(newTurnPhase);
             if (newTurnPhase !== state.currentTurnPhase) {
               // Turn phase changed - reset submission status if new turn started
               if (newTurnPhase === 'WaitingForPlayers' && state.hasSubmittedAction) {
@@ -88,7 +130,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         pollingRef.current = null;
       }
     };
-  }, [state.race, raceUuid, actions, state.currentTurnPhase, state.hasSubmittedAction]);
+  }, [state.race, raceUuid, actions, currentTurnPhase, state.hasSubmittedAction, fetchLocalView, fetchBoostAvailability]);
 
   // Handle race completion with enhanced feedback
   useEffect(() => {
@@ -241,351 +283,126 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* Main game interface container */}
-      <div className="container mx-auto px-4 py-6">
-        {/* Enhanced Race Status Panel - Top section */}
-        <div className="mb-6">
-          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Race Status</h2>
-              <div className="flex items-center space-x-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{
-                    backgroundColor: raceStatusUtils.getTurnPhaseColor(state.currentTurnPhase),
-                  }}
-                ></div>
-                <span className="text-sm font-medium">
-                  {raceStatusUtils.getStatusMessage(
-                    state.race,
-                    state.currentTurnPhase,
-                    state.hasSubmittedAction,
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Race:</span>
-                <p className="font-medium truncate">{state.race.name}</p>
-              </div>
-              <div>
-                <span className="text-gray-400">Lap:</span>
-                <p className="font-medium">
-                  {state.race.current_lap} / {state.race.total_laps}
-                  {raceStatusUtils.isFinalLap(state.race) && (
-                    <span className="text-yellow-400 ml-1">🏁</span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-400">Characteristic:</span>
-                <p className="font-medium">
-                  {raceStatusUtils.getLapCharacteristicIcon(state.race.lap_characteristic)}{' '}
-                  {state.race.lap_characteristic}
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-400">Race Status:</span>
-                <p
-                  className={`font-medium ${
-                    state.race.status === 'InProgress'
-                      ? 'text-green-400'
-                      : state.race.status === 'Finished'
-                        ? 'text-blue-400'
-                        : state.race.status === 'Waiting'
-                          ? 'text-yellow-400'
-                          : 'text-red-400'
-                  }`}
-                >
-                  {state.race.status}
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-400">Progress:</span>
-                <div className="flex items-center space-x-2">
-                  <div className="flex-1 bg-gray-700 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${raceStatusUtils.getLapProgress(state.race)}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-xs font-medium">
-                    {Math.round(raceStatusUtils.getLapProgress(state.race))}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Main game interface container - Mobile responsive */}
+      <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-6 max-w-7xl">
+        {/* Enhanced Race Status Panel - Top section - Mobile responsive */}
+        <div className="mb-4 sm:mb-6">
+          <RaceStatusPanel
+            currentLap={state.race.current_lap}
+            totalLaps={state.race.total_laps}
+            lapCharacteristic={state.race.lap_characteristic}
+            turnPhase={{
+              turn_phase: state.currentTurnPhase,
+              current_lap: state.race.current_lap,
+              lap_characteristic: state.race.lap_characteristic,
+              submitted_players: [], // TODO: Get from API
+              pending_players: [], // TODO: Get from API
+              total_active_players: state.race.participants.length
+            }}
+            raceStatus={
+              state.race.status === 'Finished' 
+                ? 'Completed' 
+                : state.race.status === 'InProgress' 
+                  ? 'InProgress' 
+                  : 'NotStarted'
+            }
+            hasSubmittedAction={state.hasSubmittedAction}
+          />
         </div>
 
-        {/* Main game layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Enhanced Left column - Local Sector Display with improved calculations */}
-          <div className="lg:col-span-2">
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Local Sector View</h2>
-                <div className="text-sm text-gray-400">
-                  Showing sectors {Math.max(0, state.localView.centerSector - 2)} -{' '}
-                  {Math.min(state.race.track.sectors.length - 1, state.localView.centerSector + 2)}
-                </div>
+        {/* Main game layout - Mobile-first responsive stacking */}
+        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+          {/* Track Display Section - Full width on mobile, 3/4 on desktop */}
+          <div className="w-full lg:w-3/4 order-2 lg:order-1">
+            {localView ? (
+              <TrackDisplayRedesign
+                localView={localView}
+                playerUuid={playerUuid}
+                animationState={state.animationState}
+                onSectorClick={(sectorId) => {
+                  console.log('Sector clicked:', sectorId);
+                  // Future enhancement: show sector details
+                }}
+                onSlotClick={(sectorId, slotNumber) => {
+                  console.log('Slot clicked:', sectorId, slotNumber);
+                  // Future enhancement: show participant details
+                }}
+              />
+            ) : (
+              <div className="bg-gray-800 rounded-lg p-6 sm:p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-500 mx-auto mb-3 sm:mb-4"></div>
+                <p className="text-gray-400 text-sm sm:text-base">Loading track view...</p>
               </div>
-
-              <div className="space-y-3">
-                {state.localView.visibleSectors.map((sector) => {
-                  const isPlayerSector = sector.id === state.playerParticipant?.current_sector;
-                  const participantsInSector = state.localView.visibleParticipants
-                    .filter((p) => p.current_sector === sector.id)
-                    .sort((a, b) => a.current_position_in_sector - b.current_position_in_sector);
-
-                  // Calculate position relative to player sector for visual emphasis
-                  const relativePosition = sector.id - state.localView.centerSector;
-                  const positionClass =
-                    relativePosition === 0 ? 'center' : relativePosition < 0 ? 'above' : 'below';
-
-                  return (
-                    <div
-                      key={sector.id}
-                      className={`p-4 rounded-lg border transition-all duration-300 ${
-                        isPlayerSector
-                          ? 'bg-blue-900 border-blue-500 shadow-lg shadow-blue-500/20'
-                          : positionClass === 'above' || positionClass === 'below'
-                            ? 'bg-gray-700 border-gray-600 opacity-90'
-                            : 'bg-gray-700 border-gray-600'
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-medium text-lg">
-                            Sector {sector.id}: {sector.name}
-                          </h3>
-                          {isPlayerSector && (
-                            <span className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-                              YOUR SECTOR
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`text-sm px-2 py-1 rounded ${
-                              sector.sector_type === 'Start'
-                                ? 'bg-green-600 text-white'
-                                : sector.sector_type === 'Finish'
-                                  ? 'bg-purple-600 text-white'
-                                  : sector.sector_type === 'Straight'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-orange-600 text-white'
-                            }`}
-                          >
-                            {sector.sector_type}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-300 mb-3">
-                        <div>
-                          <span className="text-gray-400">Value Range:</span>
-                          <p className="font-medium">
-                            {sector.min_value} - {sector.max_value}
-                          </p>
-                        </div>
-                        {sector.slot_capacity && (
-                          <div>
-                            <span className="text-gray-400">Capacity:</span>
-                            <p className="font-medium">
-                              {participantsInSector.length} / {sector.slot_capacity}
-                              {participantsInSector.length >= sector.slot_capacity && (
-                                <span className="text-red-400 ml-1">FULL</span>
-                              )}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {participantsInSector.length > 0 ? (
-                        <div>
-                          <span className="text-gray-400 text-sm block mb-2">
-                            Participants ({participantsInSector.length}):
-                          </span>
-                          <div className="grid grid-cols-1 gap-2">
-                            {participantsInSector.map((participant, i) => (
-                              <div
-                                key={participant.player_uuid}
-                                className={`flex items-center justify-between p-2 rounded text-sm ${
-                                  participant.player_uuid === playerUuid
-                                    ? 'bg-blue-800 border border-blue-600'
-                                    : 'bg-gray-600'
-                                }`}
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <span className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-xs font-bold">
-                                    {i + 1}
-                                  </span>
-                                  <span
-                                    className={
-                                      participant.player_uuid === playerUuid
-                                        ? 'text-blue-200 font-medium'
-                                        : 'text-gray-200'
-                                    }
-                                  >
-                                    {participant.player_uuid === playerUuid
-                                      ? 'You'
-                                      : `Player ${participant.player_uuid.slice(-4)}`}
-                                  </span>
-                                </div>
-                                <div className="text-right">
-                                  <div className="font-medium">
-                                    Value: {participant.total_value}
-                                  </div>
-                                  <div className="text-xs text-gray-400">
-                                    Lap: {participant.current_lap}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-gray-400 text-sm">
-                          No participants in this sector
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Local view navigation hint */}
-              <div className="mt-4 text-center text-xs text-gray-500">
-                Showing your current sector ± 2 sectors ({state.localView.visibleSectors.length}{' '}
-                total)
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Right column - Player info and controls */}
-          <div className="space-y-6">
-            {/* Player Car Card */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <h2 className="text-xl font-bold mb-4">Your Car</h2>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-gray-400">Current Sector:</span>
-                  <p className="font-medium">{state.playerParticipant.current_sector}</p>
+          {/* Controls and Player Info Section - Full width on mobile, 1/4 on desktop */}
+          <div className="w-full lg:w-1/4 order-1 lg:order-2 space-y-3 sm:space-y-4 lg:space-y-6">
+            {/* Player Car Card - Mobile responsive */}
+            <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+              <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">Your Car</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:gap-3 text-sm">
+                <div className="bg-gray-700/50 p-2 rounded">
+                  <span className="text-gray-400 block text-xs">Current Sector:</span>
+                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.current_sector}</p>
                 </div>
-                <div>
-                  <span className="text-gray-400">Position in Sector:</span>
-                  <p className="font-medium">
-                    {state.playerParticipant.current_position_in_sector}
+                <div className="bg-gray-700/50 p-2 rounded">
+                  <span className="text-gray-400 block text-xs">Position:</span>
+                  <p className="font-medium text-sm sm:text-base">
+                    {state.playerParticipant?.current_position_in_sector}
                   </p>
                 </div>
-                <div>
-                  <span className="text-gray-400">Current Lap:</span>
-                  <p className="font-medium">{state.playerParticipant.current_lap}</p>
+                <div className="bg-gray-700/50 p-2 rounded">
+                  <span className="text-gray-400 block text-xs">Current Lap:</span>
+                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.current_lap}</p>
                 </div>
-                <div>
-                  <span className="text-gray-400">Total Value:</span>
-                  <p className="font-medium">{state.playerParticipant.total_value}</p>
+                <div className="bg-gray-700/50 p-2 rounded">
+                  <span className="text-gray-400 block text-xs">Total Value:</span>
+                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.total_value}</p>
                 </div>
               </div>
             </div>
 
-            {/* Enhanced Turn Controller with better state management */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Turn Actions</h2>
-                <div className="text-sm text-gray-400">Phase: {state.currentTurnPhase}</div>
-              </div>
-
-              {raceStatusUtils.canSubmitActions(state.race) &&
-              state.currentTurnPhase === 'WaitingForPlayers' &&
-              !state.hasSubmittedAction ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-3">
-                      Select Boost Value (0-5):
-                    </label>
-                    <div className="grid grid-cols-6 gap-2">
-                      {[0, 1, 2, 3, 4, 5].map((boost) => (
-                        <button
-                          key={boost}
-                          onClick={() => actions.selectBoost(boost)}
-                          className={`aspect-square rounded-lg border font-bold text-lg transition-all duration-200 ${
-                            state.selectedBoost === boost
-                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105'
-                              : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:border-gray-500'
-                          }`}
-                        >
-                          {boost}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-2 text-xs text-gray-400">
-                      Selected boost:{' '}
-                      <span className="font-medium text-blue-400">{state.selectedBoost}</span>
-                    </div>
-                  </div>
-
-                  {/* Performance preview */}
-                  <div className="bg-gray-700 rounded-lg p-3">
-                    <div className="text-sm font-medium mb-2">Performance Preview:</div>
-                    <div className="text-xs text-gray-300 space-y-1">
-                      <div>Base performance will be calculated from your car stats</div>
-                      <div>
-                        Sector ceiling:{' '}
-                        {state.localView.visibleSectors.find(
-                          (s) => s.id === state.playerParticipant?.current_sector,
-                        )?.max_value || 'N/A'}
-                      </div>
-                      <div>Boost addition: +{state.selectedBoost}</div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={actions.submitBoostAction}
-                    disabled={state.isLoading}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
-                  >
-                    {state.isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Submitting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Submit Boost ({state.selectedBoost})</span>
-                        <span>🚀</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : state.hasSubmittedAction ? (
-                <div className="text-center py-6">
-                  <div className="text-green-400 text-4xl mb-3">✓</div>
-                  <p className="text-green-400 font-medium text-lg mb-2">
+            {/* Redesigned Boost Control Panel - Mobile responsive */}
+            {raceStatusUtils.canSubmitActions(state.race) &&
+            currentTurnPhase === 'WaitingForPlayers' ? (
+              <BoostControlPanel
+                selectedBoost={state.selectedBoost}
+                availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4, 5]}
+                onBoostSelect={actions.selectBoost}
+                onValidateTurn={actions.submitBoostAction}
+                isSubmitting={state.isLoading}
+                hasSubmitted={state.hasSubmittedAction}
+                turnPhase={currentTurnPhase}
+              />
+            ) : state.hasSubmittedAction ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-green-400 text-3xl sm:text-4xl mb-2 sm:mb-3">✓</div>
+                  <p className="text-green-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">
                     Action Submitted Successfully
                   </p>
-                  <p className="text-gray-400 text-sm mb-3">
+                  <p className="text-gray-400 text-sm mb-2 sm:mb-3">
                     Boost value: <span className="font-medium">{state.selectedBoost}</span>
                   </p>
-                  <div className="bg-gray-700 rounded-lg p-3">
-                    <p className="text-gray-300 text-sm">
+                  <div className="bg-gray-700 rounded-lg p-2 sm:p-3">
+                    <p className="text-gray-300 text-xs sm:text-sm">
                       {raceStatusUtils.getStatusMessage(
                         state.race,
-                        state.currentTurnPhase,
+                        currentTurnPhase,
                         state.hasSubmittedAction,
                       )}
                     </p>
                   </div>
                 </div>
-              ) : state.race.status === 'Finished' ? (
-                <div className="text-center py-6">
-                  <div className="text-blue-400 text-4xl mb-3">🏁</div>
-                  <p className="text-blue-400 font-medium text-lg mb-2">Race Finished</p>
+              </div>
+            ) : state.race?.status === 'Finished' ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏁</div>
+                  <p className="text-blue-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Finished</p>
                   {state.playerParticipant?.finish_position && (
-                    <p className="text-gray-300">
+                    <p className="text-gray-300 text-sm sm:text-base">
                       Final Position:{' '}
                       <span className="font-bold text-yellow-400">
                         #{state.playerParticipant.finish_position}
@@ -593,40 +410,44 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                     </p>
                   )}
                 </div>
-              ) : state.race.status === 'Waiting' ? (
-                <div className="text-center py-6">
-                  <div className="text-yellow-400 text-4xl mb-3">⏳</div>
-                  <p className="text-yellow-400 font-medium text-lg mb-2">Race Starting Soon</p>
-                  <p className="text-gray-400 text-sm">Waiting for race to begin...</p>
+              </div>
+            ) : state.race?.status === 'Waiting' ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-yellow-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏳</div>
+                  <p className="text-yellow-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Starting Soon</p>
+                  <p className="text-gray-400 text-xs sm:text-sm">Waiting for race to begin...</p>
                 </div>
-              ) : (
-                <div className="text-center py-6">
-                  <div className="text-gray-400 text-4xl mb-3">⏸️</div>
-                  <p className="text-gray-400 font-medium">Turn actions not available</p>
-                  <p className="text-gray-500 text-sm mt-2">
-                    Current phase: {state.currentTurnPhase}
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-gray-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏸️</div>
+                  <p className="text-gray-400 font-medium text-sm sm:text-base">Turn actions not available</p>
+                  <p className="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
+                    Current phase: {currentTurnPhase}
                   </p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Enhanced error display with better UX */}
+        {/* Enhanced error display with better UX - Mobile responsive */}
         {state.error && (
-          <div className="fixed bottom-4 right-4 max-w-md bg-red-600 text-white rounded-lg shadow-lg border border-red-500 z-50">
-            <div className="p-4">
-              <div className="flex items-start space-x-3">
-                <div className="text-red-200 text-xl">⚠️</div>
-                <div className="flex-1">
-                  <h4 className="font-medium mb-1">Error</h4>
-                  <p className="text-sm text-red-100">
+          <div className="fixed bottom-2 sm:bottom-4 right-2 sm:right-4 left-2 sm:left-auto max-w-full sm:max-w-md bg-red-600 text-white rounded-lg shadow-lg border border-red-500 z-50">
+            <div className="p-3 sm:p-4">
+              <div className="flex items-start space-x-2 sm:space-x-3">
+                <div className="text-red-200 text-lg sm:text-xl flex-shrink-0">⚠️</div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium mb-1 text-sm sm:text-base">Error</h4>
+                  <p className="text-xs sm:text-sm text-red-100 break-words">
                     {raceErrorUtils.getUserFriendlyError(state.error)}
                   </p>
                   {raceErrorUtils.isRetryableError(state.error) && (
                     <button
                       onClick={handleRetry}
-                      className="mt-2 text-xs bg-red-700 hover:bg-red-800 px-2 py-1 rounded transition-colors"
+                      className="mt-2 text-xs bg-red-700 hover:bg-red-800 px-2 py-1 rounded transition-colors touch-manipulation"
                     >
                       Retry
                     </button>
@@ -634,7 +455,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 </div>
                 <button
                   onClick={actions.clearError}
-                  className="text-red-200 hover:text-white transition-colors"
+                  className="text-red-200 hover:text-white transition-colors flex-shrink-0 touch-manipulation p-1"
                 >
                   ✕
                 </button>
@@ -643,23 +464,23 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
           </div>
         )}
 
-        {/* Connection status indicator */}
+        {/* Connection status indicator - Mobile responsive */}
         {state.isLoading && state.race && (
-          <div className="fixed bottom-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            <span className="text-sm">Updating...</span>
+          <div className="fixed bottom-2 sm:bottom-4 left-2 sm:left-4 bg-blue-600 text-white px-2 sm:px-3 py-1 sm:py-2 rounded-lg shadow-lg flex items-center space-x-1 sm:space-x-2 z-40">
+            <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white flex-shrink-0"></div>
+            <span className="text-xs sm:text-sm">Updating...</span>
           </div>
         )}
 
-        {/* Animation overlay for turn processing */}
+        {/* Animation overlay for turn processing - Mobile responsive */}
         {state.animationState.isAnimating && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
-            <div className="bg-gray-800 rounded-lg p-6 text-center border border-gray-700">
-              <div className="text-blue-400 text-4xl mb-3">🏎️</div>
-              <h3 className="text-xl font-bold text-white mb-2">Processing Turn</h3>
-              <p className="text-gray-300 text-sm">Calculating race results...</p>
-              <div className="mt-4 w-32 bg-gray-700 rounded-full h-2 mx-auto">
-                <div className="bg-blue-500 h-2 rounded-full animate-pulse"></div>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6 text-center border border-gray-700 max-w-sm w-full">
+              <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏎️</div>
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">Processing Turn</h3>
+              <p className="text-gray-300 text-xs sm:text-sm mb-3 sm:mb-4">Calculating race results...</p>
+              <div className="w-24 sm:w-32 bg-gray-700 rounded-full h-1.5 sm:h-2 mx-auto">
+                <div className="bg-blue-500 h-1.5 sm:h-2 rounded-full animate-pulse"></div>
               </div>
             </div>
           </div>
