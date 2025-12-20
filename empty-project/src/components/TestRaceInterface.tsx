@@ -39,25 +39,81 @@ const TestRaceInterface: React.FC = () => {
         {/* Car Sprites Test */}
         <div className="bg-gray-800 rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">Car Sprites Test</h2>
+          
+          {/* Basic CSS Test */}
+          <div className="mb-6">
+            <h3 className="text-lg mb-2">Basic CSS Test (Should see colored squares)</h3>
+            <div className="flex space-x-4">
+              <div className="w-8 h-8 bg-red-500 border border-white"></div>
+              <div className="w-8 h-8 bg-blue-500 border border-white"></div>
+              <div className="w-8 h-8 bg-green-500 border border-white"></div>
+              <div className="w-8 h-8 bg-yellow-500 border border-white"></div>
+            </div>
+          </div>
+          
           <div className="space-y-4">
             <div>
-              <h3 className="text-lg mb-2">Player Car (You)</h3>
-              <CarSprite 
-                participant={mockParticipant}
-                isPlayer={true}
-                size="large"
-                animationState="highlighted"
-              />
+              <h3 className="text-lg mb-2">Simple Test Sprite (Solid Colors)</h3>
+              <div className="border-2 border-green-500 p-2 inline-block bg-gray-700">
+                <div className="relative inline-block">
+                  <div className="flex flex-col">
+                    <div className="flex">
+                      <div className="w-4 h-4 bg-transparent"></div>
+                      <div className="w-4 h-4 bg-transparent"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-transparent"></div>
+                      <div className="w-4 h-4 bg-transparent"></div>
+                    </div>
+                    <div className="flex">
+                      <div className="w-4 h-4 bg-transparent"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-transparent"></div>
+                    </div>
+                    <div className="flex">
+                      <div className="w-4 h-4 bg-red-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-yellow-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-yellow-500"></div>
+                      <div className="w-4 h-4 bg-blue-500"></div>
+                      <div className="w-4 h-4 bg-red-500"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div>
-              <h3 className="text-lg mb-2">Other Player Car</h3>
-              <CarSprite 
-                participant={mockParticipant2}
-                isPlayer={false}
-                size="large"
-                animationState="idle"
-              />
+              <h3 className="text-lg mb-2">CarSprite Component Test</h3>
+              <div className="border-2 border-red-500 p-2 inline-block bg-gray-700">
+                <CarSprite 
+                  participant={mockParticipant}
+                  isPlayer={true}
+                  size="large"
+                  animationState="highlighted"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg mb-2">Other Player Car - Large with Debug Border</h3>
+              <div className="border-2 border-blue-500 p-2 inline-block bg-gray-700">
+                <CarSprite 
+                  participant={mockParticipant2}
+                  isPlayer={false}
+                  size="large"
+                  animationState="idle"
+                />
+              </div>
             </div>
             
             <div>

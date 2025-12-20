@@ -161,6 +161,13 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
       role="img"
       aria-label={`Car sprite for ${participant.player_name || 'Unknown Player'}`}
     >
+      {/* Debug info for development */}
+      {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+        <div className="absolute -top-8 left-0 text-xs text-yellow-400 whitespace-nowrap z-10">
+          {participant.player_name} ({dimensions.width.base}x{dimensions.height.base})
+        </div>
+      )}
+      
       {/* 8-bit pixel car */}
       <div className="relative">
         {renderPixelPattern()}
