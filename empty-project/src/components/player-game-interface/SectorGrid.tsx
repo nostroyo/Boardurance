@@ -133,6 +133,13 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
         </div>
       </div>
 
+      {/* Debug: Show sector participants count */}
+      {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+        <div className="bg-yellow-600 text-black text-xs p-1 rounded mb-2">
+          DEBUG: Sector {sector.id} has {sectorParticipants.length} participants
+        </div>
+      )}
+
       {/* Position Slots Grid - Mobile responsive */}
       <div className="mb-3 sm:mb-4">
         <div className="text-gray-400 text-xs sm:text-sm mb-2">Position Slots:</div>

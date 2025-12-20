@@ -45,14 +45,22 @@ const PositionSlotComponent: React.FC<PositionSlotProps> = ({
         console.log(`[PositionSlot] Rendering CarSprite for ${participant.player_name} in slot ${slotNumber}`);
       }
       
-      // Show 8-bit car sprite
+      // Show 8-bit car sprite with debug wrapper
       return (
-        <CarSprite
-          participant={participant}
-          isPlayer={isPlayerSlot}
-          size="small"
-          animationState={isPlayerSlot ? 'highlighted' : animationState}
-        />
+        <div className="relative">
+          {/* Debug indicator */}
+          {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+            <div className="absolute -top-6 left-0 bg-green-500 text-black text-[8px] px-1 rounded z-10">
+              {participant.player_name}
+            </div>
+          )}
+          <CarSprite
+            participant={participant}
+            isPlayer={isPlayerSlot}
+            size="small"
+            animationState={isPlayerSlot ? 'highlighted' : animationState}
+          />
+        </div>
       );
     }
 
