@@ -30,19 +30,47 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
     // Debug logging
     if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.log(`[SectorGrid] Sector ${sector.id} participants:`, filteredParticipants);
+      console.log(`[SectorGrid] Sector ${sector.id} participant positions:`, 
+        filteredParticipants.map(p => ({ 
+          name: p.player_name, 
+          position: p.position_in_sector,
+          uuid: p.player_uuid.slice(0, 8) 
+        }))
+      );
     }
     
     return filteredParticipants;
   }, [participants, sector.id]);
 
-  // Create position slots (1-5 numbered slots)
+  // Create position slots (0-4 backend positions mapped to 1-5 UI slots)
   const positionSlots = useMemo(() => {
     const slots = [];
     const maxSlots = 5; // Fixed 5 slots per sector as per requirements
 
+    // Debug: Log all participants and their positions
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log(`[SectorGrid] Creating slots for sector ${sector.id}:`);
+      console.log(`[SectorGrid] Available participants:`, sectorParticipants.map(p => ({
+        name: p.player_name,
+        position: p.position_in_sector,
+        uuid: p.player_uuid.slice(0, 8)
+      })));
+    }
+
     for (let i = 1; i <= maxSlots; i++) {
-      const participant = sectorParticipants.find((p) => p.position_in_sector === i);
+      // Map UI slot number (1-5) to backend position (0-4)
+      const backendPosition = i - 1;
+      const participant = sectorParticipants.find((p) => p.position_in_sector === backendPosition);
       const isPlayerSlot = participant?.player_uuid === playerUuid;
+
+      // Debug: Log slot mapping
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.log(`[SectorGrid] Slot ${i} (backend pos ${backendPosition}):`, {
+          participant: participant ? participant.player_name : 'empty',
+          isPlayerSlot,
+          participantPosition: participant?.position_in_sector
+        });
+      }
 
       slots.push({
         slotNumber: i,
@@ -53,7 +81,7 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
     }
 
     return slots;
-  }, [sectorParticipants, playerUuid]);
+  }, [sectorParticipants, playerUuid, sector.id]);
 
   // Get sector container styling
   const getSectorContainerStyle = (): string => {

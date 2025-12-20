@@ -187,135 +187,67 @@ export function RaceContainer({
         progress: 20,
       });
 
-      // Fetch initial data with fallback to mock data
-      let carData: CarData | null = null;
-      let localView: LocalView | null = null;
-      let turnPhase: TurnPhase | null = null;
+      // Fetch initial data from backend APIs (no mock fallbacks)
+      updateLoading(LOADING_KEYS.RACE_INIT, {
+        message: 'Fetching car data...',
+        progress: 20,
+      });
 
-      // Try to fetch car data
-      try {
-        carData = await withErrorHandling(
-          () => raceAPIService.getCarData(raceUuid, playerUuid),
-          'fetching car data',
-        );
-        console.log('[RaceContainer] Car data loaded successfully');
-      } catch (error) {
-        console.warn('[RaceContainer] Car data API failed, using mock data:', error);
-        // Fallback to mock car data
-        carData = {
-          car: { uuid: 'mock-car', name: 'Mock Car', nft_mint_address: null },
-          pilot: {
-            uuid: 'mock-pilot',
-            name: 'Mock Pilot',
-            pilot_class: 'Professional',
-            rarity: 'Common',
-            skills: { reaction_time: 75, precision: 80, focus: 70, stamina: 85 },
-            performance: { straight_value: 15, curve_value: 12 },
-            nft_mint_address: null,
-          },
-          engine: {
-            uuid: 'mock-engine',
-            name: 'Mock Engine',
-            rarity: 'Common',
-            straight_value: 20,
-            curve_value: 18,
-            nft_mint_address: null,
-          },
-          body: {
-            uuid: 'mock-body',
-            name: 'Mock Body',
-            rarity: 'Common',
-            straight_value: 10,
-            curve_value: 15,
-            nft_mint_address: null,
-          },
-        };
-      }
+      const carData = await withErrorHandling(
+        () => raceAPIService.getCarData(raceUuid, playerUuid),
+        'fetching car data',
+      );
+      console.log('[RaceContainer] Car data loaded successfully');
 
-      // Try to fetch local view
-      try {
-        localView = await withErrorHandling(
-          () => raceAPIService.getLocalView(raceUuid, playerUuid),
-          'fetching local view',
-        );
-        console.log('[RaceContainer] Local view loaded successfully');
-      } catch (error) {
-        console.warn('[RaceContainer] Local view API failed, using mock data:', error);
-        // Fallback to mock local view
-        localView = {
-          center_sector: 1,
-          visible_sectors: [
-            { id: 0, name: 'Start/Finish', min_value: 10, max_value: 20, slot_capacity: 5, sector_type: 'Start', current_occupancy: 2 },
-            { id: 1, name: 'Sector 1', min_value: 15, max_value: 25, slot_capacity: 5, sector_type: 'Straight', current_occupancy: 3 },
-            { id: 2, name: 'Sector 2', min_value: 12, max_value: 22, slot_capacity: 5, sector_type: 'Curve', current_occupancy: 1 },
-            { id: 3, name: 'Sector 3', min_value: 18, max_value: 28, slot_capacity: 5, sector_type: 'Straight', current_occupancy: 2 },
-            { id: 4, name: 'Sector 4', min_value: 14, max_value: 24, slot_capacity: 5, sector_type: 'Curve', current_occupancy: 4 },
-          ],
-          visible_participants: [
-            {
-              player_uuid: playerUuid,
-              player_name: 'You',
-              car_name: 'Your Car',
-              current_sector: 1,
-              position_in_sector: 1,
-              total_value: 45,
-              current_lap: 1,
-              is_finished: false,
-            },
-            {
-              player_uuid: 'other-player-1',
-              player_name: 'Player 2',
-              car_name: 'Car 2',
-              current_sector: 1,
-              position_in_sector: 2,
-              total_value: 42,
-              current_lap: 1,
-              is_finished: false,
-            },
-            {
-              player_uuid: 'other-player-2',
-              player_name: 'Player 3',
-              car_name: 'Car 3',
-              current_sector: 2,
-              position_in_sector: 1,
-              total_value: 38,
-              current_lap: 1,
-              is_finished: false,
-            },
-          ],
-        };
-      }
+      updateLoading(LOADING_KEYS.RACE_INIT, {
+        message: 'Fetching race state...',
+        progress: 50,
+      });
 
-      // Try to fetch turn phase
-      try {
-        turnPhase = await withErrorHandling(() => raceAPIService.getTurnPhase(raceUuid), 'fetching turn phase');
-        console.log('[RaceContainer] Turn phase loaded successfully');
-      } catch (error) {
-        console.warn('[RaceContainer] Turn phase API failed, using mock data:', error);
-        // Fallback to mock turn phase
-        turnPhase = {
-          turn_phase: 'WaitingForPlayers',
-          current_lap: 1,
-          lap_characteristic: 'Straight',
-          submitted_players: [],
-          pending_players: [playerUuid],
-          total_active_players: 3,
-        };
-      }
+      const localView = await withErrorHandling(
+        () => raceAPIService.getLocalView(raceUuid, playerUuid),
+        'fetching local view',
+      );
+      console.log('[RaceContainer] Local view loaded successfully');
+
+      updateLoading(LOADING_KEYS.RACE_INIT, {
+        message: 'Fetching turn phase...',
+        progress: 70,
+      });
+
+      const turnPhase = await withErrorHandling(
+        () => raceAPIService.getTurnPhase(raceUuid), 
+        'fetching turn phase'
+      );
+      console.log('[RaceContainer] Turn phase loaded successfully');
 
       updateLoading(LOADING_KEYS.RACE_INIT, {
         message: 'Processing race data...',
-        progress: 80,
+        progress: 90,
       });
 
-      console.log('[RaceContainer] Initial data loaded successfully');
+      console.log('[RaceContainer] All data loaded successfully');
 
-      // Debug: Log the mock data being used
-      console.log('[RaceContainer] Mock data summary:', {
+      // Debug: Log the real data being used
+      console.log('[RaceContainer] Real data summary:', {
         carData: carData ? 'loaded' : 'missing',
         localView: localView ? `${localView.visible_participants.length} participants, ${localView.visible_sectors.length} sectors` : 'missing',
         turnPhase: turnPhase ? turnPhase.turn_phase : 'missing',
       });
+
+      // Debug: Log the actual local view data
+      if (localView) {
+        console.log('[RaceContainer] Local view data:', {
+          centerSector: localView.center_sector,
+          visibleSectors: localView.visible_sectors.map(s => ({ id: s.id, name: s.name, occupancy: s.current_occupancy })),
+          participants: localView.visible_participants.map(p => ({ 
+            name: p.player_name, 
+            sector: p.current_sector, 
+            position: p.position_in_sector,
+            uuid: p.player_uuid.slice(0, 8)
+          }))
+        });
+      }
 
       // Update state with fetched data
       setState((prev) => ({
@@ -340,38 +272,24 @@ export function RaceContainer({
       // These are less critical and can load after the main UI is displayed
       fetchPerformancePreview();
 
-      // Fetch boost availability with fallback
+      // Fetch boost availability from backend
       try {
         const boostAvailability = await raceAPIService.getBoostAvailability(raceUuid, playerUuid);
         setState((prev) => ({ ...prev, boostAvailability }));
         console.log('[RaceContainer] Boost availability loaded successfully');
       } catch (error) {
-        console.warn('[RaceContainer] Failed to fetch boost availability, using mock data:', error);
-        // Fallback to mock boost availability
-        const mockBoostAvailability: BoostAvailability = {
-          available_cards: [0, 1, 2, 3, 4],
-          hand_state: { '0': true, '1': true, '2': true, '3': true, '4': true },
-          current_cycle: 1,
-          cycles_completed: 0,
-          cards_remaining: 5,
-          next_replenishment_at: null,
-        };
-        setState((prev) => ({ ...prev, boostAvailability: mockBoostAvailability }));
+        console.error('[RaceContainer] Failed to fetch boost availability:', error);
+        // This is non-critical, continue without boost availability
       }
 
-      // Fetch lap history with fallback
+      // Fetch lap history from backend
       try {
         const lapHistory = await raceAPIService.getLapHistory(raceUuid, playerUuid);
         setState((prev) => ({ ...prev, lapHistory }));
         console.log('[RaceContainer] Lap history loaded successfully');
       } catch (error) {
-        console.warn('[RaceContainer] Failed to fetch lap history, using mock data:', error);
-        // Fallback to mock lap history
-        const mockLapHistory: LapHistory = {
-          laps: [],
-          cycle_summaries: [],
-        };
-        setState((prev) => ({ ...prev, lapHistory: mockLapHistory }));
+        console.error('[RaceContainer] Failed to fetch lap history:', error);
+        // This is non-critical, continue without lap history
       }
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error(String(error));
@@ -411,41 +329,9 @@ export function RaceContainer({
 
       stopLoading(LOADING_KEYS.PERFORMANCE_PREVIEW);
     } catch (error) {
-      // Non-critical error - provide mock data
-      console.warn('[RaceContainer] Failed to fetch performance preview, using mock data:', error);
-      
-      // Fallback to mock performance preview
-      const mockPerformancePreview: PerformancePreview = {
-        base_performance: {
-          engine_contribution: 20,
-          body_contribution: 15,
-          pilot_contribution: 10,
-          base_value: 45,
-          sector_ceiling: 25,
-          capped_base_value: 25,
-          lap_characteristic: 'Straight',
-        },
-        boost_options: [
-          { boost_value: 0, is_available: true, final_value: 45, movement_probability: 'Stay' },
-          { boost_value: 1, is_available: true, final_value: 48, movement_probability: 'Stay' },
-          { boost_value: 2, is_available: true, final_value: 52, movement_probability: 'MoveUp' },
-          { boost_value: 3, is_available: true, final_value: 56, movement_probability: 'MoveUp' },
-          { boost_value: 4, is_available: true, final_value: 59, movement_probability: 'MoveUp' },
-        ],
-        boost_cycle_info: {
-          current_cycle: 1,
-          cycles_completed: 0,
-          cards_remaining: 5,
-          available_cards: [0, 1, 2, 3, 4],
-        },
-      };
-      
-      setState((prev) => ({
-        ...prev,
-        performancePreview: mockPerformancePreview,
-      }));
-      
+      console.error('[RaceContainer] Failed to fetch performance preview:', error);
       stopLoading(LOADING_KEYS.PERFORMANCE_PREVIEW);
+      // This is non-critical, continue without performance preview
     }
   }, [raceUuid, playerUuid, startLoading, stopLoading]);
 

@@ -37,15 +37,28 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
       .split('')
       .reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-    // Generate distinct colors for each player
-    const hue = (hash * 137.508) % 360; // Golden angle for good distribution
-    const saturation = isPlayer ? 80 : 60;
-    const lightness = isPlayer ? 55 : 45;
+    // Use solid Tailwind colors for better visibility
+    const colorPalettes = [
+      { primary: '#3B82F6', secondary: '#1E40AF', highlight: '#60A5FA', accent: '#DBEAFE' }, // Blue
+      { primary: '#EF4444', secondary: '#B91C1C', highlight: '#F87171', accent: '#FEE2E2' }, // Red
+      { primary: '#10B981', secondary: '#047857', highlight: '#34D399', accent: '#D1FAE5' }, // Green
+      { primary: '#F59E0B', secondary: '#D97706', highlight: '#FBBF24', accent: '#FEF3C7' }, // Yellow
+      { primary: '#8B5CF6', secondary: '#7C3AED', highlight: '#A78BFA', accent: '#EDE9FE' }, // Purple
+      { primary: '#EC4899', secondary: '#BE185D', highlight: '#F472B6', accent: '#FCE7F3' }, // Pink
+      { primary: '#06B6D4', secondary: '#0891B2', highlight: '#22D3EE', accent: '#CFFAFE' }, // Cyan
+      { primary: '#84CC16', secondary: '#65A30D', highlight: '#A3E635', accent: '#ECFCCB' }, // Lime
+    ];
 
-    const primary = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-    const secondary = `hsl(${(hue + 30) % 360}, ${saturation - 10}%, ${lightness - 10}%)`;
-    const highlight = `hsl(${hue}, ${saturation + 20}%, ${lightness + 20}%)`;
-    const accent = `hsl(${(hue + 180) % 360}, ${saturation}%, ${lightness + 10}%)`;
+    const colorIndex = hash % colorPalettes.length;
+    const colors = colorPalettes[colorIndex];
+
+    // Make player car more vibrant
+    if (isPlayer) {
+      colors.primary = '#FFD700'; // Gold for player
+      colors.secondary = '#FFA500'; // Orange
+      colors.highlight = '#FFFF00'; // Bright yellow
+      colors.accent = '#FFF8DC'; // Cornsilk
+    }
 
     // 8-bit car pixel pattern (8x6 pixels)
     const pixelPattern = [
@@ -64,7 +77,7 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
     };
 
     return {
-      colors: { primary, secondary, highlight, accent },
+      colors,
       pixelPattern,
       animations,
     };
@@ -146,7 +159,6 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
                 width: `${dimensions.pixelSize.base}px`,
                 height: `${dimensions.pixelSize.base}px`,
                 backgroundColor: pixelColor,
-                imageRendering: 'pixelated',
                 // Ensure minimum visibility
                 minWidth: '2px',
                 minHeight: '2px',
@@ -181,6 +193,19 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
       {/* 8-bit pixel car */}
       <div className="relative">
         {renderPixelPattern()}
+        
+        {/* Debug: Show a simple colored rectangle as fallback */}
+        {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+          <div 
+            className="absolute top-0 left-0 opacity-50"
+            style={{
+              width: `${dimensions.width.base}px`,
+              height: `${dimensions.height.base}px`,
+              backgroundColor: spriteStyle.colors.primary,
+              border: '2px solid white',
+            }}
+          />
+        )}
         
         {/* Player indicator overlay - Mobile responsive */}
         {isPlayer && (
