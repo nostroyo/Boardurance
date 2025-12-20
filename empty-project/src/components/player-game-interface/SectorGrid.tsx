@@ -23,9 +23,16 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
 }) => {
   // Get participants in this sector sorted by position
   const sectorParticipants = useMemo(() => {
-    return participants
+    const filteredParticipants = participants
       .filter((p) => p.current_sector === sector.id)
       .sort((a, b) => a.position_in_sector - b.position_in_sector);
+    
+    // Debug logging
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log(`[SectorGrid] Sector ${sector.id} participants:`, filteredParticipants);
+    }
+    
+    return filteredParticipants;
   }, [participants, sector.id]);
 
   // Create position slots (1-5 numbered slots)
