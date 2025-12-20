@@ -1190,20 +1190,17 @@ async fn get_player_by_wallet_impl(
             };
 
             tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END]",
-                wallet_address = %wallet_address,
+                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Ok(Json(response))
         }
         Ok(None) => {
             tracing::info!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Player not found",
-                wallet_address = %wallet_address
+                "[FETCHING PLAYER BY WALLET - EVENT] Player not found wallet_address={}",\n                wallet_address
             );
             tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END]",
-                wallet_address = %wallet_address,
+                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Err((
@@ -1213,13 +1210,10 @@ async fn get_player_by_wallet_impl(
         }
         Err(e) => {
             tracing::error!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Failed to fetch player: {}",
-                e,
-                wallet_address = %wallet_address
+                "[FETCHING PLAYER BY WALLET - EVENT] Failed to fetch player: {} wallet_address={}",\n                e,\n                wallet_address
             );
             tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END]",
-                wallet_address = %wallet_address,
+                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Err((
@@ -1245,20 +1239,17 @@ async fn get_player_by_email_impl(
             };
 
             tracing::info!(
-                "[FETCHING PLAYER BY EMAIL - END]",
-                email = %email,
+                "[FETCHING PLAYER BY EMAIL - END] email={}",\n                email,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Ok(Json(response))
         }
         Ok(None) => {
             tracing::info!(
-                "[FETCHING PLAYER BY EMAIL - EVENT] Player not found",
-                email = %email
+                "[FETCHING PLAYER BY EMAIL - EVENT] Player not found email={}",\n                email
             );
             tracing::info!(
-                "[FETCHING PLAYER BY EMAIL - END]",
-                email = %email,
+                "[FETCHING PLAYER BY EMAIL - END] email={}",\n                email,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Err((
@@ -1268,13 +1259,10 @@ async fn get_player_by_email_impl(
         }
         Err(e) => {
             tracing::error!(
-                "[FETCHING PLAYER BY EMAIL - EVENT] Failed to fetch player: {}",
-                e,
-                email = %email
+                "[FETCHING PLAYER BY EMAIL - EVENT] Failed to fetch player: {} email={}",\n                e,\n                email
             );
             tracing::info!(
-                "[FETCHING PLAYER BY EMAIL - END]",
-                email = %email,
+                "[FETCHING PLAYER BY EMAIL - END] email={}",\n                email,
                 elapsed_milliseconds = start_time.elapsed().as_millis() as u64
             );
             Err((
