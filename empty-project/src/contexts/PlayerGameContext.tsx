@@ -7,7 +7,7 @@ import type {
   AnimationState,
   TurnPhase,
 } from '../types';
-import { raceAPI } from '../utils/raceAPI';
+import { raceAPIService } from '../services/raceAPI';
 
 // Context type definition
 interface PlayerGameContextType {

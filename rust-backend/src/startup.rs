@@ -2,7 +2,7 @@
 
 use crate::app_state::AppState;
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::routes::{health_check, test_items, players, races, auth};
+use crate::routes::{health_check, players, races, auth};
 use crate::services::{JwtService, JwtConfig, SessionManager, SessionConfig};
 use crate::middleware::{AuthMiddleware, RequireRole};
 use axum::{routing::get, Router};
@@ -60,8 +60,6 @@ impl Application {
 #[openapi(
     paths(
         crate::routes::health_check,
-        crate::routes::test_items::create_test_item,
-        crate::routes::test_items::get_test_items,
         crate::routes::players::get_all_players,
         crate::routes::players::get_player_by_uuid,
         crate::routes::players::get_player_by_wallet,
@@ -126,7 +124,6 @@ impl Application {
             crate::domain::BodyName,
             crate::domain::PilotPerformance,
             // Route DTOs
-            crate::routes::test_items::CreateTestItemRequest,
             crate::routes::players::ConnectWalletRequest,
             crate::routes::players::UpdateTeamNameRequest,
             crate::routes::players::AddCarRequest,
@@ -243,7 +240,6 @@ pub async fn run(
     // Create main app with Database state for other routes
     let app = Router::new()
         .route("/health_check", get(health_check))
-        .nest("/api/v1", test_items::routes())
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
         .merge(auth_routes) // Merge the auth routes that already have their state

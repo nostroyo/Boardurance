@@ -1,6 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { PlayerGameProvider } from '../contexts/PlayerGameContext';
-import { PlayerGameInterface } from './player-game-interface';
+import { RaceContainer } from './player-game-interface/RaceContainer';
 import { useAuthContext } from '../contexts/AuthContext';
 
 function GameWrapper() {
@@ -30,20 +29,22 @@ function GameWrapper() {
   }
 
   return (
-    <PlayerGameProvider>
-      <PlayerGameInterface
-        raceUuid={raceUuid}
-        playerUuid={user.uuid}
-        onRaceComplete={(position) => {
-          console.log(`Race completed! Final position: ${position}`);
-          // Could redirect to results page or show modal
-        }}
-        onError={(error) => {
-          console.error('Game error:', error);
-          // Could show error notification
-        }}
-      />
-    </PlayerGameProvider>
+    <RaceContainer
+      raceUuid={raceUuid}
+      playerUuid={user.uuid}
+      onRaceComplete={(position) => {
+        console.log(`Race completed! Final position: ${position}`);
+        // Could redirect to results page or show modal
+      }}
+      onError={(error) => {
+        console.error('Game error:', error);
+        // Could show error notification
+      }}
+      onReturnToLobby={() => {
+        console.log('[GameWrapper] Returning to lobby');
+        // TODO: Navigate back to lobby
+      }}
+    />
   );
 }
 
