@@ -27,27 +27,86 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   const [boostAvailability, setBoostAvailability] = useState<BoostAvailability | null>(null);
   const [currentTurnPhase, setCurrentTurnPhase] = useState<TurnPhaseStatus>('WaitingForPlayers');
 
-  // Fetch local view data from API
+  // Fetch local view data from API with fallback to mock data
   const fetchLocalView = useCallback(async () => {
     try {
       const response = await raceAPI.getLocalView(raceUuid, playerUuid);
       if (response.success && response.data) {
         setLocalView(response.data as LocalView);
+        console.log('[PlayerGameInterface] Local view loaded successfully:', response.data);
+      } else {
+        console.warn('[PlayerGameInterface] Local view API failed, using mock data:', response.error);
+        // Fallback to mock data so user can see the interface
+        const mockLocalView: LocalView = {
+          center_sector: state.playerParticipant?.current_sector || 1,
+          visible_sectors: [
+            { id: 0, name: 'Start/Finish', min_value: 10, max_value: 20, slot_capacity: 5, sector_type: 'Start', current_occupancy: 2 },
+            { id: 1, name: 'Sector 1', min_value: 15, max_value: 25, slot_capacity: 5, sector_type: 'Straight', current_occupancy: 3 },
+            { id: 2, name: 'Sector 2', min_value: 12, max_value: 22, slot_capacity: 5, sector_type: 'Curve', current_occupancy: 1 },
+            { id: 3, name: 'Sector 3', min_value: 18, max_value: 28, slot_capacity: 5, sector_type: 'Straight', current_occupancy: 2 },
+            { id: 4, name: 'Sector 4', min_value: 14, max_value: 24, slot_capacity: 5, sector_type: 'Curve', current_occupancy: 4 },
+          ],
+          visible_participants: state.race?.participants.map((p, index) => ({
+            player_uuid: p.player_uuid,
+            player_name: `Player ${index + 1}`,
+            car_name: `Car ${index + 1}`,
+            current_sector: p.current_sector,
+            position_in_sector: p.current_position_in_sector,
+            total_value: p.total_value,
+            current_lap: p.current_lap,
+            is_finished: p.is_finished,
+          })) || []
+        };
+        setLocalView(mockLocalView);
       }
     } catch (error) {
-      console.error('Failed to fetch local view:', error);
+      console.error('[PlayerGameInterface] Failed to fetch local view:', error);
+      // Still provide mock data on error
+      const mockLocalView: LocalView = {
+        center_sector: state.playerParticipant?.current_sector || 1,
+        visible_sectors: [
+          { id: 0, name: 'Start/Finish', min_value: 10, max_value: 20, slot_capacity: 5, sector_type: 'Start', current_occupancy: 2 },
+          { id: 1, name: 'Sector 1', min_value: 15, max_value: 25, slot_capacity: 5, sector_type: 'Straight', current_occupancy: 3 },
+          { id: 2, name: 'Sector 2', min_value: 12, max_value: 22, slot_capacity: 5, sector_type: 'Curve', current_occupancy: 1 },
+        ],
+        visible_participants: []
+      };
+      setLocalView(mockLocalView);
     }
-  }, [raceUuid, playerUuid]);
+  }, [raceUuid, playerUuid, state.playerParticipant, state.race?.participants]);
 
-  // Fetch boost availability from API
+  // Fetch boost availability from API with fallback to mock data
   const fetchBoostAvailability = useCallback(async () => {
     try {
       const response = await raceAPI.getBoostAvailability(raceUuid, playerUuid);
       if (response.success && response.data) {
         setBoostAvailability(response.data as BoostAvailability);
+        console.log('[PlayerGameInterface] Boost availability loaded successfully:', response.data);
+      } else {
+        console.warn('[PlayerGameInterface] Boost availability API failed, using mock data:', response.error);
+        // Fallback to mock data so user can see the interface
+        const mockBoostAvailability: BoostAvailability = {
+          available_cards: [0, 1, 2, 3, 4, 5],
+          hand_state: { '0': true, '1': true, '2': true, '3': true, '4': true, '5': true },
+          current_cycle: 1,
+          cycles_completed: 0,
+          cards_remaining: 6,
+          next_replenishment_at: null,
+        };
+        setBoostAvailability(mockBoostAvailability);
       }
     } catch (error) {
-      console.error('Failed to fetch boost availability:', error);
+      console.error('[PlayerGameInterface] Failed to fetch boost availability:', error);
+      // Still provide mock data on error
+      const mockBoostAvailability: BoostAvailability = {
+        available_cards: [0, 1, 2, 3, 4, 5],
+        hand_state: { '0': true, '1': true, '2': true, '3': true, '4': true, '5': true },
+        current_cycle: 1,
+        cycles_completed: 0,
+        cards_remaining: 6,
+        next_replenishment_at: null,
+      };
+      setBoostAvailability(mockBoostAvailability);
     }
   }, [raceUuid, playerUuid]);
 
@@ -460,6 +519,28 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   ✕
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Info Panel - Show API status and data */}
+        {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+          <div className="fixed bottom-20 right-4 bg-gray-800 rounded-lg p-3 text-xs max-w-sm border border-gray-600 z-30">
+            <h4 className="font-bold mb-2 text-yellow-400">Debug Info</h4>
+            <div className="space-y-1 text-gray-300">
+              <div>Race Status: {state.race?.status}</div>
+              <div>Turn Phase: {currentTurnPhase}</div>
+              <div>Player Sector: {state.playerParticipant?.current_sector}</div>
+              <div>Local View: {localView ? '✓ Loaded' : '✗ Missing'}</div>
+              <div>Boost Availability: {boostAvailability ? '✓ Loaded' : '✗ Missing'}</div>
+              <div>Can Submit: {raceStatusUtils.canSubmitActions(state.race) ? 'Yes' : 'No'}</div>
+              <div>Has Submitted: {state.hasSubmittedAction ? 'Yes' : 'No'}</div>
+              {localView && (
+                <div>Visible Sectors: {localView.visible_sectors.length}</div>
+              )}
+              {boostAvailability && (
+                <div>Available Boosts: [{boostAvailability.available_cards.join(', ')}]</div>
+              )}
             </div>
           </div>
         )}

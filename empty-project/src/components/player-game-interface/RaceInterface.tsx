@@ -16,12 +16,11 @@ import type {
   BoostAvailability,
   LapHistory,
 } from '../../types/race-api';
-import { PerformancePreview as PerformancePreviewComponent } from './PerformancePreview';
-import { PlayerCarCard } from './PlayerCarCard';
 import { TrackDisplayRedesign } from './TrackDisplayRedesign';
 import { RaceStatusPanel } from './RaceStatusPanel';
 import { BoostControlPanel } from './BoostControlPanel';
 import { RaceLoadingState, PollingIndicator } from './RaceLoadingState';
+import DiagnosticPanel from '../DiagnosticPanel';
 
 export interface RaceInterfaceProps {
   // Race data
@@ -93,36 +92,12 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
             />
           )}
 
-          {/* Main Race Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Car Info and Performance */}
-            <div className="space-y-6">
-              {/* Player Car Card */}
-              {carData && <PlayerCarCard carData={carData} lapHistory={lapHistory || undefined} />}
-
-              {/* Performance Preview */}
-              {isLoadingPreview ? (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h2 className="text-xl font-semibold mb-4">Performance Preview</h2>
-                  <RaceLoadingState type="data" message="Loading performance calculations..." />
-                </div>
-              ) : (
-                performancePreview &&
-                boostAvailability && (
-                  <PerformancePreviewComponent
-                    preview={performancePreview}
-                    selectedBoost={selectedBoost}
-                    onBoostSelect={onBoostSelect}
-                    availableBoosts={boostAvailability.available_cards}
-                  />
-                )
-              )}
-            </div>
-
-            {/* Center Column - Track View */}
-            <div className="space-y-6">
+          {/* Simplified Layout - Track Display and Boost Controls */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Track Display - Takes up 3/4 of the width */}
+            <div className="lg:col-span-3 space-y-6">
               {/* Redesigned Track Display */}
-              {localView && (
+              {localView ? (
                 <TrackDisplayRedesign
                   localView={localView}
                   playerUuid={playerUuid}
@@ -136,11 +111,29 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                     // Future enhancement: show participant details
                   }}
                 />
+              ) : (
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-gray-400">Loading track view...</p>
+                </div>
               )}
             </div>
 
-            {/* Right Column - Actions and Status */}
-            <div className="space-y-6">
+            {/* Boost Controls - Takes up 1/4 of the width */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Player Car Info */}
+              {carData && (
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold mb-3">Your Car</h3>
+                  <div className="space-y-2 text-sm">
+                    <div><span className="text-gray-400">Car:</span> {carData.car.name}</div>
+                    <div><span className="text-gray-400">Pilot:</span> {carData.pilot.name}</div>
+                    <div><span className="text-gray-400">Engine:</span> {carData.engine.name}</div>
+                    <div><span className="text-gray-400">Body:</span> {carData.body.name}</div>
+                  </div>
+                </div>
+              )}
+
               {/* Redesigned Boost Control Panel */}
               <div className="bg-gray-800 rounded-lg p-4">
                 <h2 className="text-xl font-semibold mb-4">Boost Selection</h2>
@@ -171,49 +164,6 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                 )}
               </div>
 
-              {/* Boost Cycle Information */}
-              {boostAvailability && (
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-3">Boost Cycle Status</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Current Cycle:</span>
-                      <span className="text-white font-semibold">
-                        {boostAvailability.current_cycle}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Cards Remaining:</span>
-                      <span className="text-white font-semibold">
-                        {boostAvailability.cards_remaining} / 5
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Cycles Completed:</span>
-                      <span className="text-white font-semibold">
-                        {boostAvailability.cycles_completed}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>Cycle Progress</span>
-                      <span>{5 - boostAvailability.cards_remaining} / 5 used</span>
-                    </div>
-                    <div className="w-full bg-gray-600 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${((5 - boostAvailability.cards_remaining) / 5) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Turn Phase Status */}
               {turnPhase && (
                 <div className="bg-gray-800 rounded-lg p-4">
@@ -235,9 +185,9 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                     </div>
 
                     <div className="text-sm text-gray-400">
+                      <div>Lap: {turnPhase.current_lap}</div>
+                      <div>Characteristic: {turnPhase.lap_characteristic}</div>
                       <div>Active Players: {turnPhase.total_active_players}</div>
-                      <div>Submitted: {turnPhase.submitted_players.length}</div>
-                      <div>Pending: {turnPhase.pending_players.length}</div>
                     </div>
                   </div>
                 </div>
@@ -248,20 +198,53 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
           {/* Debug Info (Development Only) */}
           {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
             <div className="bg-gray-800 rounded-lg p-4 text-xs">
-              <h3 className="text-sm font-semibold mb-2">Debug Info</h3>
+              <h3 className="text-sm font-semibold mb-2 text-yellow-400">Debug Info - RaceInterface</h3>
               <div className="grid grid-cols-2 gap-4 text-gray-400">
                 <div>
                   <div>Race UUID: {raceUuid}</div>
                   <div>Player UUID: {playerUuid.slice(-8)}</div>
                   <div>Selected Boost: {selectedBoost ?? 'None'}</div>
+                  <div>Car Data: {carData ? '✓ Loaded' : '✗ Missing'}</div>
+                  <div>Local View: {localView ? '✓ Loaded' : '✗ Missing'}</div>
+                  <div>Boost Availability: {boostAvailability ? '✓ Loaded' : '✗ Missing'}</div>
                 </div>
                 <div>
+                  <div>Turn Phase: {turnPhase ? '✓ Loaded' : '✗ Missing'}</div>
                   <div>Submitting: {isSubmitting ? 'Yes' : 'No'}</div>
                   <div>Submitted: {hasSubmittedThisTurn ? 'Yes' : 'No'}</div>
                   <div>Polling: {isPolling ? 'Yes' : 'No'}</div>
+                  {localView && (
+                    <>
+                      <div>Visible Sectors: {localView.visible_sectors.length}</div>
+                      <div>Visible Participants: {localView.visible_participants.length}</div>
+                    </>
+                  )}
                 </div>
               </div>
+              {localView && localView.visible_participants.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-600">
+                  <div className="text-yellow-400 font-semibold mb-1">Participants:</div>
+                  {localView.visible_participants.map((p, i) => (
+                    <div key={i} className="text-xs">
+                      {p.player_name} - Sector {p.current_sector}, Pos {p.position_in_sector}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
+
+          {/* Floating Diagnostic Panel */}
+          {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+            <DiagnosticPanel
+              localView={localView}
+              boostAvailability={boostAvailability}
+              turnPhase={turnPhase}
+              carData={carData}
+              selectedBoost={selectedBoost}
+              raceUuid={raceUuid}
+              playerUuid={playerUuid}
+            />
           )}
         </div>
       </div>

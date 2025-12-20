@@ -127,7 +127,7 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
     return `${baseStyle} ${animationClass} ${playerStyle}`;
   };
 
-  // Render the 8-bit pixel pattern - Responsive sizing
+  // Render the 8-bit pixel pattern - Responsive sizing with better visibility
   const renderPixelPattern = () => {
     return spriteStyle.pixelPattern.map((row, rowIndex) => (
       <div key={rowIndex} className="flex">
@@ -140,6 +140,9 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
               height: `${dimensions.pixelSize.base}px`,
               backgroundColor: getPixelColor(pixel),
               imageRendering: 'pixelated',
+              // Ensure minimum visibility
+              minWidth: '2px',
+              minHeight: '2px',
             }}
           />
         ))}

@@ -12,8 +12,7 @@ import AdminDashboard from './components/AdminDashboard';
 import GameLobby from './components/GameLobby';
 import GameWrapper from './components/GameWrapper';
 import RacePlayPage from './components/RacePlayPage';
-import { TrackDisplayDemo } from './components/player-game-interface/TrackDisplayDemo';
-import { SimpleDemo } from './components/player-game-interface/SimpleDemo';
+import TestRaceInterface from './components/TestRaceInterface';
 import './App.css';
 
 function App() {
@@ -24,8 +23,6 @@ function App() {
           <ErrorNotification />
           <Routes>
             <Route path="/" element={<MainPage />} />
-            <Route path="/demo" element={<TrackDisplayDemo />} />
-            <Route path="/simple" element={<SimpleDemo />} />
             <Route path="/register" element={<RegistrationPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route
@@ -75,6 +72,10 @@ function App() {
                   <GameLobby />
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/test-interface"
+              element={<TestRaceInterface />}
             />
           </Routes>
         </div>
