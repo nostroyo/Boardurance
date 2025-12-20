@@ -114,6 +114,11 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
     }
   };
 
+  // Debug: Log colors to console in development
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    console.log(`[CarSprite] ${participant.player_name} colors:`, spriteStyle.colors);
+  }
+
   // Get container styling
   const getContainerStyle = (): string => {
     const baseStyle = 'relative inline-block transition-all duration-300';
@@ -131,21 +136,26 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
   const renderPixelPattern = () => {
     return spriteStyle.pixelPattern.map((row, rowIndex) => (
       <div key={rowIndex} className="flex">
-        {row.map((pixel, colIndex) => (
-          <div
-            key={`${rowIndex}-${colIndex}`}
-            className="border-0"
-            style={{
-              width: `${dimensions.pixelSize.base}px`,
-              height: `${dimensions.pixelSize.base}px`,
-              backgroundColor: getPixelColor(pixel),
-              imageRendering: 'pixelated',
-              // Ensure minimum visibility
-              minWidth: '2px',
-              minHeight: '2px',
-            }}
-          />
-        ))}
+        {row.map((pixel, colIndex) => {
+          const pixelColor = getPixelColor(pixel);
+          return (
+            <div
+              key={`${rowIndex}-${colIndex}`}
+              className="border-0"
+              style={{
+                width: `${dimensions.pixelSize.base}px`,
+                height: `${dimensions.pixelSize.base}px`,
+                backgroundColor: pixelColor,
+                imageRendering: 'pixelated',
+                // Ensure minimum visibility
+                minWidth: '2px',
+                minHeight: '2px',
+                // Debug: Add a border to see if pixels are being rendered
+                border: typeof window !== 'undefined' && window.location.hostname === 'localhost' && pixel !== 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+              }}
+            />
+          );
+        })}
       </div>
     ));
   };

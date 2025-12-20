@@ -12,7 +12,6 @@ import AdminDashboard from './components/AdminDashboard';
 import GameLobby from './components/GameLobby';
 import GameWrapper from './components/GameWrapper';
 import RacePlayPage from './components/RacePlayPage';
-import TestRaceInterface from './components/TestRaceInterface';
 import './App.css';
 
 function App() {
@@ -72,10 +71,6 @@ function App() {
                   <GameLobby />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/test-interface"
-              element={<TestRaceInterface />}
             />
           </Routes>
         </div>

@@ -310,6 +310,13 @@ export function RaceContainer({
 
       console.log('[RaceContainer] Initial data loaded successfully');
 
+      // Debug: Log the mock data being used
+      console.log('[RaceContainer] Mock data summary:', {
+        carData: carData ? 'loaded' : 'missing',
+        localView: localView ? `${localView.visible_participants.length} participants, ${localView.visible_sectors.length} sectors` : 'missing',
+        turnPhase: turnPhase ? turnPhase.turn_phase : 'missing',
+      });
+
       // Update state with fetched data
       setState((prev) => ({
         ...prev,
