@@ -20,7 +20,6 @@ import { TrackDisplayRedesign } from './TrackDisplayRedesign';
 import { RaceStatusPanel } from './RaceStatusPanel';
 import { BoostControlPanel } from './BoostControlPanel';
 import { RaceLoadingState, PollingIndicator } from './RaceLoadingState';
-import DiagnosticPanel from '../DiagnosticPanel';
 
 export interface RaceInterfaceProps {
   // Race data
@@ -234,18 +233,6 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
             </div>
           )}
 
-          {/* Floating Diagnostic Panel */}
-          {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
-            <DiagnosticPanel
-              localView={localView}
-              boostAvailability={boostAvailability}
-              turnPhase={turnPhase}
-              carData={carData}
-              selectedBoost={selectedBoost}
-              raceUuid={raceUuid}
-              playerUuid={playerUuid}
-            />
-          )}
         </div>
       </div>
     );
