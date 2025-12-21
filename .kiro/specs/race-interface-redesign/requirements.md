@@ -23,11 +23,11 @@ This specification defines the redesign of the player race interface to provide 
 
 #### Acceptance Criteria
 
-1. WHEN the race interface loads THEN the system SHALL display a bird's eye view of the track with all sectors visible
+1. WHEN the race interface loads THEN the system SHALL display a bird's eye view of the track with sectors around me visible
 2. WHEN displaying sectors THEN the system SHALL show each sector as a grid with clearly marked position slots
 3. WHEN cars are in sectors THEN the system SHALL display 8-bit style car sprites in the appropriate position slots
 4. WHEN showing the player's car THEN the system SHALL highlight it distinctly from other cars
-5. WHEN the current player sector is displayed THEN the system SHALL position it in the center of the screen with other sectors arranged around it
+5. WHEN the current player sector is displayed THEN the system SHALL position it in the center of the screen with other sectors arranged around it (only max 2 front and down)
 
 ### Requirement 2
 
@@ -38,20 +38,19 @@ This specification defines the redesign of the player race interface to provide 
 1. WHEN sectors are displayed THEN the system SHALL distribute them evenly with consistent spacing
 2. WHEN showing sector grids THEN the system SHALL use sharp, clear borders and consistent sizing
 3. WHEN multiple sectors are visible THEN the system SHALL maintain visual hierarchy with the player sector emphasized
-4. WHEN displaying sector information THEN the system SHALL show sector type, capacity, and value ranges clearly
-5. WHEN sectors have different types THEN the system SHALL use distinct visual styling for each type
+4. WHEN displaying sector information THEN the system SHALL show sector capacity and value ranges clearly
 
 ### Requirement 3
 
-**User Story:** As a player, I want an integrated boost selection panel with a validate turn button, so that I can select my boost and submit my turn action in a streamlined interface.
+**User Story:** As a player, I want visible boost selection buttons and a validate turn button, so that I can easily select my boost value and submit my turn action without having to search for controls.
 
 #### Acceptance Criteria
 
-1. WHEN the boost selection is available THEN the system SHALL display boost options prominently in the interface
-2. WHEN a boost is selected THEN the system SHALL provide immediate visual feedback of the selection
-3. WHEN boost selection is complete THEN the system SHALL enable a validate turn button
-4. WHEN the validate turn button is clicked THEN the system SHALL submit the turn action and provide confirmation
-5. WHEN turn submission is in progress THEN the system SHALL disable further interactions and show loading state
+1. WHEN the turn phase allows boost selection THEN the system SHALL display clearly visible boost value buttons (0-5)
+2. WHEN boost buttons are displayed THEN the system SHALL show which boost values are available vs already used
+3. WHEN a boost button is clicked THEN the system SHALL provide immediate visual feedback and highlight the selection
+4. WHEN a boost is selected THEN the system SHALL enable a prominent "Validate Turn" button
+5. WHEN the validate turn button is clicked THEN the system SHALL submit the turn action and show confirmation feedback
 
 ### Requirement 4
 
@@ -77,14 +76,15 @@ This specification defines the redesign of the player race interface to provide 
 4. WHEN errors occur THEN the system SHALL display error messages using the existing error handling
 5. WHEN the race completes THEN the system SHALL show completion status and final positions
 
-### Requirement 6
 
-**User Story:** As a player, I want responsive design that works on different screen sizes, so that I can play the game on various devices.
+### Requirement 7
+
+**User Story:** As a player, I want the boost selection controls to be prominently displayed and easily accessible, so that I don't have to hunt for them in the current interface where they are hard to find.
 
 #### Acceptance Criteria
 
-1. WHEN viewing on desktop THEN the system SHALL display the full bird's eye view with optimal spacing
-2. WHEN viewing on tablet THEN the system SHALL adapt the layout while maintaining readability
-3. WHEN viewing on mobile THEN the system SHALL stack components vertically and adjust sector grid size
-4. WHEN screen orientation changes THEN the system SHALL reflow the layout appropriately
-5. WHEN zooming is needed THEN the system SHALL provide controls to adjust the view scale
+1. WHEN the race interface loads THEN the system SHALL display boost selection buttons in a dedicated, visible panel
+2. WHEN boost buttons are shown THEN the system SHALL use clear labeling and intuitive design (buttons labeled 0, 1, 2, 3, 4, 5)
+3. WHEN boost availability changes THEN the system SHALL update button states to show available vs unavailable options
+4. WHEN no boost selection is made THEN the system SHALL show a clear call-to-action to select a boost
+5. WHEN boost selection and validation are complete THEN the system SHALL show the "Validate Turn" button prominently

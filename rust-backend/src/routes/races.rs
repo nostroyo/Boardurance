@@ -60,6 +60,23 @@ pub struct LapActionRequest {
     pub boost_value: u32,
 }
 
+/// Request to submit a single player's turn action
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SubmitTurnActionRequest {
+    pub player_uuid: String,
+    pub boost_value: u32,
+}
+
+/// Response after submitting a turn action
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SubmitTurnActionResponse {
+    pub success: bool,
+    pub message: String,
+    pub turn_phase: String, // "WaitingForPlayers" or "AllSubmitted"
+    pub players_submitted: u32,
+    pub total_players: u32,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct RaceResponse {
     pub race: Race,
@@ -553,6 +570,7 @@ pub fn routes() -> Router<Database> {
         
         // Race-level endpoint
         .route("/races/:race_uuid/turn-phase", get(get_turn_phase))
+        .route("/races/:race_uuid/submit-action", post(submit_turn_action))
         
         // Protected routes - These should be protected with AuthMiddleware
         // TODO: Apply middleware layers in startup.rs:
@@ -3549,3 +3567,141 @@ pub async fn process_lap_in_db(
 
 
 
+
+/// Submit a single player's turn action (boost selection)
+/// 
+/// This endpoint allows individual players to submit their boost selection for the current turn.
+/// Unlike the batch `process_turn` endpoint, this handles one player at a time and stores
+/// the action until all players have submitted their choices.
+#[utoipa::path(
+    post,
+    path = "/races/{race_uuid}/submit-action",
+    request_body = SubmitTurnActionRequest,
+    responses(
+        (status = 200, description = "Action submitted successfully", body = SubmitTurnActionResponse),
+        (status = 400, description = "Invalid request data"),
+        (status = 404, description = "Race or player not found"),
+        (status = 409, description = "Action already submitted or race not in progress")
+    ),
+    params(
+        ("race_uuid" = String, Path, description = "Race UUID")
+    )
+)]
+#[tracing::instrument(name = "Submitting turn action", skip(database, payload))]
+pub async fn submit_turn_action(
+    State(database): State<Database>,
+    Path(race_uuid_str): Path<String>,
+    Json(payload): Json<SubmitTurnActionRequest>,
+) -> Result<Json<SubmitTurnActionResponse>, StatusCode> {
+    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid race UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let player_uuid = match Uuid::parse_str(&payload.player_uuid) {
+        Ok(uuid) => uuid,
+        Err(e) => {
+            tracing::warn!("Invalid player UUID: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    // Validate boost value
+    if payload.boost_value > 4 {
+        tracing::warn!("Invalid boost value: {}", payload.boost_value);
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    match submit_player_action_in_db(&database, race_uuid, player_uuid, payload.boost_value).await {
+        Ok(Some(response)) => {
+            tracing::info!("Action submitted successfully for player {} in race {}", player_uuid, race_uuid);
+            Ok(Json(response))
+        }
+        Ok(None) => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            Err(StatusCode::NOT_FOUND)
+        }
+        Err(e) => {
+            tracing::error!("Failed to submit action: {:?}", e);
+            if e.to_string().contains("not found") {
+                Err(StatusCode::NOT_FOUND)
+            } else if e.to_string().contains("already submitted") || e.to_string().contains("not in progress") {
+                Err(StatusCode::CONFLICT)
+            } else {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+}
+
+/// Submit a player's action to the database
+async fn submit_player_action_in_db(
+    database: &Database,
+    race_uuid: Uuid,
+    player_uuid: Uuid,
+    boost_value: u32,
+) -> Result<Option<SubmitTurnActionResponse>, mongodb::error::Error> {
+    let collection = database.collection::<Race>("races");
+
+    // First, find the race and validate it exists and is in progress
+    let race = match collection.find_one(doc! { "uuid": race_uuid.to_string() }, None).await? {
+        Some(race) => race,
+        None => return Ok(None),
+    };
+
+    // Check if race is in progress
+    if race.status != RaceStatus::InProgress {
+        return Err(mongodb::error::Error::custom("Race is not in progress"));
+    }
+
+    // Check if player is a participant
+    let is_participant = race.participants.iter().any(|p| p.player_uuid == player_uuid);
+    if !is_participant {
+        return Err(mongodb::error::Error::custom("Player not found in race"));
+    }
+
+    // Check if player has already submitted an action for this turn
+    let already_submitted = race.pending_actions.iter().any(|action| action.player_uuid == player_uuid);
+    if already_submitted {
+        return Err(mongodb::error::Error::custom("Action already submitted for this turn"));
+    }
+
+    // Create the lap action
+    let lap_action = LapAction {
+        player_uuid,
+        boost_value,
+    };
+
+    // Add the action to pending_actions
+    let filter = doc! { "uuid": race_uuid.to_string() };
+    let update = doc! {
+        "$push": {
+            "pending_actions": to_bson_safe(&lap_action, "lap_action")?
+        },
+        "$set": {
+            "updated_at": BsonDateTime::now()
+        }
+    };
+
+    collection.update_one(filter, update, None).await?;
+
+    // Calculate response data
+    let players_submitted = race.pending_actions.len() as u32 + 1; // +1 for the action we just added
+    let total_players = race.participants.len() as u32;
+    let turn_phase = if players_submitted >= total_players {
+        "AllSubmitted".to_string()
+    } else {
+        "WaitingForPlayers".to_string()
+    };
+
+    Ok(Some(SubmitTurnActionResponse {
+        success: true,
+        message: "Action submitted successfully".to_string(),
+        turn_phase,
+        players_submitted,
+        total_players,
+    }))
+}

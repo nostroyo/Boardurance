@@ -151,4 +151,3 @@ cd empty-project
 ### Performance Targets
 - **Frontend**: <1.5s First Contentful Paint
 - **Backend**: <100ms API response times (95th percentile)
-- **Blockchain**: <30s transaction confirmation on devnet

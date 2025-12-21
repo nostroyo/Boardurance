@@ -37,12 +37,11 @@ The Single Player Race MVP enables a complete end-to-end racing experience where
 
 #### Acceptance Criteria
 
-1. WHEN viewing boost options, THE Frontend SHALL request performance preview from the backend for all boost cards (0-4)
+1. WHEN viewing boost options, THE Frontend could calculate itself the performance value from boost 
 2. THE Frontend SHALL display base performance calculation breakdown (engine + body + pilot contributions)
 3. THE Frontend SHALL show sector ceiling application and capped base value
 4. THE Frontend SHALL display final performance value for each boost option with multiplier applied
 5. THE Frontend SHALL indicate which boost cards are available vs already used in the current cycle
-6. THE Frontend SHALL show movement probability (MoveUp, Stay, MoveDown) for each boost option
 7. THE Frontend SHALL display boost cycle information (current cycle, cards remaining, next replenishment)
 
 ### Requirement 3
@@ -118,7 +117,7 @@ The Single Player Race MVP enables a complete end-to-end racing experience where
 2. THE Frontend SHALL highlight the player's current sector in the local view
 3. THE Frontend SHALL show loading spinners during API requests
 4. THE Frontend SHALL display toast notifications for important events (turn submitted, lap completed, race finished)
-5. THE Frontend SHALL use animations for sector transitions and position changes
+5. THE Frontend SHALL use animations for sector transitions and position changes (not mandatory now)
 
 ### Requirement 9
 
@@ -138,7 +137,7 @@ The Single Player Race MVP enables a complete end-to-end racing experience where
 
 #### Acceptance Criteria
 
-1. THE Frontend SHALL NOT calculate performance values locally
+1. THE Frontend SHALL NOT calculate performance values locally (it can just display the boost + performance value as it is just a simple addition, no need to fetc it from the backend)
 2. THE Frontend SHALL NOT determine movement outcomes locally
 3. THE Frontend SHALL NOT manage boost hand state locally
 4. THE Frontend SHALL fetch all game logic results from backend APIs

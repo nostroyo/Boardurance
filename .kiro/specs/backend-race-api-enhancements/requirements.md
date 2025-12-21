@@ -66,7 +66,6 @@ The Backend Race API Enhancements provide critical missing endpoints to support 
 2. THE Local_View_API SHALL return the player's current sector plus 2 sectors above and 2 sectors below
 3. THE Local_View_API SHALL include all participants within the 5-sector visible range with their positions
 4. THE Local_View_API SHALL return sector details (id, name, min_value, max_value, slot_capacity, sector_type) for each visible sector
-5. THE Local_View_API SHALL handle track wrapping for circular tracks when calculating sector ranges
 
 ### Requirement 5
 
@@ -98,7 +97,6 @@ The Backend Race API Enhancements provide critical missing endpoints to support 
 
 #### Acceptance Criteria
 
-1. THE Backend SHALL use the boost multiplier formula `final_value = base_value * (1.0 + boost_value * 0.08)` for all performance calculations
 2. THE Backend SHALL apply sector ceiling to base performance BEFORE applying the boost multiplier
 3. THE Backend SHALL validate that boost values are in the range 0-4 (boost cards) for all API endpoints
 4. THE Backend SHALL validate that the selected boost card is available in the player's current boost hand before processing

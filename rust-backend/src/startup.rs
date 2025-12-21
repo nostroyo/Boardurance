@@ -88,12 +88,12 @@ impl Application {
         crate::routes::races::get_local_view,
         crate::routes::races::get_boost_availability,
         crate::routes::races::get_lap_history,
+        crate::routes::races::submit_turn_action,
         crate::routes::auth::register_user,
         crate::routes::auth::login_user,
     ),
     components(
         schemas(
-            crate::domain::TestItem,
             crate::domain::Player,
             crate::domain::Car,
             crate::domain::Pilot,
@@ -135,6 +135,8 @@ impl Application {
             crate::routes::races::JoinRaceRequest,
             crate::routes::races::ProcessLapRequest,
             crate::routes::races::LapActionRequest,
+            crate::routes::races::SubmitTurnActionRequest,
+            crate::routes::races::SubmitTurnActionResponse,
             crate::routes::races::RaceResponse,
             crate::routes::races::LapResultResponse,
             // New API response models
