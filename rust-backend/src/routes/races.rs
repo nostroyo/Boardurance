@@ -72,7 +72,7 @@ pub struct SubmitTurnActionRequest {
 pub struct SubmitTurnActionResponse {
     pub success: bool,
     pub message: String,
-    pub turn_phase: String, // "WaitingForPlayers" or "AllSubmitted"
+    pub turn_phase: String, // "WaitingForPlayers", "Processing"
     pub players_submitted: u32,
     pub total_players: u32,
 }
@@ -3560,6 +3560,8 @@ pub async fn process_lap_in_db(
     
     collection.find_one_and_update(filter, update, None).await?;
     
+    tracing::info!("Turn processing completed for race {}. Ready for next turn.", race_uuid);
+    
     Ok(Some((lap_result, race.status)))
 }
 
@@ -3691,16 +3693,49 @@ async fn submit_player_action_in_db(
     // Calculate response data
     let players_submitted = race.pending_actions.len() as u32 + 1; // +1 for the action we just added
     let total_players = race.participants.len() as u32;
-    let turn_phase = if players_submitted >= total_players {
-        "AllSubmitted".to_string()
-    } else {
-        "WaitingForPlayers".to_string()
-    };
-
+    
+    if players_submitted >= total_players {
+        // All players have submitted - trigger automatic turn processing
+        tracing::info!("All players submitted for race {}. Starting automatic turn processing.", race_uuid);
+        
+        let database_clone = database.clone();
+        let race_uuid_clone = race_uuid;
+        
+        // Spawn background task to process the turn
+        tokio::spawn(async move {
+            // Small delay to ensure the current transaction completes
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            
+            // Get the updated race with all pending actions
+            let collection = database_clone.collection::<Race>("races");
+            if let Ok(Some(updated_race)) = collection.find_one(doc! { "uuid": race_uuid_clone.to_string() }, None).await {
+                let all_actions = updated_race.pending_actions;
+                
+                match process_lap_in_db(&database_clone, race_uuid_clone, all_actions).await {
+                    Ok(_) => {
+                        tracing::info!("Turn processed automatically for race {}", race_uuid_clone);
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to auto-process turn for race {}: {:?}", race_uuid_clone, e);
+                    }
+                }
+            }
+        });
+        
+        return Ok(Some(SubmitTurnActionResponse {
+            success: true,
+            message: "Action submitted. Processing turn...".to_string(),
+            turn_phase: "Processing".to_string(),
+            players_submitted,
+            total_players,
+        }));
+    }
+    
+    // Not all players have submitted yet
     Ok(Some(SubmitTurnActionResponse {
         success: true,
         message: "Action submitted successfully".to_string(),
-        turn_phase,
+        turn_phase: "WaitingForPlayers".to_string(),
         players_submitted,
         total_players,
     }))

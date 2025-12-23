@@ -15,7 +15,7 @@ export interface PlayerGameState {
 
   // Turn Management
   currentTurnPhase: TurnPhase;
-  selectedBoost: number;
+  selectedBoost: number | null;
   hasSubmittedAction: boolean;
 
   // UI State

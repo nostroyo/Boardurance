@@ -8,6 +8,7 @@ import type {
   TurnPhase,
 } from '../types';
 import { raceAPIService } from '../services/raceAPI';
+import { raceAPI } from '../utils/raceAPI';
 
 // Context type definition
 interface PlayerGameContextType {
@@ -34,7 +35,7 @@ const initialState: PlayerGameState = {
   playerUuid: '',
   playerParticipant: null,
   currentTurnPhase: 'WaitingForPlayers',
-  selectedBoost: 0,
+  selectedBoost: null,
   hasSubmittedAction: false,
   isLoading: false,
   error: null,
@@ -54,7 +55,7 @@ type PlayerGameAction =
   | { type: 'SET_PLAYER_PARTICIPANT'; payload: RaceParticipant | null }
   | { type: 'SET_LOCAL_VIEW'; payload: LocalRaceView }
   | { type: 'SET_TURN_PHASE'; payload: TurnPhase }
-  | { type: 'SET_SELECTED_BOOST'; payload: number }
+  | { type: 'SET_SELECTED_BOOST'; payload: number | null }
   | { type: 'SET_HAS_SUBMITTED'; payload: boolean }
   | { type: 'SET_ANIMATION_STATE'; payload: AnimationState }
   | { type: 'RESET_STATE' };
@@ -234,14 +235,43 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
 
   // Select boost value
   const selectBoost = useCallback((boost: number) => {
-    if (boost >= 0 && boost <= 5) {
+    if (boost >= 0 && boost <= 4) {
       dispatch({ type: 'SET_SELECTED_BOOST', payload: boost });
     }
   }, []);
 
+  // Turn completion polling
+  const startTurnCompletionPolling = useCallback(() => {
+    if (!state.race) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const turnPhaseResponse = await raceAPIService.getTurnPhase(state.race!.uuid);
+        
+        if (turnPhaseResponse.turn_phase === 'WaitingForPlayers') {
+          // Turn processing complete - reset for next turn
+          clearInterval(pollInterval);
+          
+          // Reset submission state
+          dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });
+          dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
+          dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
+          
+          // Refresh race data
+          await updateRaceData();
+        }
+      } catch (error) {
+        console.error('Turn completion polling error:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    // Cleanup after 60 seconds max to prevent infinite polling
+    setTimeout(() => clearInterval(pollInterval), 60000);
+  }, [state.race, updateRaceData]);
+
   // Submit boost action
   const submitBoostAction = useCallback(async () => {
-    if (!state.race || !state.playerParticipant || state.hasSubmittedAction) {
+    if (!state.race || !state.playerParticipant || state.hasSubmittedAction || state.selectedBoost === null) {
       return;
     }
 
@@ -249,23 +279,30 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     dispatch({ type: 'SET_ERROR', payload: null });
 
     try {
-      const actions = [
-        {
-          player_uuid: state.playerUuid,
-          boost_value: state.selectedBoost,
-        },
-      ];
+      // Use individual submission endpoint instead of batch processing
+      const response = await raceAPIService.submitTurnAction(
+        state.race.uuid,
+        state.playerUuid,
+        state.selectedBoost
+      );
 
-      const response = await raceAPI.processRaceTurn(state.race.uuid, actions);
-
+      // Response is SubmitActionResponse directly, not wrapped
       if (response.success) {
         dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
-        dispatch({ type: 'SET_TURN_PHASE', payload: 'AllSubmitted' });
+        
+        if (response.turn_phase === 'Processing') {
+          dispatch({ type: 'SET_TURN_PHASE', payload: 'Processing' });
+          // Start polling for turn completion
+          startTurnCompletionPolling();
+        } else {
+          dispatch({ type: 'SET_TURN_PHASE', payload: response.turn_phase as TurnPhase });
+        }
       } else {
-        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to submit action' });
+        dispatch({ type: 'SET_ERROR', payload: response.message || 'Failed to submit action' });
       }
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Network error while submitting action' });
+      const errorMessage = error instanceof Error ? error.message : 'Network error while submitting action';
+      dispatch({ type: 'SET_ERROR', payload: errorMessage });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -275,6 +312,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     state.playerUuid,
     state.selectedBoost,
     state.hasSubmittedAction,
+    startTurnCompletionPolling,
   ]);
 
   // Set error

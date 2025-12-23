@@ -169,5 +169,8 @@ export interface SubmitActionRequest {
 
 export interface SubmitActionResponse {
   success: boolean;
-  message?: string;
+  message: string;
+  turn_phase: string; // "WaitingForPlayers", "Processing"
+  players_submitted: number;
+  total_players: number;
 }

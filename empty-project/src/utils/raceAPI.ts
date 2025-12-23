@@ -217,14 +217,14 @@ export const raceAPI = {
     playerUuid: string,
     boostValue: number,
   ): Promise<APIResponse<RaceResponse>> {
-    if (boostValue < 0 || boostValue > 5) {
+    if (boostValue < 0 || boostValue > 4) {
       return {
         success: false,
-        error: 'Boost value must be between 0 and 5',
+        error: 'Boost value must be between 0 and 4',
       };
     }
 
-    return await this.makeAuthenticatedRequest(`${this.baseUrl}/races/${raceUuid}/boost`, {
+    return await this.makeAuthenticatedRequest(`${this.baseUrl}/races/${raceUuid}/submit-action`, {
       method: 'POST',
       body: JSON.stringify({
         player_uuid: playerUuid,
