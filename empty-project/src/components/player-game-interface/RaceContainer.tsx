@@ -348,11 +348,8 @@ export function RaceContainer({
    */
   const handleBoostSelection = useCallback(
     (boost: number) => {
-      console.log('[RaceContainer] Boost selected:', boost);
-
       // Validate boost value is in valid range (0-4)
       if (boost < 0 || boost > 4) {
-        console.warn('[RaceContainer] Invalid boost value:', boost);
         handleError(
           new Error('Invalid boost value. Please select a boost between 0 and 4.'),
           'boost selection',

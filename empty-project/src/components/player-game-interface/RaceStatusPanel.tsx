@@ -262,24 +262,6 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
         </div>
       </div>
 
-      {/* Lap Progress Bar (Requirements 1.2) */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-400">Lap Progress:</span>
-          <span className="text-sm font-medium text-gray-300">{Math.round(getLapProgress())}%</span>
-        </div>
-        <div className="bg-gray-700 rounded-full h-3 overflow-hidden">
-          <div
-            className="bg-gradient-to-r from-blue-500 to-blue-400 h-3 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${getLapProgress()}%` }}
-            role="progressbar"
-            aria-valuenow={getLapProgress()}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          ></div>
-        </div>
-      </div>
-
       {/* Time remaining (if provided) */}
       {timeRemaining !== undefined && timeRemaining > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-700">
@@ -295,23 +277,6 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
           </div>
         </div>
       )}
-
-      {/* Notification banner for action required */}
-      {effectiveRaceStatus === 'InProgress' &&
-        effectiveTurnPhase === 'WaitingForPlayers' &&
-        !hasSubmittedAction && (
-          <div className="mt-4 bg-yellow-600 bg-opacity-20 border border-yellow-500 rounded-lg p-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-yellow-400 text-xl">⚠️</span>
-              <div className="flex-1">
-                <p className="text-yellow-200 font-medium text-sm">Action Required</p>
-                <p className="text-yellow-300 text-xs">
-                  Submit your boost value to continue the race
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
       {/* Processing notification */}
       {effectiveTurnPhase === 'Processing' && (

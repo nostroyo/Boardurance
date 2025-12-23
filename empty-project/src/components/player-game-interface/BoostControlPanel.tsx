@@ -41,8 +41,8 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  // Boost values 0-5 as specified in requirements
-  const boostValues = [0, 1, 2, 3, 4, 5];
+  // Boost values 0-4 as specified in requirements
+  const boostValues = [0, 1, 2, 3, 4];
 
   // Reset states when turn phase changes or submission completes
   useEffect(() => {
@@ -152,7 +152,7 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
 
       {/* Boost Value Buttons Grid - Mobile-first responsive */}
       <div className="space-y-2 sm:space-y-3">
-        <label className="block text-sm font-medium text-gray-200">Boost Value (0-5):</label>
+        <label className="block text-sm font-medium text-gray-200">Boost Value (0-4):</label>
 
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
           {boostValues.map((boost) => {

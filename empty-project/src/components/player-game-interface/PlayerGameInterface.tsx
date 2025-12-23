@@ -368,7 +368,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
             currentTurnPhase === 'WaitingForPlayers' ? (
               <BoostControlPanel
                 selectedBoost={state.selectedBoost}
-                availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4, 5]}
+                availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4]}
                 onBoostSelect={actions.selectBoost}
                 onValidateTurn={actions.submitBoostAction}
                 isSubmitting={state.isLoading}

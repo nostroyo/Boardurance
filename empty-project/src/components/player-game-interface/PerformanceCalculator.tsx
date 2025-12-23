@@ -124,7 +124,7 @@ export const PerformanceCalculator: React.FC<PerformanceCalculatorProps> = ({
       <div className="mb-4">
         <h4 className="text-sm font-medium text-gray-300 mb-2">Boost Simulation</h4>
         <div className="bg-gray-700 rounded-lg p-3">
-          <label className="block text-xs text-gray-400 mb-2">Select Boost Value (0-5):</label>
+          <label className="block text-xs text-gray-400 mb-2">Select Boost Value (0-4):</label>
 
           {/* Boost Selector Buttons */}
           <div className="grid grid-cols-6 gap-2 mb-3">

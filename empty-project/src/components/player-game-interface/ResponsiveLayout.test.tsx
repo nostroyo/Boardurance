@@ -183,7 +183,7 @@ describe('Responsive Layout Tests', () => {
   describe('BoostControlPanel Responsive Behavior', () => {
     const mockProps = {
       selectedBoost: null,
-      availableBoosts: [0, 1, 2, 3, 4, 5],
+      availableBoosts: [0, 1, 2, 3, 4],
       onBoostSelect: vi.fn(),
       onValidateTurn: vi.fn(),
       isSubmitting: false,
@@ -314,7 +314,7 @@ describe('Responsive Layout Tests', () => {
             />
             <BoostControlPanel
               selectedBoost={null}
-              availableBoosts={[0, 1, 2, 3, 4, 5]}
+              availableBoosts={[0, 1, 2, 3, 4]}
               onBoostSelect={vi.fn()}
               onValidateTurn={vi.fn()}
               isSubmitting={false}
@@ -355,7 +355,7 @@ describe('Responsive Layout Tests', () => {
       render(
         <BoostControlPanel
           selectedBoost={null}
-          availableBoosts={[0, 1, 2, 3, 4, 5]}
+          availableBoosts={[0, 1, 2, 3, 4]}
           onBoostSelect={vi.fn()}
           onValidateTurn={vi.fn()}
           isSubmitting={false}

@@ -33,15 +33,12 @@ function GameWrapper() {
       raceUuid={raceUuid}
       playerUuid={user.uuid}
       onRaceComplete={(position) => {
-        console.log(`Race completed! Final position: ${position}`);
         // Could redirect to results page or show modal
       }}
       onError={(error) => {
-        console.error('Game error:', error);
         // Could show error notification
       }}
       onReturnToLobby={() => {
-        console.log('[GameWrapper] Returning to lobby');
         // TODO: Navigate back to lobby
       }}
     />

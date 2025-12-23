@@ -6,7 +6,7 @@ import type { TurnPhase } from '../../types/race';
 describe('BoostControlPanel', () => {
   const defaultProps = {
     selectedBoost: null,
-    availableBoosts: [0, 1, 2, 3, 4, 5],
+    availableBoosts: [0, 1, 2, 3, 4],
     onBoostSelect: vi.fn(),
     onValidateTurn: vi.fn(),
     isSubmitting: false,
@@ -21,10 +21,10 @@ describe('BoostControlPanel', () => {
     expect(screen.getByText('Select your boost value for this turn')).toBeInTheDocument();
   });
 
-  it('renders all boost buttons (0-5)', () => {
+  it('renders all boost buttons (0-4)', () => {
     render(<BoostControlPanel {...defaultProps} />);
     
-    for (let i = 0; i <= 5; i++) {
+    for (let i = 0; i <= 4; i++) {
       expect(screen.getByRole('button', { name: `Select boost value ${i}` })).toBeInTheDocument();
     }
   });
@@ -44,7 +44,7 @@ describe('BoostControlPanel', () => {
     render(
       <BoostControlPanel 
         {...defaultProps} 
-        availableBoosts={[0, 1, 3, 4, 5]} // 2 is not available
+        availableBoosts={[0, 1, 3, 4]} // 2 is not available
         onBoostSelect={onBoostSelect} 
       />
     );
@@ -123,7 +123,7 @@ describe('BoostControlPanel', () => {
     render(
       <BoostControlPanel 
         {...defaultProps} 
-        availableBoosts={[0, 1, 3, 4, 5]} // 2 is not available
+        availableBoosts={[0, 1, 3, 4]} // 2 is not available
       />
     );
     
