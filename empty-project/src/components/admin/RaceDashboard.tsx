@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { raceAPIService } from '../../services/raceAPI';
+import { raceAPI } from '../../utils/raceAPI';
 import RaceCard from './RaceCard';
 
 interface Race {

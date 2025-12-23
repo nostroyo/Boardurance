@@ -83,11 +83,11 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
     prevSubmittedRef.current = hasSubmittedAction;
   }, [hasSubmittedAction, onActionSubmitted]);
 
-  // Calculate lap progress percentage
-  const getLapProgress = (): number => {
-    if (effectiveTotalLaps === 0) return 0;
-    return (effectiveCurrentLap / effectiveTotalLaps) * 100;
-  };
+  // Calculate lap progress percentage (currently unused but available for future enhancements)
+  // const getLapProgress = (): number => {
+  //   if (effectiveTotalLaps === 0) return 0;
+  //   return (effectiveCurrentLap / effectiveTotalLaps) * 100;
+  // };
 
   // Get turn phase color for indicator (Requirements 8.1)
   const getTurnPhaseColor = (): string => {

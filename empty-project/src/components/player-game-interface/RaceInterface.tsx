@@ -53,16 +53,16 @@ export interface RaceInterfaceProps {
 export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
   ({
     carData,
-    performancePreview,
+    // performancePreview, // Currently unused but available for future enhancements
     turnPhase,
     localView,
     boostAvailability,
-    lapHistory,
+    // lapHistory, // Currently unused but available for future enhancements
     selectedBoost,
     isSubmitting,
     hasSubmittedThisTurn,
     isPolling,
-    isLoadingPreview,
+    // isLoadingPreview, // Currently unused but available for future enhancements
     isLoadingSubmit,
     // isAnyLoading, // Currently unused but available for future enhancements
     onBoostSelect,

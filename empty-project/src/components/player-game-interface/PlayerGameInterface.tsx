@@ -10,18 +10,7 @@ import { BoostControlPanel } from './BoostControlPanel';
 
 // Existing component imports
 import { RaceStatusPanel } from './RaceStatusPanel';
-import { raceStatusUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceStatusUtils } from '../../utils/raceAPI';
-import { raceStatusUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
 import { raceAPI } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
-import { raceErrorUtils } from '../../utils/raceAPI';
 
 const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   raceUuid,
@@ -76,7 +65,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize race';
 
-      if (retryCountRef.current < maxRetries && raceErrorUtils.isRetryableError(errorMessage)) {
+      if (retryCountRef.current < maxRetries && errorMessage.includes('network') || errorMessage.includes('timeout')) {
         retryCountRef.current++;
         const delay = 1000 * Math.pow(2, retryCountRef.current - 1); // Exponential backoff
 
@@ -84,7 +73,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
           initializeRaceWithRetry();
         }, delay);
       } else {
-        actions.setError(raceErrorUtils.getUserFriendlyError(errorMessage));
+        actions.setError(errorMessage);
       }
     }
   }, [raceUuid, playerUuid, actions, fetchLocalView, fetchBoostAvailability]);
@@ -162,9 +151,8 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   // Enhanced error handling with user-friendly messages
   useEffect(() => {
     if (state.error) {
-      const userFriendlyError = raceErrorUtils.getUserFriendlyError(state.error);
       if (onError) {
-        onError(userFriendlyError);
+        onError(state.error);
       }
     }
   }, [state.error, onError]);
@@ -205,15 +193,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
 
   // Enhanced error state with detailed feedback and recovery options
   if (state.error && !state.race) {
-    const isRetryable = raceErrorUtils.isRetryableError(state.error);
-    const requiresAction = raceErrorUtils.requiresUserAction(state.error);
+    const isRetryable = state.error.includes('network') || state.error.includes('timeout');
+    const requiresAction = state.error.includes('not found') || state.error.includes('permission');
 
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
         <div className="text-center max-w-md mx-auto px-4">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold mb-2">Error Loading Race</h2>
-          <p className="text-gray-300 mb-4">{raceErrorUtils.getUserFriendlyError(state.error)}</p>
+          <p className="text-gray-300 mb-4">{state.error}</p>
 
           <div className="space-y-3">
             {isRetryable && (
@@ -376,7 +364,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
             </div>
 
             {/* Redesigned Boost Control Panel - Mobile responsive */}
-            {raceStatusUtils.canSubmitActions(state.race) &&
+            {state.race?.status === 'InProgress' &&
             currentTurnPhase === 'WaitingForPlayers' ? (
               <BoostControlPanel
                 selectedBoost={state.selectedBoost}
@@ -399,11 +387,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   </p>
                   <div className="bg-gray-700 rounded-lg p-2 sm:p-3">
                     <p className="text-gray-300 text-xs sm:text-sm">
-                      {raceStatusUtils.getStatusMessage(
-                        state.race,
-                        currentTurnPhase,
-                        state.hasSubmittedAction,
-                      )}
+                      Waiting for other players to submit their actions...
                     </p>
                   </div>
                 </div>
@@ -454,9 +438,9 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium mb-1 text-sm sm:text-base">Error</h4>
                   <p className="text-xs sm:text-sm text-red-100 break-words">
-                    {raceErrorUtils.getUserFriendlyError(state.error)}
+                    {state.error}
                   </p>
-                  {raceErrorUtils.isRetryableError(state.error) && (
+                  {(state.error.includes('network') || state.error.includes('timeout')) && (
                     <button
                       onClick={handleRetry}
                       className="mt-2 text-xs bg-red-700 hover:bg-red-800 px-2 py-1 rounded transition-colors touch-manipulation"
@@ -486,7 +470,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               <div>Player Sector: {state.playerParticipant?.current_sector}</div>
               <div>Local View: {localView ? '✓ Loaded' : '✗ Missing'}</div>
               <div>Boost Availability: {boostAvailability ? '✓ Loaded' : '✗ Missing'}</div>
-              <div>Can Submit: {raceStatusUtils.canSubmitActions(state.race) ? 'Yes' : 'No'}</div>
+              <div>Can Submit: {state.race?.status === 'InProgress' ? 'Yes' : 'No'}</div>
               <div>Has Submitted: {state.hasSubmittedAction ? 'Yes' : 'No'}</div>
               {localView && (
                 <div>Visible Sectors: {localView.visible_sectors.length}</div>

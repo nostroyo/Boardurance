@@ -32,10 +32,10 @@ function GameWrapper() {
     <RaceContainer
       raceUuid={raceUuid}
       playerUuid={user.uuid}
-      onRaceComplete={(position) => {
+      onRaceComplete={(_position) => {
         // Could redirect to results page or show modal
       }}
-      onError={(error) => {
+      onError={(_error) => {
         // Could show error notification
       }}
       onReturnToLobby={() => {

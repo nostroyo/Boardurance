@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import JSONUploader from './JSONUploader';
-import { raceAPIService } from '../../services/raceAPI';
+import { raceAPI } from '../../utils/raceAPI';
 
 interface RaceCreatorProps {
   onRaceCreated: () => void;
