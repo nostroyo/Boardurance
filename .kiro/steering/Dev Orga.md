@@ -104,3 +104,6 @@ inclusion: always
 - Implement proper CORS configuration
 - Sanitize data before database operations
 - Use environment variables for sensitive configuration
+
+### Old code
+- Always remove old code never assume we want retrocompatibility  Unless I say otherwise

@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 use crate::domain::{
     Race, Track, Sector, SectorType, RaceStatus, LapAction, LapResult, LapCharacteristic,
-    MovementType, MovementProbability,
+    MovementType, MovementProbability, PerformanceCalculation,
 };
 use crate::domain::boost_hand_manager::{BoostHandManager, BoostAvailability, BoostCardErrorResponse};
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
@@ -3537,11 +3538,33 @@ pub async fn process_lap_in_db(
         return Ok(None);
     };
 
-    // Process the lap
-    let lap_result = match race.process_lap(&actions) {
+    // Create placeholder performance calculations for manual processing
+    let mut performance_calculations = HashMap::new();
+    for action in &actions {
+        // Use placeholder performance calculation with base value 10
+        let performance = PerformanceCalculation {
+            engine_contribution: 5,
+            body_contribution: 3,
+            pilot_contribution: 2,
+            base_value: 10,
+            sector_ceiling: 30, // Default ceiling
+            capped_base_value: 10,
+            boost_value: action.boost_value,
+            final_value: 10 + action.boost_value,
+        };
+        performance_calculations.insert(action.player_uuid, performance);
+    }
+
+    // Process the lap using the new method with car data
+    let lap_result = match race.process_lap_with_car_data(&actions, &performance_calculations) {
         Ok(result) => result,
         Err(e) => return Err(mongodb::error::Error::custom(e)),
     };
+
+    // Clear pending actions after successful processing
+    race.pending_actions.clear();
+    race.action_submissions.clear();
+    race.pending_performance_calculations.clear();
 
     // Update the race in database
     let filter = doc! { "uuid": race_uuid.to_string() };
@@ -3695,32 +3718,37 @@ async fn submit_player_action_in_db(
     let total_players = race.participants.len() as u32;
     
     if players_submitted >= total_players {
-        // All players have submitted - trigger automatic turn processing
-        tracing::info!("All players submitted for race {}. Starting automatic turn processing.", race_uuid);
+        // All players have submitted - trigger immediate turn processing
+        tracing::info!("All players submitted for race {}. Processing turn immediately.", race_uuid);
         
-        let database_clone = database.clone();
-        let race_uuid_clone = race_uuid;
-        
-        // Spawn background task to process the turn
-        tokio::spawn(async move {
-            // Small delay to ensure the current transaction completes
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Get the updated race with all pending actions
+        let collection = database.collection::<Race>("races");
+        if let Ok(Some(updated_race)) = collection.find_one(doc! { "uuid": race_uuid.to_string() }, None).await {
+            let all_actions = updated_race.pending_actions;
             
-            // Get the updated race with all pending actions
-            let collection = database_clone.collection::<Race>("races");
-            if let Ok(Some(updated_race)) = collection.find_one(doc! { "uuid": race_uuid_clone.to_string() }, None).await {
-                let all_actions = updated_race.pending_actions;
-                
-                match process_lap_in_db(&database_clone, race_uuid_clone, all_actions).await {
-                    Ok(_) => {
-                        tracing::info!("Turn processed automatically for race {}", race_uuid_clone);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to auto-process turn for race {}: {:?}", race_uuid_clone, e);
-                    }
+            match process_lap_in_db(&database, race_uuid, all_actions).await {
+                Ok(_) => {
+                    tracing::info!("Turn processed successfully for race {}", race_uuid);
+                    return Ok(Some(SubmitTurnActionResponse {
+                        success: true,
+                        message: "Action submitted and turn processed".to_string(),
+                        turn_phase: "WaitingForPlayers".to_string(),
+                        players_submitted: 0, // Reset after processing
+                        total_players,
+                    }));
+                }
+                Err(e) => {
+                    tracing::error!("Failed to process turn for race {}: {:?}", race_uuid, e);
+                    return Ok(Some(SubmitTurnActionResponse {
+                        success: true,
+                        message: "Action submitted but turn processing failed".to_string(),
+                        turn_phase: "AllSubmitted".to_string(),
+                        players_submitted,
+                        total_players,
+                    }));
                 }
             }
-        });
+        }
         
         return Ok(Some(SubmitTurnActionResponse {
             success: true,

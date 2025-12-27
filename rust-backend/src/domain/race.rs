@@ -436,54 +436,7 @@ impl Race {
 
         Ok(self.process_lap_internal(actions, &participant_values))
     }
-
-    /// Legacy `process_lap` method for backward compatibility with tests
-    /// Uses placeholder base value of 10 for performance calculation
-    /// New code should use `process_lap_with_car_data` instead
-    pub fn process_lap(&mut self, actions: &[LapAction]) -> Result<LapResult, String> {
-        if self.status != RaceStatus::InProgress {
-            return Err("Race is not in progress".to_string());
-        }
-
-        // Validate all participants have submitted actions
-        for participant in &self.participants {
-            if participant.is_finished {
-                continue;
-            }
-            if !actions.iter().any(|a| a.player_uuid == participant.player_uuid) {
-                return Err(format!("Missing action for player {}", participant.player_uuid));
-            }
-        }
-
-        // Validate boost values
-        for action in actions {
-            if action.boost_value > 5 {
-                return Err(format!("Invalid boost value {} for player {}", action.boost_value, action.player_uuid));
-            }
-        }
-
-        // Calculate final values for all participants using placeholder base value
-        let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
-        for action in actions {
-            if let Some(participant) = self.participants.iter().find(|p| p.player_uuid == action.player_uuid) {
-                if !participant.is_finished {
-                    // Use placeholder base value for backward compatibility
-                    let base_value = 10;
-                    
-                    // Apply sector performance ceiling: cap base value to current sector's max_value
-                    let current_sector = &self.track.sectors[participant.current_sector as usize];
-                    let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
-                    
-                    // Add boost to the capped base value
-                    let final_value = capped_base_value + action.boost_value;
-                    participant_values.insert(action.player_uuid, final_value);
-                }
-            }
-        }
-
-        Ok(self.process_lap_internal(actions, &participant_values))
-    }
-
+    
     /// Internal method that processes lap movements after performance values are calculated
     fn process_lap_internal(&mut self, actions: &[LapAction], participant_values: &HashMap<Uuid, u32>) -> LapResult {
 
