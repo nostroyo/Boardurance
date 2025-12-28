@@ -7,6 +7,7 @@ import type {
   AnimationState,
   TurnPhase,
 } from '../types';
+import type { TurnPhase as TurnPhaseResponse } from '../types/race-api';
 import { raceAPIService } from '../services/raceAPI';
 import { raceAPI } from '../utils/raceAPI';
 
@@ -191,7 +192,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
 
         // Get actual turn phase from backend instead of guessing
         try {
-          const turnPhaseResponse = await raceAPIService.getTurnPhase(raceUuid);
+          const turnPhaseResponse: TurnPhaseResponse = await raceAPIService.getTurnPhase(raceUuid);
           if (turnPhaseResponse.turn_phase) {
             dispatch({ type: 'SET_TURN_PHASE', payload: turnPhaseResponse.turn_phase as TurnPhase });
           } else {
@@ -264,7 +265,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
 
     const pollInterval = setInterval(async () => {
       try {
-        const turnPhaseResponse = await raceAPIService.getTurnPhase(state.race!.uuid);
+        const turnPhaseResponse: TurnPhaseResponse = await raceAPIService.getTurnPhase(state.race!.uuid);
         
         if (turnPhaseResponse.turn_phase === 'WaitingForPlayers') {
           // Turn processing complete - reset for next turn
