@@ -337,6 +337,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     state.selectedBoost,
     state.hasSubmittedAction,
     startTurnCompletionPolling,
+    updateRaceData,
   ]);
 
   // Set error
