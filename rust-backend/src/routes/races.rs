@@ -3499,30 +3499,63 @@ pub async fn start_race_in_db(
     let collection = database.collection::<Race>("races");
     
     // Get the race first
-    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
-        return Ok(None);
+    let mut race = match get_race_by_uuid(database, race_uuid).await? {
+        Some(race) => race,
+        None => {
+            tracing::warn!("Race not found: {}", race_uuid);
+            return Ok(None);
+        }
     };
 
-    // Try to start race
-    if let Err(e) = race.start_race() {
-        return Err(mongodb::error::Error::custom(e));
+    // Validate race can be started
+    if race.status != RaceStatus::Waiting {
+        let error_msg = format!("Race has already started or finished. Current status: {:?}", race.status);
+        tracing::warn!("{}", error_msg);
+        return Err(mongodb::error::Error::custom(error_msg));
     }
 
-    // Update the race in database
+    if race.participants.is_empty() {
+        let error_msg = "Cannot start race without participants";
+        tracing::warn!("{}", error_msg);
+        return Err(mongodb::error::Error::custom(error_msg));
+    }
+
+    tracing::info!("Starting race {} with {} participants", race_uuid, race.participants.len());
+
+    // Update race status and initialize lap characteristic
+    race.status = RaceStatus::InProgress;
+    race.lap_characteristic = LapCharacteristic::Straight; // Start with straight characteristic
+    race.current_lap = 1;
+    
+    // Sort participants in their starting sectors (simple position assignment)
+    for (index, participant) in race.participants.iter_mut().enumerate() {
+        participant.current_position_in_sector = index as u32 + 1;
+        tracing::debug!("Participant {} positioned at sector {} position {}", 
+                       participant.player_uuid, participant.current_sector, participant.current_position_in_sector);
+    }
+
+    // Update the race in database - only update essential fields
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! { 
         "$set": { 
-            "status": to_bson_safe(&race.status, "status")?,
+            "status": "InProgress",
             "current_lap": race.current_lap,
-            "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
-            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
-            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
+            "lap_characteristic": "Straight",
             "updated_at": BsonDateTime::now()
         } 
     };
     
-    collection.find_one_and_update(filter, update, None).await
+    tracing::info!("Updating race {} in database", race_uuid);
+    match collection.find_one_and_update(filter, update, None).await {
+        Ok(result) => {
+            tracing::info!("Successfully started race {}", race_uuid);
+            Ok(result)
+        }
+        Err(e) => {
+            tracing::error!("Failed to update race {} in database: {:?}", race_uuid, e);
+            Err(e)
+        }
+    }
 }
 
 #[tracing::instrument(name = "Processing turn in the database", skip(database, actions))]
@@ -3672,7 +3705,7 @@ async fn submit_player_action_in_db(
     let collection = database.collection::<Race>("races");
 
     // First, find the race and validate it exists and is in progress
-    let race = match collection.find_one(doc! { "uuid": race_uuid.to_string() }, None).await? {
+    let mut race = match collection.find_one(doc! { "uuid": race_uuid.to_string() }, None).await? {
         Some(race) => race,
         None => return Ok(None),
     };
@@ -3694,19 +3727,25 @@ async fn submit_player_action_in_db(
         return Err(mongodb::error::Error::custom("Action already submitted for this turn"));
     }
 
+    // Validate boost value (0-4)
+    if boost_value > 4 {
+        return Err(mongodb::error::Error::custom(format!("Invalid boost value: {}. Must be between 0 and 4", boost_value)));
+    }
+
     // Create the lap action
     let lap_action = LapAction {
         player_uuid,
         boost_value,
     };
 
-    // Add the action to pending_actions
+    // Add the action to pending_actions in memory
+    race.pending_actions.push(lap_action);
+
+    // Update the race in database
     let filter = doc! { "uuid": race_uuid.to_string() };
     let update = doc! {
-        "$push": {
-            "pending_actions": to_bson_safe(&lap_action, "lap_action")?
-        },
         "$set": {
+            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
             "updated_at": BsonDateTime::now()
         }
     };
@@ -3714,8 +3753,8 @@ async fn submit_player_action_in_db(
     collection.update_one(filter, update, None).await?;
 
     // Calculate response data
-    let players_submitted = race.pending_actions.len() as u32 + 1; // +1 for the action we just added
-    let total_players = race.participants.len() as u32;
+    let players_submitted = race.pending_actions.len() as u32;
+    let total_players = race.participants.iter().filter(|p| !p.is_finished).count() as u32;
     
     if players_submitted >= total_players {
         // All players have submitted - return AllSubmitted status
