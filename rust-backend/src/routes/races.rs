@@ -3087,16 +3087,24 @@ pub async fn create_race(
     };
 
     // Create race
-    let race = Race::new(payload.name, track, payload.total_laps);
+    let mut race = Race::new(payload.name, track, payload.total_laps);
+
+    // Auto-start the race immediately for better UX
+    // This eliminates the need for manual race starting
+    race.status = RaceStatus::InProgress;
+    race.lap_characteristic = LapCharacteristic::Straight; // Start with straight characteristic
+    race.current_lap = 1;
+    
+    tracing::info!("Auto-starting race {} for improved UX", race.uuid);
 
     match insert_race(&database, &race).await {
         Ok(created_race) => {
-            tracing::info!("Race created successfully with UUID: {}", created_race.uuid);
+            tracing::info!("Race created and auto-started successfully with UUID: {}", created_race.uuid);
             Ok((
                 StatusCode::CREATED,
                 Json(RaceResponse {
                     race: created_race,
-                    message: "Race created successfully".to_string(),
+                    message: "Race created and started successfully".to_string(),
                 }),
             ))
         }
