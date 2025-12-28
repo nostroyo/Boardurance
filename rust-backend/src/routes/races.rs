@@ -3757,17 +3757,34 @@ async fn submit_player_action_in_db(
     let total_players = race.participants.iter().filter(|p| !p.is_finished).count() as u32;
     
     if players_submitted >= total_players {
-        // All players have submitted - return AllSubmitted status
-        // Manual processing can be triggered via /turn endpoint
-        tracing::info!("All players submitted for race {}. Ready for manual processing.", race_uuid);
+        // All players have submitted - auto-process the turn immediately
+        tracing::info!("All players submitted for race {}. Auto-processing turn...", race_uuid);
         
-        return Ok(Some(SubmitTurnActionResponse {
-            success: true,
-            message: "Action submitted. All players ready - process turn manually.".to_string(),
-            turn_phase: "AllSubmitted".to_string(),
-            players_submitted,
-            total_players,
-        }));
+        // Get the pending actions for processing
+        let actions = race.pending_actions.clone();
+        
+        // Process the turn using the existing game logic
+        match process_lap_in_db(&database, race_uuid, actions).await {
+            Ok(Some((lap_result, race_status))) => {
+                tracing::info!("Turn auto-processed successfully for race {}. Ready for next turn.", race_uuid);
+                
+                return Ok(Some(SubmitTurnActionResponse {
+                    success: true,
+                    message: "Turn processed successfully. Ready for next turn.".to_string(),
+                    turn_phase: "WaitingForPlayers".to_string(), // Reset for next turn
+                    players_submitted: 0, // Reset counter for next turn
+                    total_players,
+                }));
+            }
+            Ok(None) => {
+                tracing::error!("Race not found during turn processing: {}", race_uuid);
+                return Err(mongodb::error::Error::custom("Race not found during processing"));
+            }
+            Err(e) => {
+                tracing::error!("Turn processing failed for race {}: {:?}", race_uuid, e);
+                return Err(mongodb::error::Error::custom(format!("Turn processing failed: {}", e)));
+            }
+        }
     }
     
     // Not all players have submitted yet
