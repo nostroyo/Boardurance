@@ -365,7 +365,8 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
 
             {/* Redesigned Boost Control Panel - Mobile responsive */}
             {state.race?.status === 'InProgress' &&
-            currentTurnPhase === 'WaitingForPlayers' ? (
+            currentTurnPhase === 'WaitingForPlayers' &&
+            boostAvailability ? (
               <BoostControlPanel
                 selectedBoost={state.selectedBoost}
                 availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4]}
