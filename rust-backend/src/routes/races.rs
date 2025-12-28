@@ -3765,7 +3765,7 @@ async fn submit_player_action_in_db(
         
         // Process the turn using the existing game logic
         match process_lap_in_db(&database, race_uuid, actions).await {
-            Ok(Some((lap_result, race_status))) => {
+            Ok(Some((_lap_result, _race_status))) => {
                 tracing::info!("Turn auto-processed successfully for race {}. Ready for next turn.", race_uuid);
                 
                 return Ok(Some(SubmitTurnActionResponse {
