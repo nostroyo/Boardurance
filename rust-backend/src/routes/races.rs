@@ -3718,42 +3718,14 @@ async fn submit_player_action_in_db(
     let total_players = race.participants.len() as u32;
     
     if players_submitted >= total_players {
-        // All players have submitted - trigger immediate turn processing
-        tracing::info!("All players submitted for race {}. Processing turn immediately.", race_uuid);
-        
-        // Get the updated race with all pending actions
-        let collection = database.collection::<Race>("races");
-        if let Ok(Some(updated_race)) = collection.find_one(doc! { "uuid": race_uuid.to_string() }, None).await {
-            let all_actions = updated_race.pending_actions;
-            
-            match process_lap_in_db(&database, race_uuid, all_actions).await {
-                Ok(_) => {
-                    tracing::info!("Turn processed successfully for race {}", race_uuid);
-                    return Ok(Some(SubmitTurnActionResponse {
-                        success: true,
-                        message: "Action submitted and turn processed".to_string(),
-                        turn_phase: "WaitingForPlayers".to_string(),
-                        players_submitted: 0, // Reset after processing
-                        total_players,
-                    }));
-                }
-                Err(e) => {
-                    tracing::error!("Failed to process turn for race {}: {:?}", race_uuid, e);
-                    return Ok(Some(SubmitTurnActionResponse {
-                        success: true,
-                        message: "Action submitted but turn processing failed".to_string(),
-                        turn_phase: "AllSubmitted".to_string(),
-                        players_submitted,
-                        total_players,
-                    }));
-                }
-            }
-        }
+        // All players have submitted - return AllSubmitted status
+        // Manual processing can be triggered via /turn endpoint
+        tracing::info!("All players submitted for race {}. Ready for manual processing.", race_uuid);
         
         return Ok(Some(SubmitTurnActionResponse {
             success: true,
-            message: "Action submitted. Processing turn...".to_string(),
-            turn_phase: "Processing".to_string(),
+            message: "Action submitted. All players ready - process turn manually.".to_string(),
+            turn_phase: "AllSubmitted".to_string(),
             players_submitted,
             total_players,
         }));

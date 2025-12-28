@@ -290,7 +290,37 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
       if (response.success) {
         dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
         
-        if (response.turn_phase === 'Processing') {
+        if (response.turn_phase === 'AllSubmitted') {
+          // All players submitted - trigger manual turn processing
+          dispatch({ type: 'SET_TURN_PHASE', payload: 'Processing' });
+          
+          // Trigger manual turn processing
+          try {
+            const processResponse = await fetch(`http://localhost:3000/api/v1/races/${state.race.uuid}/turn`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                actions: [{
+                  player_uuid: state.playerUuid,
+                  boost_value: state.selectedBoost
+                }]
+              })
+            });
+            
+            if (processResponse.ok) {
+              // Turn processed successfully - reset for next turn
+              dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });
+              dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
+              dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
+              await updateRaceData();
+            } else {
+              dispatch({ type: 'SET_ERROR', payload: 'Failed to process turn' });
+            }
+          } catch (error) {
+            dispatch({ type: 'SET_ERROR', payload: 'Failed to process turn' });
+          }
+        } else if (response.turn_phase === 'Processing') {
           dispatch({ type: 'SET_TURN_PHASE', payload: 'Processing' });
           // Start polling for turn completion
           startTurnCompletionPolling();
