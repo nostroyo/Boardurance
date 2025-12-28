@@ -107,15 +107,13 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
 
         // Check turn phase if race is in progress
         if (state.race?.status === 'InProgress') {
-          const turnPhaseResponse = await raceAPI.getTurnPhase(raceUuid);
-          if (turnPhaseResponse.success && turnPhaseResponse.data) {
-            const newTurnPhase = (turnPhaseResponse.data as any).turn_phase;
-            setCurrentTurnPhase(newTurnPhase);
-            if (newTurnPhase !== state.currentTurnPhase) {
-              // Turn phase changed - reset submission status if new turn started
-              if (newTurnPhase === 'WaitingForPlayers' && state.hasSubmittedAction) {
-                actions.setError(null); // Clear any previous errors
-              }
+          const turnPhaseResponse = await raceAPIService.getTurnPhase(raceUuid);
+          const newTurnPhase = turnPhaseResponse.turn_phase;
+          setCurrentTurnPhase(newTurnPhase);
+          if (newTurnPhase !== state.currentTurnPhase) {
+            // Turn phase changed - reset submission status if new turn started
+            if (newTurnPhase === 'WaitingForPlayers' && state.hasSubmittedAction) {
+              actions.setError(null); // Clear any previous errors
             }
           }
         }
