@@ -187,20 +187,74 @@ function GameLobby() {
         ],
       };
 
-      const response = await fetch('http://localhost:3000/api/v1/races', {
+      // Step 1: Create the race (auto-starts due to Feature #9)
+      const createResponse = await fetch('http://localhost:3000/api/v1/races', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify(testRaceData),
       });
 
-      if (response.ok) {
-        await response.json();
-        // Refresh races list
+      if (!createResponse.ok) {
+        setError('Failed to create race');
+        return;
+      }
+
+      const createResult = await createResponse.json();
+      const raceUuid = createResult.race.uuid;
+
+      // Step 2: Get player's cars and pilots from API
+      const playerResponse = await fetch(`http://localhost:3000/api/v1/players/${user?.uuid}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for authentication
+      });
+
+      if (!playerResponse.ok) {
+        setError('Failed to get player data for joining race');
+        return;
+      }
+
+      const playerData = await playerResponse.json();
+      
+      // Check if player has cars and pilots
+      if (!playerData.cars || playerData.cars.length === 0) {
+        setError('No cars available. Please ensure you have at least one car.');
+        return;
+      }
+      
+      if (!playerData.pilots || playerData.pilots.length === 0) {
+        setError('No pilots available. Please ensure you have at least one pilot.');
+        return;
+      }
+
+      // Step 3: Auto-join the creator to the race with real assets
+      const joinData = {
+        player_uuid: user?.uuid,
+        car_uuid: playerData.cars[0].uuid, // Use first available car
+        pilot_uuid: playerData.pilots[0].uuid, // Use first available pilot
+      };
+
+      const joinResponse = await fetch(`http://localhost:3000/api/v1/races/${raceUuid}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for authentication
+        body: JSON.stringify(joinData),
+      });
+
+      if (joinResponse.ok) {
+        // Race created and joined successfully - refresh races list
         window.location.reload();
       } else {
-        setError('Failed to create race');
+        setError('Race created but failed to join. Please join manually.');
+        // Still refresh to show the new race
+        window.location.reload();
       }
     } catch (err) {
       setError('Network error while creating race');
