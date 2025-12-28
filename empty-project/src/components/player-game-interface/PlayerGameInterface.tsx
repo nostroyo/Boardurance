@@ -10,7 +10,6 @@ import { BoostControlPanel } from './BoostControlPanel';
 
 // Existing component imports
 import { RaceStatusPanel } from './RaceStatusPanel';
-import { raceAPI } from '../../utils/raceAPI';
 
 const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   raceUuid,

@@ -189,14 +189,32 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
         const localView = calculateLocalView(race, playerParticipant);
         dispatch({ type: 'SET_LOCAL_VIEW', payload: localView });
 
-        // Determine turn phase based on race status
-        let turnPhase: TurnPhase = 'WaitingForPlayers';
-        if (race.status === 'InProgress') {
-          turnPhase = 'WaitingForPlayers'; // Default to waiting for players
-        } else if (race.status === 'Finished') {
-          turnPhase = 'Complete';
+        // Get actual turn phase from backend instead of guessing
+        try {
+          const turnPhaseResponse = await raceAPIService.getTurnPhase(raceUuid);
+          if (turnPhaseResponse.turn_phase) {
+            dispatch({ type: 'SET_TURN_PHASE', payload: turnPhaseResponse.turn_phase as TurnPhase });
+          } else {
+            // Fallback logic if turn phase call fails
+            let turnPhase: TurnPhase = 'WaitingForPlayers';
+            if (race.status === 'InProgress') {
+              turnPhase = 'WaitingForPlayers';
+            } else if (race.status === 'Finished') {
+              turnPhase = 'Complete';
+            }
+            dispatch({ type: 'SET_TURN_PHASE', payload: turnPhase });
+          }
+        } catch (error) {
+          console.error('Failed to get turn phase:', error);
+          // Fallback logic if turn phase call fails
+          let turnPhase: TurnPhase = 'WaitingForPlayers';
+          if (race.status === 'InProgress') {
+            turnPhase = 'WaitingForPlayers';
+          } else if (race.status === 'Finished') {
+            turnPhase = 'Complete';
+          }
+          dispatch({ type: 'SET_TURN_PHASE', payload: turnPhase });
         }
-        dispatch({ type: 'SET_TURN_PHASE', payload: turnPhase });
       } else {
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load race data' });
       }

@@ -599,6 +599,16 @@ impl Race {
             .iter()
             .map(|a| a.player_uuid)
             .collect();
+        
+        // If there are no active participants, no actions are needed
+        if active_participants.is_empty() {
+            return true;
+        }
+        
+        // If there are active participants but no submitted actions, not all submitted
+        if submitted_actions.is_empty() {
+            return false;
+        }
             
         active_participants == submitted_actions
     }
