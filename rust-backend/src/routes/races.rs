@@ -3729,6 +3729,12 @@ async fn submit_player_action_in_db(
         return Err(mongodb::error::Error::custom("Player not found in race"));
     }
 
+    // Log race state for debugging
+    tracing::info!("Race {} state: total_participants={}, finished_participants={}", 
+                   race_uuid, 
+                   race.participants.len(),
+                   race.participants.iter().filter(|p| p.is_finished).count());
+
     // Check if player has already submitted an action for this turn
     let already_submitted = race.pending_actions.iter().any(|action| action.player_uuid == player_uuid);
     if already_submitted {
@@ -3763,6 +3769,15 @@ async fn submit_player_action_in_db(
     // Calculate response data
     let players_submitted = race.pending_actions.len() as u32;
     let total_players = race.participants.iter().filter(|p| !p.is_finished).count() as u32;
+    
+    tracing::info!("Race {}: players_submitted={}, total_players={}, condition_met={}", 
+                   race_uuid, players_submitted, total_players, players_submitted >= total_players);
+    
+    // Handle edge case where all players are finished (shouldn't happen during active race)
+    if total_players == 0 {
+        tracing::warn!("Race {} has no active players, but received action submission", race_uuid);
+        return Err(mongodb::error::Error::custom("No active players in race"));
+    }
     
     if players_submitted >= total_players {
         // All players have submitted - auto-process the turn immediately
