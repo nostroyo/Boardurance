@@ -328,6 +328,8 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
 
       // Response is SubmitActionResponse directly, not wrapped
       if (response.success) {
+        console.log('Submit response:', JSON.stringify(response, null, 2));
+        
         // Check if turn was immediately processed (single player or all players submitted)
         if (response.turn_phase === 'WaitingForPlayers' && response.players_submitted === 0) {
           // Turn was auto-processed and completed - reset for next turn immediately
@@ -343,21 +345,25 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
           
         } else if (response.turn_phase === 'WaitingForPlayers' && response.players_submitted > 0) {
           // Still waiting for other players
+          console.log('Still waiting for other players:', response.players_submitted, '/', response.total_players);
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
           
         } else if (response.turn_phase === 'Processing') {
           // Turn is being processed
+          console.log('Turn is being processed');
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'Processing' });
           startTurnCompletionPolling();
           
         } else {
           // Handle other turn phases
+          console.log('Other turn phase:', response.turn_phase);
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: response.turn_phase as TurnPhase });
         }
       } else {
+        console.error('Submit failed:', response);
         dispatch({ type: 'SET_ERROR', payload: response.message || 'Failed to submit action' });
       }
     } catch (error) {
