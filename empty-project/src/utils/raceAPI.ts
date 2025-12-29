@@ -62,7 +62,7 @@ interface APIResponse<T = unknown> {
 }
 
 // Turn phase types for player game interface
-export type TurnPhase = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'Complete';
+export type TurnPhase = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'TurnProcessed' | 'Complete';
 
 // Race polling configuration
 export interface RacePollingConfig {

@@ -48,7 +48,7 @@ export interface LocalRaceView {
 }
 
 // Turn phase management
-export type TurnPhase = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'Complete';
+export type TurnPhase = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'TurnProcessed' | 'Complete';
 
 export const TurnPhase = {
   WaitingForPlayers: 'WaitingForPlayers' as const,

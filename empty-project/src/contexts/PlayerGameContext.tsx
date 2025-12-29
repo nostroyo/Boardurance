@@ -331,7 +331,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
         console.log('Submit response:', JSON.stringify(response, null, 2));
         
         // Check if turn was immediately processed (single player or all players submitted)
-        if (response.turn_phase === 'WaitingForPlayers' && response.players_submitted === 0) {
+        if (response.turn_phase === 'TurnProcessed') {
           // Turn was auto-processed and completed - reset for next turn immediately
           console.log('Turn auto-processed, resetting for next turn');
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });

@@ -83,7 +83,7 @@ export interface PerformancePreview {
 // Turn Phase Types (from /turn-phase endpoint)
 // ============================================================================
 
-export type TurnPhaseStatus = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'Complete';
+export type TurnPhaseStatus = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'TurnProcessed' | 'Complete';
 
 export interface TurnPhase {
   turn_phase: TurnPhaseStatus;
@@ -170,7 +170,7 @@ export interface SubmitActionRequest {
 export interface SubmitActionResponse {
   success: boolean;
   message: string;
-  turn_phase: string; // "WaitingForPlayers", "Processing"
+  turn_phase: string; // "WaitingForPlayers", "Processing", "TurnProcessed"
   players_submitted: number;
   total_players: number;
 }

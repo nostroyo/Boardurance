@@ -73,7 +73,7 @@ pub struct SubmitTurnActionRequest {
 pub struct SubmitTurnActionResponse {
     pub success: bool,
     pub message: String,
-    pub turn_phase: String, // "WaitingForPlayers", "Processing"
+    pub turn_phase: String, // "WaitingForPlayers", "Processing", "TurnProcessed"
     pub players_submitted: u32,
     pub total_players: u32,
 }
@@ -180,6 +180,7 @@ pub enum TurnPhase {
     WaitingForPlayers,
     AllSubmitted,
     Processing,
+    TurnProcessed,
     Complete,
 }
 
@@ -361,7 +362,7 @@ pub struct BodyInfo {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TurnPhaseResponse {
-    pub turn_phase: String, // "WaitingForPlayers", "AllSubmitted", "Processing", "Complete"
+    pub turn_phase: String, // "WaitingForPlayers", "AllSubmitted", "Processing", "TurnProcessed", "Complete"
     pub current_lap: u32,
     pub lap_characteristic: String,
     pub submitted_players: Vec<String>, // UUIDs
@@ -3794,7 +3795,7 @@ async fn submit_player_action_in_db(
                 return Ok(Some(SubmitTurnActionResponse {
                     success: true,
                     message: "Turn processed successfully. Ready for next turn.".to_string(),
-                    turn_phase: "WaitingForPlayers".to_string(), // Reset for next turn
+                    turn_phase: "TurnProcessed".to_string(), // Clear signal that turn completed
                     players_submitted: 0, // Reset counter for next turn
                     total_players,
                 }));
