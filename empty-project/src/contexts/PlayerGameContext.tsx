@@ -259,16 +259,24 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     }
   }, []);
 
-  // Turn completion polling
+  // Turn completion polling - enhanced for better reliability
   const startTurnCompletionPolling = useCallback(() => {
     if (!state.race) return;
 
+    console.log('Starting turn completion polling for race:', state.race.uuid);
+    let pollCount = 0;
+    const maxPolls = 30; // 60 seconds max (30 * 2s)
+
     const pollInterval = setInterval(async () => {
+      pollCount++;
+      
       try {
         const turnPhaseResponse: TurnPhaseResponse = await raceAPIService.getTurnPhase(state.race!.uuid);
+        console.log(`Poll ${pollCount}: Turn phase is ${turnPhaseResponse.turn_phase}`);
         
         if (turnPhaseResponse.turn_phase === 'WaitingForPlayers') {
           // Turn processing complete - reset for next turn
+          console.log('Turn processing completed, resetting for next turn');
           clearInterval(pollInterval);
           
           // Reset submission state
@@ -276,16 +284,29 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
           dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
           
-          // Refresh race data
-          await updateRaceData();
+          // Refresh race data with a small delay
+          setTimeout(async () => {
+            await updateRaceData();
+          }, 500);
+        } else if (pollCount >= maxPolls) {
+          // Timeout - stop polling and reset anyway
+          console.warn('Turn completion polling timed out, forcing reset');
+          clearInterval(pollInterval);
+          
+          dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });
+          dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
+          dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
+          dispatch({ type: 'SET_ERROR', payload: 'Turn processing took too long. Please refresh the page.' });
         }
       } catch (error) {
         console.error('Turn completion polling error:', error);
+        
+        if (pollCount >= maxPolls) {
+          clearInterval(pollInterval);
+          dispatch({ type: 'SET_ERROR', payload: 'Failed to check turn status. Please refresh the page.' });
+        }
       }
     }, 2000); // Poll every 2 seconds
-    
-    // Cleanup after 60 seconds max to prevent infinite polling
-    setTimeout(() => clearInterval(pollInterval), 60000);
   }, [state.race, updateRaceData]);
 
   // Submit boost action
@@ -307,19 +328,33 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
 
       // Response is SubmitActionResponse directly, not wrapped
       if (response.success) {
-        dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
-        
-        if (response.turn_phase === 'WaitingForPlayers') {
-          // Turn was auto-processed and completed - reset for next turn
+        // Check if turn was immediately processed (single player or all players submitted)
+        if (response.turn_phase === 'WaitingForPlayers' && response.players_submitted === 0) {
+          // Turn was auto-processed and completed - reset for next turn immediately
+          console.log('Turn auto-processed, resetting for next turn');
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });
           dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
-          await updateRaceData();
+          
+          // Refresh race data to get updated positions
+          setTimeout(async () => {
+            await updateRaceData();
+          }, 500); // Small delay to ensure backend has updated
+          
+        } else if (response.turn_phase === 'WaitingForPlayers' && response.players_submitted > 0) {
+          // Still waiting for other players
+          dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
+          dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
+          
         } else if (response.turn_phase === 'Processing') {
+          // Turn is being processed
+          dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'Processing' });
-          // Start polling for turn completion
           startTurnCompletionPolling();
+          
         } else {
+          // Handle other turn phases
+          dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: response.turn_phase as TurnPhase });
         }
       } else {
