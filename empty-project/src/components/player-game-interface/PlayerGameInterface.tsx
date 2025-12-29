@@ -382,6 +382,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 isLoadingBoostAvailability,
                 boostAvailabilityError,
                 hasSubmittedAction: state.hasSubmittedAction,
+                retryCount: boostAvailabilityRetryCount,
                 shouldShowButtons: state.race?.status === 'InProgress' && 
                                  currentTurnPhase === 'WaitingForPlayers' && 
                                  boostAvailability && 
@@ -524,7 +525,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                       Current phase: {currentTurnPhase}
                     </p>
                     {/* Debug information in development */}
-                    {process.env.NODE_ENV === 'development' && (
+                    {import.meta.env.DEV && (
                       <div className="mt-3 p-2 bg-gray-900 rounded text-xs text-left">
                         <p className="text-yellow-400 mb-1">Debug Info:</p>
                         <p>Race Status: {state.race?.status || 'null'}</p>
@@ -532,6 +533,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                         <p>Boost Data: {boostAvailability ? 'loaded' : 'null'}</p>
                         <p>Loading: {isLoadingBoostAvailability ? 'yes' : 'no'}</p>
                         <p>Error: {boostAvailabilityError || 'none'}</p>
+                        <p>Retry Count: {boostAvailabilityRetryCount}</p>
                       </div>
                     )}
                   </div>
