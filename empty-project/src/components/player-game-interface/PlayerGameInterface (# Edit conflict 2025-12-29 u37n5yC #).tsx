@@ -44,17 +44,63 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
     }
   }, [raceUuid, playerUuid]);
 
-  // Fetch boost availability from API (no mock fallbacks)
+  // Fetch boost availability from API with enhanced error handling and retry logic
   const fetchBoostAvailability = useCallback(async () => {
+    if (!state.race || state.race.status !== 'InProgress') {
+      console.log('[PlayerGameInterface] Skipping boost availability fetch - race not in progress');
+      return;
+    }
+
+    setIsLoadingBoostAvailability(true);
+    setBoostAvailabilityError(null);
+    
     try {
+      console.log('[PlayerGameInterface] Fetching boost availability...', {
+        raceUuid,
+        playerUuid,
+        raceStatus: state.race?.status,
+        retryCount: boostAvailabilityRetryCount
+      });
+      
       const response = await raceAPIService.getBoostAvailability(raceUuid, playerUuid);
       setBoostAvailability(response);
-      console.log('[PlayerGameInterface] Boost availability loaded successfully:', response);
+      setBoostAvailabilityError(null);
+      setBoostAvailabilityRetryCount(0);
+      
+      console.log('[PlayerGameInterface] Boost availability loaded successfully:', {
+        availableCards: response.available_cards,
+        handState: response.hand_state,
+        currentCycle: response.current_cycle
+      });
     } catch (error) {
-      console.error('[PlayerGameInterface] Failed to fetch boost availability:', error);
-      throw error; // Let the error bubble up to be handled by error boundaries
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch boost availability';
+      console.error('[PlayerGameInterface] Failed to fetch boost availability:', {
+        error: errorMessage,
+        raceUuid,
+        playerUuid,
+        retryCount: boostAvailabilityRetryCount
+      });
+      
+      setBoostAvailabilityError(errorMessage);
+      
+      // Implement exponential backoff retry for network errors
+      if (boostAvailabilityRetryCount < 3 && (
+        errorMessage.includes('network') || 
+        errorMessage.includes('timeout') ||
+        errorMessage.includes('fetch')
+      )) {
+        const retryDelay = 1000 * Math.pow(2, boostAvailabilityRetryCount);
+        console.log(`[PlayerGameInterface] Retrying boost availability in ${retryDelay}ms...`);
+        
+        setTimeout(() => {
+          setBoostAvailabilityRetryCount(prev => prev + 1);
+          fetchBoostAvailability();
+        }, retryDelay);
+      }
+    } finally {
+      setIsLoadingBoostAvailability(false);
     }
-  }, [raceUuid, playerUuid]);
+  }, [raceUuid, playerUuid, state.race, boostAvailabilityRetryCount]);
 
   // Enhanced race initialization with error recovery
   const initializeRaceWithRetry = useCallback(async () => {
@@ -103,15 +149,11 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         // Update race data
         await actions.updateRaceData();
         
-        // Update redesigned interface data with better error handling
-        const promises = [fetchLocalView()];
-        
-        // Only fetch boost availability if race is in progress and we don't have data or had an error
-        if (state.race?.status === 'InProgress' && (!boostAvailability || boostAvailabilityError)) {
-          promises.push(fetchBoostAvailability());
-        }
-        
-        await Promise.allSettled(promises); // Use allSettled to prevent one failure from stopping others
+        // Update redesigned interface data
+        await Promise.all([
+          fetchLocalView(),
+          fetchBoostAvailability()
+        ]);
 
         // Check turn phase if race is in progress
         if (state.race?.status === 'InProgress') {
@@ -122,9 +164,6 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
             // Turn phase changed - reset submission status if new turn started
             if (newTurnPhase === 'WaitingForPlayers' && state.hasSubmittedAction) {
               actions.setError(null); // Clear any previous errors
-              // Reset boost availability error when new turn starts
-              setBoostAvailabilityError(null);
-              setBoostAvailabilityRetryCount(0);
             }
           }
         }
@@ -372,172 +411,70 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               </div>
             </div>
 
-            {/* Redesigned Boost Control Panel - Mobile responsive with enhanced debugging */}
-            {(() => {
-              // Debug logging for boost button visibility conditions
-              const debugInfo = {
-                raceStatus: state.race?.status,
-                turnPhase: currentTurnPhase,
-                hasBoostAvailability: !!boostAvailability,
-                isLoadingBoostAvailability,
-                boostAvailabilityError,
-                hasSubmittedAction: state.hasSubmittedAction,
-                shouldShowButtons: state.race?.status === 'InProgress' && 
-                                 currentTurnPhase === 'WaitingForPlayers' && 
-                                 boostAvailability && 
-                                 !state.hasSubmittedAction
-              };
-              
-              console.log('[PlayerGameInterface] Boost button conditions:', debugInfo);
-              
-              // Show boost control panel when all conditions are met
-              if (state.race?.status === 'InProgress' &&
-                  currentTurnPhase === 'WaitingForPlayers' &&
-                  boostAvailability &&
-                  !state.hasSubmittedAction) {
-                return (
-                  <BoostControlPanel
-                    selectedBoost={state.selectedBoost}
-                    availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4]}
-                    onBoostSelect={actions.selectBoost}
-                    onValidateTurn={actions.submitBoostAction}
-                    isSubmitting={state.isLoading}
-                    hasSubmitted={state.hasSubmittedAction}
-                    turnPhase={currentTurnPhase}
-                  />
-                );
-              }
-              
-              // Show loading state while fetching boost availability
-              if (state.race?.status === 'InProgress' &&
-                  currentTurnPhase === 'WaitingForPlayers' &&
-                  !boostAvailability &&
-                  isLoadingBoostAvailability &&
-                  !state.hasSubmittedAction) {
-                return (
-                  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-                    <div className="text-center py-4 sm:py-6">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
-                      <p className="text-blue-400 font-medium text-sm sm:text-base mb-1">
-                        Loading Boost Options...
-                      </p>
-                      <p className="text-gray-400 text-xs">
-                        Fetching available boost cards
-                      </p>
-                    </div>
-                  </div>
-                );
-              }
-              
-              // Show error state with retry option
-              if (state.race?.status === 'InProgress' &&
-                  currentTurnPhase === 'WaitingForPlayers' &&
-                  !boostAvailability &&
-                  boostAvailabilityError &&
-                  !state.hasSubmittedAction) {
-                return (
-                  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-red-500">
-                    <div className="text-center py-4 sm:py-6">
-                      <div className="text-red-400 text-3xl mb-2">⚠️</div>
-                      <p className="text-red-400 font-medium text-sm sm:text-base mb-2">
-                        Boost Options Unavailable
-                      </p>
-                      <p className="text-gray-400 text-xs mb-3">
-                        {boostAvailabilityError}
-                      </p>
-                      <button
-                        onClick={() => {
-                          setBoostAvailabilityRetryCount(0);
-                          fetchBoostAvailability();
-                        }}
-                        className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-medium transition-colors"
-                      >
-                        Retry Loading Boosts
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-              
-              // Show action submitted state
-              if (state.hasSubmittedAction) {
-                return (
-                  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-                    <div className="text-center py-4 sm:py-6">
-                      <div className="text-green-400 text-3xl sm:text-4xl mb-2 sm:mb-3">✓</div>
-                      <p className="text-green-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">
-                        Action Submitted Successfully
-                      </p>
-                      <p className="text-gray-400 text-sm mb-2 sm:mb-3">
-                        Boost value: <span className="font-medium">{state.selectedBoost}</span>
-                      </p>
-                      <div className="bg-gray-700 rounded-lg p-2 sm:p-3">
-                        <p className="text-gray-300 text-xs sm:text-sm">
-                          Waiting for other players to submit their actions...
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              
-              // Show race finished state
-              if (state.race?.status === 'Finished') {
-                return (
-                  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-                    <div className="text-center py-4 sm:py-6">
-                      <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏁</div>
-                      <p className="text-blue-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Finished</p>
-                      {state.playerParticipant?.finish_position && (
-                        <p className="text-gray-300 text-sm sm:text-base">
-                          Final Position:{' '}
-                          <span className="font-bold text-yellow-400">
-                            #{state.playerParticipant.finish_position}
-                          </span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              
-              // Show race waiting state
-              if (state.race?.status === 'Waiting') {
-                return (
-                  <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-                    <div className="text-center py-4 sm:py-6">
-                      <div className="text-yellow-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏳</div>
-                      <p className="text-yellow-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Starting Soon</p>
-                      <p className="text-gray-400 text-xs sm:text-sm">Waiting for race to begin...</p>
-                    </div>
-                  </div>
-                );
-              }
-              
-              // Default state - turn actions not available
-              return (
-                <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
-                  <div className="text-center py-4 sm:py-6">
-                    <div className="text-gray-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏸️</div>
-                    <p className="text-gray-400 font-medium text-sm sm:text-base">Turn actions not available</p>
-                    <p className="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
-                      Current phase: {currentTurnPhase}
+            {/* Redesigned Boost Control Panel - Mobile responsive */}
+            {state.race?.status === 'InProgress' &&
+            currentTurnPhase === 'WaitingForPlayers' &&
+            boostAvailability ? (
+              <BoostControlPanel
+                selectedBoost={state.selectedBoost}
+                availableBoosts={boostAvailability?.available_cards || [0, 1, 2, 3, 4]}
+                onBoostSelect={actions.selectBoost}
+                onValidateTurn={actions.submitBoostAction}
+                isSubmitting={state.isLoading}
+                hasSubmitted={state.hasSubmittedAction}
+                turnPhase={currentTurnPhase}
+              />
+            ) : state.hasSubmittedAction ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-green-400 text-3xl sm:text-4xl mb-2 sm:mb-3">✓</div>
+                  <p className="text-green-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">
+                    Action Submitted Successfully
+                  </p>
+                  <p className="text-gray-400 text-sm mb-2 sm:mb-3">
+                    Boost value: <span className="font-medium">{state.selectedBoost}</span>
+                  </p>
+                  <div className="bg-gray-700 rounded-lg p-2 sm:p-3">
+                    <p className="text-gray-300 text-xs sm:text-sm">
+                      Waiting for other players to submit their actions...
                     </p>
-                    {/* Debug information in development */}
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="mt-3 p-2 bg-gray-900 rounded text-xs text-left">
-                        <p className="text-yellow-400 mb-1">Debug Info:</p>
-                        <p>Race Status: {state.race?.status || 'null'}</p>
-                        <p>Turn Phase: {currentTurnPhase}</p>
-                        <p>Boost Data: {boostAvailability ? 'loaded' : 'null'}</p>
-                        <p>Loading: {isLoadingBoostAvailability ? 'yes' : 'no'}</p>
-                        <p>Error: {boostAvailabilityError || 'none'}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
-              );
-            })()}
+              </div>
+            ) : state.race?.status === 'Finished' ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏁</div>
+                  <p className="text-blue-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Finished</p>
+                  {state.playerParticipant?.finish_position && (
+                    <p className="text-gray-300 text-sm sm:text-base">
+                      Final Position:{' '}
+                      <span className="font-bold text-yellow-400">
+                        #{state.playerParticipant.finish_position}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : state.race?.status === 'Waiting' ? (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-yellow-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏳</div>
+                  <p className="text-yellow-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Starting Soon</p>
+                  <p className="text-gray-400 text-xs sm:text-sm">Waiting for race to begin...</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
+                <div className="text-center py-4 sm:py-6">
+                  <div className="text-gray-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏸️</div>
+                  <p className="text-gray-400 font-medium text-sm sm:text-base">Turn actions not available</p>
+                  <p className="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
+                    Current phase: {currentTurnPhase}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
