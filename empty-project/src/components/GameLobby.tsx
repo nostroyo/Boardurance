@@ -340,6 +340,9 @@ function GameLobby() {
                         <div>
                           <span className="text-gray-400">Participants:</span>
                           <span className="ml-2 font-medium">{race.participants?.length || 0}</span>
+                          {race.status === 'InProgress' && (race.participants?.length || 0) < (race.maxParticipants || 10) && (
+                            <span className="ml-1 text-green-400 text-xs">(Joinable)</span>
+                          )}
                         </div>
                         <div>
                           <span className="text-gray-400">Lap:</span>
@@ -378,8 +381,8 @@ function GameLobby() {
                               );
                             }
                           } else {
-                            // User is not a participant - show join button if race is waiting
-                            if (race.status === 'Waiting') {
+                            // User is not a participant - show join button for waiting OR in-progress races with available slots
+                            if (race.status === 'Waiting' || (race.status === 'InProgress' && (race.participants?.length || 0) < (race.maxParticipants || 10))) {
                               return (
                                 <button
                                   onClick={() => joinRace(race.uuid)}
