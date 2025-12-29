@@ -321,13 +321,19 @@ impl Race {
     }
 
     pub fn add_participant(&mut self, player_uuid: Uuid, car_uuid: Uuid, pilot_uuid: Uuid) -> Result<(), String> {
-        if self.status != RaceStatus::Waiting {
-            return Err("Cannot add participants to a race that has already started".to_string());
+        // Allow joining races that are Waiting OR InProgress (for late joins)
+        if self.status != RaceStatus::Waiting && self.status != RaceStatus::InProgress {
+            return Err(format!("Cannot add participants to a race with status: {:?}", self.status));
         }
 
         // Check if player is already participating
         if self.participants.iter().any(|p| p.player_uuid == player_uuid) {
             return Err("Player is already participating in this race".to_string());
+        }
+
+        // For InProgress races, ensure we're still in early laps (allow late joins only in first lap)
+        if self.status == RaceStatus::InProgress && self.current_lap > 1 {
+            return Err("Cannot join race - race has progressed beyond first lap".to_string());
         }
 
         // Random qualification for now - cars start in different sectors
