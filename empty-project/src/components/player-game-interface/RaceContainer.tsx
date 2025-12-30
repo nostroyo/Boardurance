@@ -607,7 +607,7 @@ export function RaceContainer({
 
     try {
       // Submit action to backend with retry logic
-      await withErrorHandling(
+      const response = await withErrorHandling(
         () => raceAPIService.submitTurnAction(raceUuid, playerUuid, state.selectedBoost!),
         'submitting turn action',
         undefined,
@@ -621,24 +621,48 @@ export function RaceContainer({
       );
 
       console.log('[RaceContainer] Turn action submitted successfully');
+      console.log('[RaceContainer] Submit response:', JSON.stringify(response, null, 2));
 
-      // Update state to reflect successful submission and start polling
-      setState((prev) => ({
-        ...prev,
-        isSubmitting: false,
-        hasSubmittedThisTurn: true,
-        isPolling: true, // Start polling for turn completion
-        error: null,
-      }));
+      // Check if turn was immediately processed
+      if (response.turn_phase === 'TurnProcessed') {
+        console.log('✅ [RaceContainer] Turn auto-processed, handling completion immediately');
+        
+        // Update state to reflect completion
+        setState((prev) => ({
+          ...prev,
+          isSubmitting: false,
+          hasSubmittedThisTurn: false, // Reset for next turn
+          selectedBoost: null, // Clear selection
+          error: null,
+        }));
 
-      stopLoading(LOADING_KEYS.SUBMIT_ACTION);
+        stopLoading(LOADING_KEYS.SUBMIT_ACTION);
+        
+        // Handle turn completion immediately (fetch updated data)
+        await handleTurnComplete();
+        
+      } else {
+        // Turn not immediately processed, start polling
+        console.log('[RaceContainer] Turn submitted, starting polling for completion');
+        
+        // Update state to reflect successful submission and start polling
+        setState((prev) => ({
+          ...prev,
+          isSubmitting: false,
+          hasSubmittedThisTurn: true,
+          isPolling: true, // Start polling for turn completion
+          error: null,
+        }));
 
-      // Start polling indicator
-      startLoading(LOADING_KEYS.POLLING, 'polling', {
-        message: 'Waiting for turn to complete...',
-      });
+        stopLoading(LOADING_KEYS.SUBMIT_ACTION);
 
-      console.log('[RaceContainer] Started polling for turn completion');
+        // Start polling indicator
+        startLoading(LOADING_KEYS.POLLING, 'polling', {
+          message: 'Waiting for turn to complete...',
+        });
+
+        console.log('[RaceContainer] Started polling for turn completion');
+      }
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error(String(error));
 
