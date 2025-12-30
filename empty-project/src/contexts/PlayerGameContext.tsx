@@ -329,11 +329,12 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
       // Response is SubmitActionResponse directly, not wrapped
       if (response.success) {
         console.log('Submit response:', JSON.stringify(response, null, 2));
+        console.log('Response turn_phase type:', typeof response.turn_phase, 'value:', response.turn_phase);
         
         // Check if turn was immediately processed (single player or all players submitted)
         if (response.turn_phase === 'TurnProcessed') {
           // Turn was auto-processed and completed - reset for next turn immediately
-          console.log('Turn auto-processed, resetting for next turn');
+          console.log('✅ Turn auto-processed, resetting for next turn');
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: false });
           dispatch({ type: 'SET_SELECTED_BOOST', payload: null });
           dispatch({ type: 'SET_TURN_PHASE', payload: 'WaitingForPlayers' });
@@ -358,7 +359,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
           
         } else {
           // Handle other turn phases
-          console.log('Other turn phase:', response.turn_phase);
+          console.log('⚠️ Other turn phase:', response.turn_phase, 'with players_submitted:', response.players_submitted);
           dispatch({ type: 'SET_HAS_SUBMITTED', payload: true });
           dispatch({ type: 'SET_TURN_PHASE', payload: response.turn_phase as TurnPhase });
         }
