@@ -23,8 +23,7 @@ pub async fn health_check(
     State(database): State<Database>,
 ) -> Result<Json<HealthResponse>, StatusCode> {
     // For health check, we'll try to list collections which is a simple operation
-    match database.list_collection_names(None).await
-    {
+    match database.list_collection_names(None).await {
         Ok(_) => {
             tracing::info!("Health check successful - database connected");
             Ok(Json(HealthResponse {

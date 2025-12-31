@@ -18,7 +18,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn report_exit(task_name: &str, outcome: Result<Result<(), std::io::Error>, tokio::task::JoinError>) {
+fn report_exit(
+    task_name: &str,
+    outcome: Result<Result<(), std::io::Error>, tokio::task::JoinError>,
+) {
     match outcome {
         Ok(Ok(())) => {
             tracing::info!("{} has exited", task_name);

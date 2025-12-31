@@ -9,7 +9,7 @@
 #[cfg(test)]
 mod tests {
     // TODO: Implement these tests once middleware is integrated in startup.rs
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_player_accessing_own_resources_allowed() {
@@ -18,7 +18,7 @@ mod tests {
         // 2. Try to GET /api/v1/players/{user_A_uuid}
         // 3. Should return 200 OK with player data
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_player_accessing_other_player_resources_blocked() {
@@ -28,7 +28,7 @@ mod tests {
         // 3. Try to GET /api/v1/players/{user_B_uuid} with user A's token
         // 4. Should return 403 FORBIDDEN
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_admin_accessing_any_resources_allowed() {
@@ -39,7 +39,7 @@ mod tests {
         // 4. Try to GET /api/v1/players/{user_B_uuid} with admin token
         // 5. Should return 200 OK with player data
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_admin_only_routes_require_admin_role() {
@@ -50,7 +50,7 @@ mod tests {
         // 4. Try to GET /api/v1/players/by-email/test@example.com
         // 5. Should return 403 FORBIDDEN
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_admin_can_access_admin_only_routes() {
@@ -61,7 +61,7 @@ mod tests {
         // 4. Try to GET /api/v1/players/by-email/test@example.com
         // 5. Should return 200 OK with player data
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_unauthenticated_access_to_admin_routes_blocked() {
@@ -71,7 +71,7 @@ mod tests {
         // 3. Try to GET /api/v1/players/by-wallet/some-wallet without token
         // 4. Should return 401 UNAUTHORIZED
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_unauthenticated_access_to_protected_routes_blocked() {
@@ -79,7 +79,7 @@ mod tests {
         // 1. Try to GET /api/v1/players/{some_uuid} without any token
         // 2. Should return 401 UNAUTHORIZED
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_invalid_token_access_blocked() {
@@ -87,7 +87,7 @@ mod tests {
         // 1. Try to GET /api/v1/players/{some_uuid} with invalid token
         // 2. Should return 401 UNAUTHORIZED
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_expired_token_access_blocked() {
@@ -97,7 +97,7 @@ mod tests {
         // 3. Try to access protected route
         // 4. Should return 401 UNAUTHORIZED
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_blacklisted_token_access_blocked() {
@@ -107,7 +107,7 @@ mod tests {
         // 3. Try to access protected route with blacklisted token
         // 4. Should return 401 UNAUTHORIZED
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_race_creator_can_start_race() {
@@ -117,7 +117,7 @@ mod tests {
         // 3. Try to POST /api/v1/races/{race_uuid}/start
         // 4. Should return 200 OK
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_non_creator_cannot_start_race() {
@@ -127,7 +127,7 @@ mod tests {
         // 3. Try to POST /api/v1/races/{race_uuid}/start with user B token
         // 4. Should return 403 FORBIDDEN
     }
-    
+
     #[tokio::test]
     #[ignore = "Middleware not yet integrated"]
     async fn test_admin_can_start_any_race() {
@@ -150,7 +150,7 @@ Integration Test Implementation Plan:
 
 2. **Test Categories:**
    - **Authentication Tests**: Valid/invalid/expired/blacklisted tokens
-   - **Ownership Tests**: Own resources vs other's resources  
+   - **Ownership Tests**: Own resources vs other's resources
    - **Role-based Tests**: Admin vs regular user access
    - **Admin-only Routes**: GET /players, GET /players/by-email, GET /players/by-wallet
    - **Route-specific Tests**: Player routes, race routes, admin routes

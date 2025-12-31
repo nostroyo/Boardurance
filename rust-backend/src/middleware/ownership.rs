@@ -14,8 +14,8 @@ use crate::middleware::auth::UserContext;
 /// Ownership validation types
 #[derive(Clone)]
 pub enum OwnershipValidationType {
-    Player(String),     // Parameter name containing player UUID
-    Race(String),       // Parameter name containing race UUID  
+    Player(String),                         // Parameter name containing player UUID
+    Race(String),                           // Parameter name containing race UUID
     Custom(fn(&UserContext, &str) -> bool), // Simplified: takes path string instead of Request
 }
 
@@ -27,21 +27,21 @@ pub struct RequireOwnership {
 
 impl RequireOwnership {
     /// Factory method for player ownership validation
-    #[must_use] 
+    #[must_use]
     pub fn player(param_name: &str) -> Self {
         Self {
             validation_type: OwnershipValidationType::Player(param_name.to_string()),
         }
     }
-    
+
     /// Factory method for race ownership validation
-    #[must_use] 
+    #[must_use]
     pub fn race(param_name: &str) -> Self {
         Self {
             validation_type: OwnershipValidationType::Race(param_name.to_string()),
         }
     }
-    
+
     /// Factory method for custom ownership validation
     pub fn custom(validator: fn(&UserContext, &str) -> bool) -> Self {
         Self {
@@ -153,23 +153,23 @@ pub struct RequireRole {
 
 impl RequireRole {
     /// Factory method for admin role requirement
-    #[must_use] 
+    #[must_use]
     pub fn admin() -> Self {
         Self {
             required_role: UserRole::Admin,
         }
     }
-    
+
     /// Factory method for super admin role requirement
-    #[must_use] 
+    #[must_use]
     pub fn super_admin() -> Self {
         Self {
             required_role: UserRole::SuperAdmin,
         }
     }
-    
+
     /// Factory method for player role requirement
-    #[must_use] 
+    #[must_use]
     pub fn player() -> Self {
         Self {
             required_role: UserRole::Player,
@@ -177,7 +177,7 @@ impl RequireRole {
     }
 
     /// Factory method for any admin role (Admin or `SuperAdmin`)
-    #[must_use] 
+    #[must_use]
     pub fn any_admin() -> Self {
         Self {
             required_role: UserRole::Admin, // We'll check is_admin() which covers both
@@ -288,12 +288,12 @@ fn validate_player_ownership(
     if user_context.role.is_admin() {
         return true;
     }
-    
+
     // Extract UUID from path
     if let Some(player_uuid) = extract_uuid_from_path(request, param_name) {
         return user_context.user_uuid == player_uuid;
     }
-    
+
     false
 }
 
@@ -307,7 +307,7 @@ fn validate_race_ownership(
     if user_context.role.is_admin() {
         return true;
     }
-    
+
     // For races, we might need to check if user is a participant
     // For now, we'll implement basic validation
     if let Some(_race_uuid) = extract_uuid_from_path(request, param_name) {
@@ -315,7 +315,7 @@ fn validate_race_ownership(
         // For now, allow any authenticated user to access races
         return true;
     }
-    
+
     false
 }
 
@@ -324,11 +324,10 @@ fn extract_uuid_from_path(request: &Request, param_name: &str) -> Option<Uuid> {
     // Get the matched path from Axum
     let matched_path = request.extensions().get::<MatchedPath>()?;
     let path = matched_path.as_str();
-    
+
     // Parse the path to extract parameters
     // This is a simplified implementation - in a real app you'd use Axum's path extraction
-    extract_param_from_path(path, param_name)
-        .and_then(|uuid_str| Uuid::parse_str(&uuid_str).ok())
+    extract_param_from_path(path, param_name).and_then(|uuid_str| Uuid::parse_str(&uuid_str).ok())
 }
 
 /// Extract parameter value from path string
@@ -336,11 +335,11 @@ fn extract_param_from_path(path: &str, param_name: &str) -> Option<String> {
     // Simple path parameter extraction
     // Look for pattern like "/players/{uuid}/cars" where param_name is "player_uuid"
     let _param_pattern = format!(":{param_name}");
-    
+
     // This is a simplified implementation
     // In practice, you'd use Axum's built-in path parameter extraction
     let parts: Vec<&str> = path.split('/').collect();
-    
+
     // Find the parameter in the path template
     // For now, we'll use a simple heuristic based on UUID format
     for part in parts {
@@ -349,7 +348,7 @@ fn extract_param_from_path(path: &str, param_name: &str) -> Option<String> {
             return Some(part.to_string());
         }
     }
-    
+
     None
 }
 
@@ -442,7 +441,7 @@ mod tests {
     fn extract_param_from_path_works() {
         let uuid_str = "123e4567-e89b-12d3-a456-426614174000";
         let path = format!("/players/{}/cars", uuid_str);
-        
+
         let extracted = extract_param_from_path(&path, "player_uuid");
         assert_eq!(extracted, Some(uuid_str.to_string()));
     }
@@ -450,7 +449,7 @@ mod tests {
     #[test]
     fn extract_param_from_path_returns_none_for_no_uuid() {
         let path = "/players/not-a-uuid/cars";
-        
+
         let extracted = extract_param_from_path(path, "player_uuid");
         assert_eq!(extracted, None);
     }

@@ -109,7 +109,7 @@ pub enum SessionError {
 
 impl SessionManager {
     /// Create a new session manager
-    #[must_use] 
+    #[must_use]
     pub fn new(database: Arc<Database>, config: SessionConfig) -> Self {
         Self {
             database,
@@ -126,8 +126,9 @@ impl SessionManager {
         metadata: SessionMetadata,
     ) -> Result<(), SessionError> {
         let now = Utc::now();
-        let expires_at = now + Duration::from_std(self.config.session_timeout)
-            .map_err(|e| SessionError::Cache(e.to_string()))?;
+        let expires_at = now
+            + Duration::from_std(self.config.session_timeout)
+                .map_err(|e| SessionError::Cache(e.to_string()))?;
 
         // Check if user has too many sessions
         let user_session_count = self.get_user_session_count(user_uuid).await?;
@@ -192,7 +193,7 @@ impl SessionManager {
                 if session.expires_at < Utc::now() {
                     return Err(SessionError::SessionExpired);
                 }
-                
+
                 // Cache the session
                 self.cache_session(session)?;
                 Ok(true)
@@ -202,7 +203,11 @@ impl SessionManager {
     }
 
     /// Invalidate a session
-    pub async fn invalidate_session(&self, token_id: &str, reason: &str) -> Result<(), SessionError> {
+    pub async fn invalidate_session(
+        &self,
+        token_id: &str,
+        reason: &str,
+    ) -> Result<(), SessionError> {
         // Add to blacklist
         let now = Utc::now();
         let expires_at = now + Duration::days(30); // Keep blacklist for 30 days
@@ -217,8 +222,12 @@ impl SessionManager {
         };
 
         // Store in database
-        let blacklist_collection = self.database.collection::<BlacklistedToken>("blacklisted_tokens");
-        blacklist_collection.insert_one(&blacklisted_token, None).await?;
+        let blacklist_collection = self
+            .database
+            .collection::<BlacklistedToken>("blacklisted_tokens");
+        blacklist_collection
+            .insert_one(&blacklisted_token, None)
+            .await?;
 
         // Deactivate session in database
         let session_collection = self.database.collection::<Session>("sessions");
@@ -238,7 +247,11 @@ impl SessionManager {
     }
 
     /// Invalidate all sessions for a user
-    pub async fn invalidate_all_user_sessions(&self, user_uuid: Uuid, reason: &str) -> Result<(), SessionError> {
+    pub async fn invalidate_all_user_sessions(
+        &self,
+        user_uuid: Uuid,
+        reason: &str,
+    ) -> Result<(), SessionError> {
         // Get all active sessions for the user
         let collection = self.database.collection::<Session>("sessions");
         let mut cursor = collection
@@ -273,7 +286,9 @@ impl SessionManager {
         }
 
         // Check database
-        let collection = self.database.collection::<BlacklistedToken>("blacklisted_tokens");
+        let collection = self
+            .database
+            .collection::<BlacklistedToken>("blacklisted_tokens");
         let blacklisted = collection
             .find_one(
                 mongodb::bson::doc! {
@@ -285,7 +300,7 @@ impl SessionManager {
             .await?;
 
         let is_blacklisted = blacklisted.is_some();
-        
+
         // Cache the result
         if is_blacklisted {
             self.blacklist_token_in_cache(token_id.to_string());
@@ -297,23 +312,19 @@ impl SessionManager {
     /// Cleanup expired sessions and blacklisted tokens
     pub async fn cleanup_expired_sessions(&self) -> Result<usize, SessionError> {
         let now = mongodb::bson::DateTime::now();
-        
+
         // Cleanup expired sessions
         let session_collection = self.database.collection::<Session>("sessions");
         let session_result = session_collection
-            .delete_many(
-                mongodb::bson::doc! { "expires_at": { "$lt": now } },
-                None,
-            )
+            .delete_many(mongodb::bson::doc! { "expires_at": { "$lt": now } }, None)
             .await?;
 
         // Cleanup expired blacklisted tokens
-        let blacklist_collection = self.database.collection::<BlacklistedToken>("blacklisted_tokens");
+        let blacklist_collection = self
+            .database
+            .collection::<BlacklistedToken>("blacklisted_tokens");
         let blacklist_result = blacklist_collection
-            .delete_many(
-                mongodb::bson::doc! { "expires_at": { "$lt": now } },
-                None,
-            )
+            .delete_many(mongodb::bson::doc! { "expires_at": { "$lt": now } }, None)
             .await?;
 
         // Clear cache to force refresh
@@ -325,7 +336,9 @@ impl SessionManager {
 
     // Private helper methods
     fn cache_session(&self, session: Session) -> Result<(), SessionError> {
-        let mut cache = self.cache.write()
+        let mut cache = self
+            .cache
+            .write()
             .map_err(|e| SessionError::Cache(format!("Failed to acquire write lock: {e}")))?;
 
         // Check cache size limit
@@ -338,10 +351,13 @@ impl SessionManager {
         }
 
         // Add to session cache
-        cache.sessions.insert(session.token_id.clone(), session.clone());
+        cache
+            .sessions
+            .insert(session.token_id.clone(), session.clone());
 
         // Add to user sessions tracking
-        cache.user_sessions
+        cache
+            .user_sessions
             .entry(session.user_uuid)
             .or_insert_with(Vec::new)
             .push(session.token_id);
@@ -375,7 +391,8 @@ impl SessionManager {
     }
 
     fn is_token_blacklisted_cached(&self, token_id: &str) -> bool {
-        self.cache.read()
+        self.cache
+            .read()
             .map(|cache| cache.blacklisted_tokens.contains(token_id))
             .unwrap_or(false)
     }
@@ -411,7 +428,6 @@ mod tests {
     use super::*;
     use mongodb::Client;
 
-
     // Mock database for testing without requiring MongoDB connection
     async fn create_mock_database() -> Database {
         // Create a mock database that won't actually connect
@@ -425,7 +441,10 @@ mod tests {
         let config = SessionConfig::default();
         assert_eq!(config.max_sessions_per_user, 5);
         assert_eq!(config.session_timeout, StdDuration::from_secs(24 * 60 * 60));
-        assert_eq!(config.blacklist_cleanup_interval, StdDuration::from_secs(60 * 60));
+        assert_eq!(
+            config.blacklist_cleanup_interval,
+            StdDuration::from_secs(60 * 60)
+        );
         assert_eq!(config.cache_size_limit, 10000);
     }
 
@@ -434,7 +453,7 @@ mod tests {
         let user_uuid = Uuid::new_v4();
         let token_id = "test_token_123".to_string();
         let now = Utc::now();
-        
+
         let session = Session {
             id: None,
             user_uuid,
@@ -458,7 +477,7 @@ mod tests {
         let user_uuid = Uuid::new_v4();
         let token_id = "blacklisted_token".to_string();
         let now = Utc::now();
-        
+
         let blacklisted_token = BlacklistedToken {
             id: None,
             token_id: token_id.clone(),
@@ -490,7 +509,7 @@ mod tests {
         let db = Arc::new(create_mock_database().await);
         let config = SessionConfig::default();
         let session_manager = SessionManager::new(db, config);
-        
+
         // Should not panic and should be created successfully
         assert_eq!(session_manager.config.max_sessions_per_user, 5);
     }
@@ -500,11 +519,11 @@ mod tests {
         let db = Arc::new(create_mock_database().await);
         let config = SessionConfig::default();
         let session_manager = SessionManager::new(db, config);
-        
+
         let user_uuid = Uuid::new_v4();
         let token_id = "cache_test_token".to_string();
         let now = Utc::now();
-        
+
         let session = Session {
             id: None,
             user_uuid,
@@ -519,16 +538,16 @@ mod tests {
 
         // Test caching
         assert!(session_manager.cache_session(session.clone()).is_ok());
-        
+
         // Test retrieval from cache
         let cached_session = session_manager.get_session_from_cache(&token_id);
         assert!(cached_session.is_some());
         assert_eq!(cached_session.unwrap().token_id, token_id);
-        
+
         // Test blacklisting in cache
         session_manager.blacklist_token_in_cache(token_id.clone());
         assert!(session_manager.is_token_blacklisted_cached(&token_id));
-        
+
         // Test removal from cache
         session_manager.remove_session_from_cache(&token_id);
         let cached_session_after_removal = session_manager.get_session_from_cache(&token_id);
@@ -539,19 +558,19 @@ mod tests {
     fn session_error_types_work() {
         let db_error = SessionError::Database(mongodb::error::Error::custom("test error"));
         assert!(matches!(db_error, SessionError::Database(_)));
-        
+
         let not_found_error = SessionError::SessionNotFound;
         assert!(matches!(not_found_error, SessionError::SessionNotFound));
-        
+
         let blacklisted_error = SessionError::TokenBlacklisted;
         assert!(matches!(blacklisted_error, SessionError::TokenBlacklisted));
-        
+
         let expired_error = SessionError::SessionExpired;
         assert!(matches!(expired_error, SessionError::SessionExpired));
-        
+
         let too_many_error = SessionError::TooManySessions;
         assert!(matches!(too_many_error, SessionError::TooManySessions));
-        
+
         let cache_error = SessionError::Cache("test cache error".to_string());
         assert!(matches!(cache_error, SessionError::Cache(_)));
     }

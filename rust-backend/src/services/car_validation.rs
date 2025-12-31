@@ -56,7 +56,7 @@ pub enum CarValidationError {
 
 impl CarValidationError {
     /// Returns the error code for API responses
-    #[must_use] 
+    #[must_use]
     pub fn error_code(&self) -> &'static str {
         match self {
             CarValidationError::CarNotFound(_) => "CAR_NOT_FOUND",
@@ -78,7 +78,7 @@ impl CarValidationError {
     }
 
     /// Returns a user-friendly message for API responses
-    #[must_use] 
+    #[must_use]
     pub fn user_message(&self) -> String {
         match self {
             CarValidationError::CarNotFound(uuid) => {
@@ -130,7 +130,7 @@ impl CarValidationError {
     }
 
     /// Returns suggested actions for resolving the error
-    #[must_use] 
+    #[must_use]
     pub fn suggested_action(&self) -> Option<String> {
         match self {
             CarValidationError::CarNotFound(_) => Some(
@@ -302,10 +302,14 @@ impl CarValidationService {
     /// Gets the primary pilot component for the car (first pilot in the list)
     fn get_car_pilot(car: &Car, player: &Player) -> Result<Pilot, CarValidationError> {
         // Validate that car has exactly 3 pilots
-        car.validate_pilots().map_err(|e| CarValidationError::InvalidConfiguration(e))?;
-        
+        car.validate_pilots()
+            .map_err(|e| CarValidationError::InvalidConfiguration(e))?;
+
         // Use the first pilot as the primary pilot for validation
-        let pilot_uuid = car.pilot_uuids.first().ok_or(CarValidationError::MissingPilot)?;
+        let pilot_uuid = car
+            .pilot_uuids
+            .first()
+            .ok_or(CarValidationError::MissingPilot)?;
 
         // First try to find the pilot in the player's inventory
         if let Some(pilot) = player.pilots.iter().find(|p| p.uuid == *pilot_uuid) {
@@ -372,7 +376,8 @@ mod tests {
 
         car.assign_engine(engine.uuid);
         car.assign_body(body.uuid);
-        car.assign_pilots(vec![pilots[0].uuid, pilots[1].uuid, pilots[2].uuid]).unwrap();
+        car.assign_pilots(vec![pilots[0].uuid, pilots[1].uuid, pilots[2].uuid])
+            .unwrap();
 
         car
     }
@@ -406,7 +411,11 @@ mod tests {
     fn test_verify_car_ownership_success() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
+        let pilots = [
+            create_test_pilot(),
+            create_test_pilot(),
+            create_test_pilot(),
+        ];
         let car = create_test_car_with_components(&engine, &body, &pilots);
         let player = create_test_player_with_assets(car.clone(), engine, body, pilots);
 
@@ -419,7 +428,11 @@ mod tests {
     fn test_verify_car_ownership_car_not_found() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
+        let pilots = [
+            create_test_pilot(),
+            create_test_pilot(),
+            create_test_pilot(),
+        ];
         let car = create_test_car_with_components(&engine, &body, &pilots);
         let player = create_test_player_with_assets(car, engine, body, pilots);
 
@@ -437,7 +450,11 @@ mod tests {
     fn test_car_missing_components() {
         let engine = create_test_engine();
         let body = create_test_body();
-        let pilots = [create_test_pilot(), create_test_pilot(), create_test_pilot()];
+        let pilots = [
+            create_test_pilot(),
+            create_test_pilot(),
+            create_test_pilot(),
+        ];
 
         // Create car without components
         let car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
@@ -467,7 +484,7 @@ mod tests {
 
         // Create a complete car first (required by new_with_assets)
         let complete_car = Car::new(CarName::parse("Complete Car").unwrap(), None).unwrap();
-        
+
         // Create an incomplete second car
         let incomplete_car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
 
@@ -490,9 +507,11 @@ mod tests {
         .unwrap();
 
         // Try to verify ownership of the incomplete car (second car)
-        let result =
-            CarValidationService::verify_car_ownership(&player_with_incomplete_car, incomplete_car.uuid);
-        
+        let result = CarValidationService::verify_car_ownership(
+            &player_with_incomplete_car,
+            incomplete_car.uuid,
+        );
+
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),

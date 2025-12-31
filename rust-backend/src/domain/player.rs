@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use unicode_segmentation::UnicodeSegmentation;
 
-use super::{Car, Pilot, Engine, Body, HashedPassword, Password, UserRole};
+use super::{Body, Car, Engine, HashedPassword, Password, Pilot, UserRole};
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Player {
@@ -96,10 +96,22 @@ impl Player {
     ) -> Result<Self, String> {
         let now = Utc::now();
 
-        let first_car = cars.get_mut(0).ok_or("Player must have at least one car".to_string())?;
+        let first_car = cars
+            .get_mut(0)
+            .ok_or("Player must have at least one car".to_string())?;
         first_car.assign_pilots(pilots.iter().take(3).map(|pilot| pilot.uuid).collect())?;
-        first_car.assign_body(bodies.first().ok_or("Player must have a least one body".to_owned())?.uuid);
-        first_car.assign_engine(engines.first().ok_or("Player must have a least one engine".to_owned())?.uuid);
+        first_car.assign_body(
+            bodies
+                .first()
+                .ok_or("Player must have a least one body".to_owned())?
+                .uuid,
+        );
+        first_car.assign_engine(
+            engines
+                .first()
+                .ok_or("Player must have a least one engine".to_owned())?
+                .uuid,
+        );
 
         Ok(Self {
             id: None,
@@ -119,8 +131,10 @@ impl Player {
     }
 
     pub fn validate_for_game(&self) -> Result<(), String> {
-
-        let car = self.cars.get(0).ok_or("Player must have at least one car".to_string())?;
+        let car = self
+            .cars
+            .get(0)
+            .ok_or("Player must have at least one car".to_string())?;
 
         if !car.is_complete() {
             return Err("Car must be complete (have pilots, engine, and body) to play".to_string());
@@ -150,7 +164,9 @@ impl Player {
 
     #[must_use]
     pub fn get_wallet_address(&self) -> Option<&str> {
-        self.wallet_address.as_ref().map(std::convert::AsRef::as_ref)
+        self.wallet_address
+            .as_ref()
+            .map(std::convert::AsRef::as_ref)
     }
 
     pub fn update_team_name(&mut self, new_team_name: TeamName) {
@@ -170,11 +186,11 @@ impl Player {
     pub fn remove_car(&mut self, car_uuid: Uuid) -> Result<(), String> {
         let initial_len = self.cars.len();
         self.cars.retain(|car| car.uuid != car_uuid);
-        
+
         if self.cars.len() == initial_len {
             return Err("Car not found".to_string());
         }
-        
+
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -191,11 +207,11 @@ impl Player {
 
         let initial_len = self.pilots.len();
         self.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
-        
+
         if self.pilots.len() == initial_len {
             return Err("Pilot not found".to_string());
         }
-        
+
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -208,11 +224,11 @@ impl Player {
     pub fn remove_engine(&mut self, engine_uuid: Uuid) -> Result<(), String> {
         let initial_len = self.engines.len();
         self.engines.retain(|engine| engine.uuid != engine_uuid);
-        
+
         if self.engines.len() == initial_len {
             return Err("Engine not found".to_string());
         }
-        
+
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -225,26 +241,28 @@ impl Player {
     pub fn remove_body(&mut self, body_uuid: Uuid) -> Result<(), String> {
         let initial_len = self.bodies.len();
         self.bodies.retain(|body| body.uuid != body_uuid);
-        
+
         if self.bodies.len() == initial_len {
             return Err("Body not found".to_string());
         }
-        
+
         self.updated_at = Utc::now();
         Ok(())
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_engine(&self, engine_uuid: Uuid) -> Option<&Engine> {
-        self.engines.iter().find(|engine| engine.uuid == engine_uuid)
+        self.engines
+            .iter()
+            .find(|engine| engine.uuid == engine_uuid)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_body(&self, body_uuid: Uuid) -> Option<&Body> {
         self.bodies.iter().find(|body| body.uuid == body_uuid)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn get_pilot(&self, pilot_uuid: Uuid) -> Option<&Pilot> {
         self.pilots.iter().find(|pilot| pilot.uuid == pilot_uuid)
     }
@@ -261,13 +279,13 @@ impl Player {
     }
 
     /// Check if this player has admin privileges
-    #[must_use] 
+    #[must_use]
     pub fn is_admin(&self) -> bool {
         self.role.is_admin()
     }
 
     /// Check if this player can access a resource owned by another player
-    #[must_use] 
+    #[must_use]
     pub fn can_access_resource(&self, resource_owner_uuid: Uuid) -> bool {
         self.is_admin() || self.uuid == resource_owner_uuid
     }
@@ -282,22 +300,22 @@ impl Player {
 impl WalletAddress {
     pub fn parse(s: &str) -> Result<WalletAddress, String> {
         let trimmed = s.trim();
-        
+
         // Basic Solana wallet address validation
         if trimmed.is_empty() {
             return Err("Wallet address cannot be empty".to_string());
         }
-        
+
         if trimmed.len() < 32 || trimmed.len() > 44 {
             return Err("Invalid wallet address length".to_string());
         }
-        
+
         // Check if it contains only valid base58 characters
         let valid_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
         if !trimmed.chars().all(|c| valid_chars.contains(c)) {
             return Err("Wallet address contains invalid characters".to_string());
         }
-        
+
         Ok(Self(trimmed.to_string()))
     }
 }
@@ -311,40 +329,40 @@ impl AsRef<str> for WalletAddress {
 impl Email {
     pub fn parse(s: &str) -> Result<Email, String> {
         let trimmed = s.trim();
-        
+
         if trimmed.is_empty() {
             return Err("Email cannot be empty".to_string());
         }
-        
+
         // Basic email validation
         if !trimmed.contains('@') {
             return Err("Email must contain @ symbol".to_string());
         }
-        
+
         let parts: Vec<&str> = trimmed.split('@').collect();
         if parts.len() != 2 {
             return Err("Email must have exactly one @ symbol".to_string());
         }
-        
+
         let local = parts[0];
         let domain = parts[1];
-        
+
         if local.is_empty() {
             return Err("Email local part cannot be empty".to_string());
         }
-        
+
         if domain.is_empty() {
             return Err("Email domain cannot be empty".to_string());
         }
-        
+
         if !domain.contains('.') {
             return Err("Email domain must contain at least one dot".to_string());
         }
-        
+
         if trimmed.len() > 254 {
             return Err("Email cannot be longer than 254 characters".to_string());
         }
-        
+
         Ok(Self(trimmed.to_string()))
     }
 }

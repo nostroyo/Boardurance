@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Pilot {
@@ -28,10 +28,10 @@ pub struct PilotName(String);
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum PilotClass {
-    Speedster,    // Focuses on speed and acceleration
-    Technician,   // Focuses on handling and precision
-    Endurance,    // Focuses on durability and consistency
-    AllRounder,   // Balanced across all skills
+    Speedster,  // Focuses on speed and acceleration
+    Technician, // Focuses on handling and precision
+    Endurance,  // Focuses on durability and consistency
+    AllRounder, // Balanced across all skills
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -45,16 +45,16 @@ pub enum PilotRarity {
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct PilotSkills {
-    pub reaction_time: u8,    // 0-10 - affects acceleration
-    pub precision: u8,        // 0-10 - affects handling
-    pub focus: u8,           // 0-10 - affects consistency
-    pub stamina: u8,         // 0-10 - affects performance over time
+    pub reaction_time: u8, // 0-10 - affects acceleration
+    pub precision: u8,     // 0-10 - affects handling
+    pub focus: u8,         // 0-10 - affects consistency
+    pub stamina: u8,       // 0-10 - affects performance over time
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct PilotPerformance {
-    pub straight_value: u8,  // 0-10
-    pub curve_value: u8,     // 0-10
+    pub straight_value: u8, // 0-10
+    pub curve_value: u8,    // 0-10
 }
 
 impl Pilot {
@@ -68,7 +68,7 @@ impl Pilot {
     ) -> Result<Self, String> {
         skills.validate()?;
         performance.validate()?;
-        
+
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
@@ -217,7 +217,10 @@ impl PilotSkills {
 
 impl PilotPerformance {
     pub fn new(straight_value: u8, curve_value: u8) -> Result<Self, String> {
-        let performance = Self { straight_value, curve_value };
+        let performance = Self {
+            straight_value,
+            curve_value,
+        };
         performance.validate()?;
         Ok(performance)
     }

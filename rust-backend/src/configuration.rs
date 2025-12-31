@@ -76,7 +76,10 @@ impl DatabaseSettings {
     // For local development without authentication
     #[must_use]
     pub fn connection_string_without_auth(&self) -> String {
-        format!("mongodb://{}:{}/{}", self.host, self.port, self.database_name)
+        format!(
+            "mongodb://{}:{}/{}",
+            self.host, self.port, self.database_name
+        )
     }
 }
 
