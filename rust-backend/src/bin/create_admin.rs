@@ -1,5 +1,5 @@
 use mongodb::{Client, Database};
-use rust_backend::domain::{Player, Email, TeamName, Password, UserRole, Car, Pilot};
+use rust_backend::domain::{Car, Email, Password, Pilot, Player, TeamName, UserRole};
 use std::env;
 
 #[tokio::main]
@@ -44,19 +44,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Create admin player
-    let mut admin_player = Player::new(
-        email,
-        password_hash,
-        team_name,
-        vec![car],
-        vec![pilot],
-    )?;
+    let mut admin_player = Player::new(email, password_hash, team_name, vec![car], vec![pilot])?;
 
     // Set admin role
     admin_player.update_role(UserRole::Admin);
 
     // Connect to MongoDB
-    let mongodb_uri = env::var("MONGODB_URI").unwrap_or_else(|_| "mongodb://admin:password123@localhost:27017".to_string());
+    let mongodb_uri = env::var("MONGODB_URI")
+        .unwrap_or_else(|_| "mongodb://admin:password123@localhost:27017".to_string());
     let client = Client::with_uri_str(&mongodb_uri).await?;
     let database: Database = client.database("rust_backend");
     let collection = database.collection::<Player>("players");
@@ -70,19 +65,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     if existing_admin.is_some() {
-        println!("❌ Admin user with email {} already exists!", admin_player.email.as_ref());
+        println!(
+            "❌ Admin user with email {} already exists!",
+            admin_player.email.as_ref()
+        );
         return Ok(());
     }
 
     // Insert admin user
     let result = collection.insert_one(&admin_player, None).await?;
-    
+
     println!("✅ Admin user created successfully!");
     println!("MongoDB ObjectId: {:?}", result.inserted_id);
     println!("UUID: {}", admin_player.uuid);
     println!("\nAdmin Login Credentials:");
     println!("Email: {}", admin_player.email.as_ref());
-    println!("Password: {}", env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "AdminPass123".to_string()));
+    println!(
+        "Password: {}",
+        env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "AdminPass123".to_string())
+    );
     println!("Role: {:?}", admin_player.role);
     println!("\nYou can now login to the admin interface at: http://localhost:5173/admin");
 

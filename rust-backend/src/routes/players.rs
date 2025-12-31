@@ -2,17 +2,20 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Router,
 };
-use mongodb::{bson::{doc, DateTime as BsonDateTime}, Database};
+use mongodb::{
+    bson::{doc, DateTime as BsonDateTime},
+    Database,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::{
-    Player, WalletAddress, TeamName, Car, CarName,
-    Pilot, PilotName, PilotClass, PilotRarity, PilotSkills,
+    Car, CarName, Pilot, PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName,
+    WalletAddress,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -69,14 +72,23 @@ pub fn routes() -> Router<Database> {
         // Routes that require player ownership or admin role:
         .route("/players/:player_uuid", get(get_player_by_uuid))
         .route("/players/:player_uuid", put(update_player_team_name))
-        .route("/players/:player_uuid/configuration", put(update_player_configuration))
+        .route(
+            "/players/:player_uuid/configuration",
+            put(update_player_configuration),
+        )
         .route("/players/:player_uuid", delete(delete_player))
         .route("/players/:player_uuid/wallet", post(connect_wallet))
         .route("/players/:player_uuid/wallet", delete(disconnect_wallet))
         .route("/players/:player_uuid/cars", post(add_car_to_player))
-        .route("/players/:player_uuid/cars/:car_uuid", delete(remove_car_from_player))
+        .route(
+            "/players/:player_uuid/cars/:car_uuid",
+            delete(remove_car_from_player),
+        )
         .route("/players/:player_uuid/pilots", post(add_pilot_to_player))
-        .route("/players/:player_uuid/pilots/:pilot_uuid", delete(remove_pilot_from_player))
+        .route(
+            "/players/:player_uuid/pilots/:pilot_uuid",
+            delete(remove_pilot_from_player),
+        )
 }
 
 /// Admin-only routes that require authentication and admin role
@@ -100,7 +112,9 @@ pub fn admin_routes() -> Router<crate::app_state::AppState> {
     tag = "players"
 )]
 #[tracing::instrument(name = "Fetching all players", skip(database))]
-pub async fn get_all_players(State(database): State<Database>) -> Result<Json<Vec<Player>>, StatusCode> {
+pub async fn get_all_players(
+    State(database): State<Database>,
+) -> Result<Json<Vec<Player>>, StatusCode> {
     match get_all_players_from_db(&database).await {
         Ok(players) => {
             tracing::info!("Successfully fetched {} players", players.len());
@@ -268,7 +282,10 @@ pub async fn connect_wallet(
     // Check if wallet is already connected to another player
     if let Ok(existing) = get_player_by_wallet_address(&database, wallet_address.as_ref()).await {
         if existing.is_some() {
-            tracing::warn!("Wallet address {} is already connected to another player", wallet_address.as_ref());
+            tracing::warn!(
+                "Wallet address {} is already connected to another player",
+                wallet_address.as_ref()
+            );
             return Err(StatusCode::CONFLICT);
         }
     }
@@ -321,7 +338,10 @@ pub async fn disconnect_wallet(
 
     match disconnect_wallet_from_player(&database, player_uuid).await {
         Ok(Some(updated_player)) => {
-            tracing::info!("Wallet disconnected successfully from player: {}", player_uuid);
+            tracing::info!(
+                "Wallet disconnected successfully from player: {}",
+                player_uuid
+            );
             Ok(Json(PlayerResponse {
                 player: updated_player,
                 message: "Wallet disconnected successfully".to_string(),
@@ -376,9 +396,14 @@ pub async fn update_player_configuration(
         }
     };
 
-    match update_player_configuration_by_uuid(&database, player_uuid, new_team_name, payload.cars).await {
+    match update_player_configuration_by_uuid(&database, player_uuid, new_team_name, payload.cars)
+        .await
+    {
         Ok(Some(updated_player)) => {
-            tracing::info!("Configuration updated successfully for player: {}", player_uuid);
+            tracing::info!(
+                "Configuration updated successfully for player: {}",
+                player_uuid
+            );
             Ok(Json(PlayerResponse {
                 player: updated_player,
                 message: "Configuration updated successfully".to_string(),
@@ -532,10 +557,7 @@ pub async fn add_car_to_player(
         }
     };
 
-    let car = match Car::new(
-        car_name,
-        payload.nft_mint_address,
-    ) {
+    let car = match Car::new(car_name, payload.nft_mint_address) {
         Ok(car) => car,
         Err(e) => {
             tracing::warn!("Failed to create car: {}", e);
@@ -670,8 +692,8 @@ pub async fn add_pilot_to_player(
 
     // Create performance based on skills (temporary implementation)
     let pilot_performance = match crate::domain::PilotPerformance::new(
-        u8::midpoint(pilot_skills.reaction_time, pilot_skills.focus),    // straight value
-        u8::midpoint(pilot_skills.precision, pilot_skills.stamina),     // curve value
+        u8::midpoint(pilot_skills.reaction_time, pilot_skills.focus), // straight value
+        u8::midpoint(pilot_skills.precision, pilot_skills.stamina),   // curve value
     ) {
         Ok(performance) => performance,
         Err(e) => {
@@ -778,29 +800,32 @@ pub async fn insert_player(
 ) -> Result<Player, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let result = collection.insert_one(player, None).await?;
-    
+
     let mut created_player = player.clone();
     created_player.id = Some(result.inserted_id.as_object_id().unwrap());
     Ok(created_player)
 }
 
 #[tracing::instrument(name = "Getting all players from the database", skip(database))]
-pub async fn get_all_players_from_db(database: &Database) -> Result<Vec<Player>, mongodb::error::Error> {
+pub async fn get_all_players_from_db(
+    database: &Database,
+) -> Result<Vec<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let mut cursor = collection.find(None, None).await?;
-    
+
     let mut players = Vec::new();
     while cursor.advance().await? {
         let player = cursor.deserialize_current()?;
         players.push(player);
     }
-    
+
     Ok(players)
 }
 
-
-
-#[tracing::instrument(name = "Getting player by wallet address from the database", skip(database))]
+#[tracing::instrument(
+    name = "Getting player by wallet address from the database",
+    skip(database)
+)]
 pub async fn get_player_by_wallet_address(
     database: &Database,
     wallet_address: &str,
@@ -810,7 +835,10 @@ pub async fn get_player_by_wallet_address(
     collection.find_one(filter, None).await
 }
 
-#[tracing::instrument(name = "Getting player by email address from the database", skip(database))]
+#[tracing::instrument(
+    name = "Getting player by email address from the database",
+    skip(database)
+)]
 pub async fn get_player_by_email_address(
     database: &Database,
     email: &str,
@@ -820,7 +848,10 @@ pub async fn get_player_by_email_address(
     collection.find_one(filter, None).await
 }
 
-#[tracing::instrument(name = "Updating player team name in the database", skip(database, new_team_name))]
+#[tracing::instrument(
+    name = "Updating player team name in the database",
+    skip(database, new_team_name)
+)]
 pub async fn update_player_team_name_in_db(
     database: &Database,
     wallet_address: &str,
@@ -828,13 +859,13 @@ pub async fn update_player_team_name_in_db(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! { 
-        "$set": { 
+    let update = doc! {
+        "$set": {
             "team_name": new_team_name.as_ref(),
             "updated_at": BsonDateTime::now()
-        } 
+        }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
@@ -857,11 +888,11 @@ pub async fn add_car_to_player_in_db(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! { 
+    let update = doc! {
         "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
@@ -873,11 +904,11 @@ pub async fn remove_car_from_player_in_db(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! { 
+    let update = doc! {
         "$pull": { "cars": { "uuid": car_uuid.to_string() } },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
@@ -889,11 +920,11 @@ pub async fn add_pilot_to_player_in_db(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! { 
+    let update = doc! {
         "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
@@ -905,15 +936,14 @@ pub async fn remove_pilot_from_player_in_db(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! { 
+    let update = doc! {
         "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
-#[
-tracing::instrument(name = "Getting player by UUID from the database", skip(database))]
+#[tracing::instrument(name = "Getting player by UUID from the database", skip(database))]
 pub async fn get_player_by_uuid_from_db(
     database: &Database,
     player_uuid: Uuid,
@@ -923,7 +953,10 @@ pub async fn get_player_by_uuid_from_db(
     collection.find_one(filter, None).await
 }
 
-#[tracing::instrument(name = "Connecting wallet to player in the database", skip(database, wallet_address))]
+#[tracing::instrument(
+    name = "Connecting wallet to player in the database",
+    skip(database, wallet_address)
+)]
 pub async fn connect_wallet_to_player(
     database: &Database,
     player_uuid: Uuid,
@@ -931,32 +964,38 @@ pub async fn connect_wallet_to_player(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
-        "$set": { 
+    let update = doc! {
+        "$set": {
             "wallet_address": wallet_address.as_ref(),
             "updated_at": BsonDateTime::now()
-        } 
+        }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
-#[tracing::instrument(name = "Disconnecting wallet from player in the database", skip(database))]
+#[tracing::instrument(
+    name = "Disconnecting wallet from player in the database",
+    skip(database)
+)]
 pub async fn disconnect_wallet_from_player(
     database: &Database,
     player_uuid: Uuid,
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
+    let update = doc! {
         "$unset": { "wallet_address": "" },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
-#[tracing::instrument(name = "Updating player team name by UUID in the database", skip(database, new_team_name))]
+#[tracing::instrument(
+    name = "Updating player team name by UUID in the database",
+    skip(database, new_team_name)
+)]
 pub async fn update_player_team_name_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -964,13 +1003,13 @@ pub async fn update_player_team_name_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
-        "$set": { 
+    let update = doc! {
+        "$set": {
             "team_name": new_team_name.as_ref(),
             "updated_at": BsonDateTime::now()
-        } 
+        }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
@@ -985,7 +1024,10 @@ pub async fn delete_player_by_uuid(
     Ok(result.deleted_count > 0)
 }
 
-#[tracing::instrument(name = "Adding car to player by UUID in the database", skip(database, car))]
+#[tracing::instrument(
+    name = "Adding car to player by UUID in the database",
+    skip(database, car)
+)]
 pub async fn add_car_to_player_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -993,15 +1035,18 @@ pub async fn add_car_to_player_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
+    let update = doc! {
         "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
-#[tracing::instrument(name = "Removing car from player by UUID in the database", skip(database))]
+#[tracing::instrument(
+    name = "Removing car from player by UUID in the database",
+    skip(database)
+)]
 pub async fn remove_car_from_player_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -1009,15 +1054,18 @@ pub async fn remove_car_from_player_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
+    let update = doc! {
         "$pull": { "cars": { "uuid": car_uuid.to_string() } },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
-#[tracing::instrument(name = "Adding pilot to player by UUID in the database", skip(database, pilot))]
+#[tracing::instrument(
+    name = "Adding pilot to player by UUID in the database",
+    skip(database, pilot)
+)]
 pub async fn add_pilot_to_player_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -1025,15 +1073,18 @@ pub async fn add_pilot_to_player_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
+    let update = doc! {
         "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
 
-#[tracing::instrument(name = "Removing pilot from player by UUID in the database", skip(database))]
+#[tracing::instrument(
+    name = "Removing pilot from player by UUID in the database",
+    skip(database)
+)]
 pub async fn remove_pilot_from_player_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -1041,14 +1092,17 @@ pub async fn remove_pilot_from_player_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
+    let update = doc! {
         "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
         "$set": { "updated_at": BsonDateTime::now() }
     };
-    
+
     collection.find_one_and_update(filter, update, None).await
 }
-#[tracing::instrument(name = "Updating player configuration by UUID in the database", skip(database, new_team_name, cars))]
+#[tracing::instrument(
+    name = "Updating player configuration by UUID in the database",
+    skip(database, new_team_name, cars)
+)]
 pub async fn update_player_configuration_by_uuid(
     database: &Database,
     player_uuid: Uuid,
@@ -1057,19 +1111,21 @@ pub async fn update_player_configuration_by_uuid(
 ) -> Result<Option<Player>, mongodb::error::Error> {
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! { 
-        "$set": { 
+    let update = doc! {
+        "$set": {
             "team_name": new_team_name.as_ref(),
             "cars": mongodb::bson::to_bson(&cars)?,
             "updated_at": BsonDateTime::now()
-        } 
+        }
     };
-    
+
     let options = mongodb::options::FindOneAndUpdateOptions::builder()
         .return_document(mongodb::options::ReturnDocument::After)
         .build();
-    
-    collection.find_one_and_update(filter, update, options).await
+
+    collection
+        .find_one_and_update(filter, update, options)
+        .await
 }
 
 /* TEMPORARILY COMMENTED OUT - ADMIN FUNCTIONS HAVE TRACING FORMAT ISSUES

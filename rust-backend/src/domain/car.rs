@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Car {
@@ -12,11 +12,11 @@ pub struct Car {
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: CarName,
     #[schema(value_type = Vec<String>, format = "uuid")]
-    pub pilot_uuids: Vec<Uuid>,  // Assigned pilots (exactly 3 required)
+    pub pilot_uuids: Vec<Uuid>, // Assigned pilots (exactly 3 required)
     #[schema(value_type = Option<String>, format = "uuid")]
     pub engine_uuid: Option<Uuid>, // Assigned engine
     #[schema(value_type = Option<String>, format = "uuid")]
-    pub body_uuid: Option<Uuid>,   // Assigned body
+    pub body_uuid: Option<Uuid>, // Assigned body
     pub is_equipped: bool,
     #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
@@ -27,13 +27,8 @@ pub struct Car {
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct CarName(String);
 
-
-
 impl Car {
-    pub fn new(
-        name: CarName,
-        nft_mint_address: Option<String>,
-    ) -> Result<Self, String> {
+    pub fn new(name: CarName, nft_mint_address: Option<String>) -> Result<Self, String> {
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
@@ -60,9 +55,12 @@ impl Car {
 
     pub fn assign_pilots(&mut self, pilot_uuids: Vec<Uuid>) -> Result<(), String> {
         if pilot_uuids.len() != 3 {
-            return Err(format!("Car must have exactly 3 pilots, got {}", pilot_uuids.len()));
+            return Err(format!(
+                "Car must have exactly 3 pilots, got {}",
+                pilot_uuids.len()
+            ));
         }
-        
+
         // Check for duplicate pilots
         let mut unique_pilots = pilot_uuids.clone();
         unique_pilots.sort();
@@ -70,7 +68,7 @@ impl Car {
         if unique_pilots.len() != 3 {
             return Err("All 3 pilots must be unique".to_string());
         }
-        
+
         self.pilot_uuids = pilot_uuids;
         self.updated_at = Utc::now();
         Ok(())
@@ -80,11 +78,11 @@ impl Car {
         if self.pilot_uuids.len() >= 3 {
             return Err("Car already has maximum of 3 pilots".to_string());
         }
-        
+
         if self.pilot_uuids.contains(&pilot_uuid) {
             return Err("Pilot is already assigned to this car".to_string());
         }
-        
+
         self.pilot_uuids.push(pilot_uuid);
         self.updated_at = Utc::now();
         Ok(())
@@ -93,11 +91,11 @@ impl Car {
     pub fn remove_pilot(&mut self, pilot_uuid: Uuid) -> Result<(), String> {
         let initial_len = self.pilot_uuids.len();
         self.pilot_uuids.retain(|&uuid| uuid != pilot_uuid);
-        
+
         if self.pilot_uuids.len() == initial_len {
             return Err("Pilot not found in car".to_string());
         }
-        
+
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -109,9 +107,12 @@ impl Car {
 
     pub fn validate_pilots(&self) -> Result<(), String> {
         if self.pilot_uuids.len() != 3 {
-            return Err(format!("Car must have exactly 3 pilots, currently has {}", self.pilot_uuids.len()));
+            return Err(format!(
+                "Car must have exactly 3 pilots, currently has {}",
+                self.pilot_uuids.len()
+            ));
         }
-        
+
         // Check for duplicate pilots
         let mut unique_pilots = self.pilot_uuids.clone();
         unique_pilots.sort();
@@ -119,7 +120,7 @@ impl Car {
         if unique_pilots.len() != 3 {
             return Err("All 3 pilots must be unique".to_string());
         }
-        
+
         Ok(())
     }
 
@@ -191,8 +192,6 @@ impl AsRef<str> for CarName {
         &self.0
     }
 }
-
-
 
 mod uuid_as_string {
     use serde::{Deserialize, Deserializer, Serializer};

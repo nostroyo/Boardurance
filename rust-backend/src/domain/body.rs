@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use unicode_segmentation::UnicodeSegmentation;
 
 use super::engine::ComponentRarity;
 
@@ -14,8 +14,8 @@ pub struct Body {
     pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: BodyName,
     pub rarity: ComponentRarity,
-    pub straight_value: u8,  // 0-10
-    pub curve_value: u8,     // 0-10
+    pub straight_value: u8, // 0-10
+    pub curve_value: u8,    // 0-10
     #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
     #[schema(value_type = String, format = "date-time")]
@@ -39,7 +39,7 @@ impl Body {
         if curve_value > 10 {
             return Err("Body curve value must be between 0 and 10".to_string());
         }
-        
+
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
@@ -60,7 +60,7 @@ impl Body {
         if curve_value > 10 {
             return Err("Body curve value must be between 0 and 10".to_string());
         }
-        
+
         self.straight_value = straight_value;
         self.curve_value = curve_value;
         self.updated_at = Utc::now();

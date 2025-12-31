@@ -59,7 +59,7 @@ pub struct AuthMiddleware {
 
 impl AuthMiddleware {
     /// Create a new authentication middleware
-    #[must_use] 
+    #[must_use]
     pub fn new(jwt_service: Arc<JwtService>, session_manager: Arc<SessionManager>) -> Self {
         Self {
             jwt_service,
@@ -96,7 +96,8 @@ impl AuthMiddleware {
     /// Validate token and create user context
     async fn validate_and_create_context(&self, token: &str) -> Result<UserContext, AuthError> {
         // Validate JWT token
-        let claims = self.jwt_service
+        let claims = self
+            .jwt_service
             .validate_token(token)
             .map_err(|e| match e {
                 crate::services::jwt::JwtError::TokenExpired => AuthError::TokenExpired,
@@ -105,7 +106,8 @@ impl AuthMiddleware {
             })?;
 
         // Check if token is blacklisted
-        let is_blacklisted = self.session_manager
+        let is_blacklisted = self
+            .session_manager
             .is_token_blacklisted(&claims.jti)
             .await
             .map_err(|e| AuthError::InternalError(e.to_string()))?;
@@ -115,11 +117,14 @@ impl AuthMiddleware {
         }
 
         // Validate session
-        let is_session_valid = self.session_manager
+        let is_session_valid = self
+            .session_manager
             .validate_session(&claims.jti)
             .await
             .map_err(|e| match e {
-                crate::services::session::SessionError::TokenBlacklisted => AuthError::BlacklistedToken,
+                crate::services::session::SessionError::TokenBlacklisted => {
+                    AuthError::BlacklistedToken
+                }
                 crate::services::session::SessionError::SessionExpired => AuthError::TokenExpired,
                 crate::services::session::SessionError::SessionNotFound => AuthError::InvalidToken,
                 _ => AuthError::InternalError(e.to_string()),
@@ -130,8 +135,7 @@ impl AuthMiddleware {
         }
 
         // Parse user UUID
-        let user_uuid = Uuid::parse_str(&claims.sub)
-            .map_err(|_| AuthError::InvalidToken)?;
+        let user_uuid = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
 
         Ok(UserContext {
             user_uuid,
@@ -265,10 +269,7 @@ where
 }
 
 /// Convenience function to create auth middleware as a function
-pub async fn auth_middleware(
-    request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
+pub async fn auth_middleware(request: Request, next: Next) -> Result<Response, StatusCode> {
     // This is a placeholder for function-style middleware
     // The actual implementation should use the Layer-based approach above
     Ok(next.run(request).await)
@@ -293,11 +294,14 @@ mod tests {
             vec![], // pilots
             vec![], // engines
             vec![], // bodies
-        ).unwrap()
+        )
+        .unwrap()
     }
 
     async fn create_mock_database() -> Database {
-        let client = mongodb::Client::with_uri_str("mongodb://mock:27017").await.unwrap();
+        let client = mongodb::Client::with_uri_str("mongodb://mock:27017")
+            .await
+            .unwrap();
         client.database("mock_test")
     }
 
@@ -319,10 +323,22 @@ mod tests {
 
     #[test]
     fn auth_error_to_status_code_conversion_works() {
-        assert_eq!(StatusCode::from(AuthError::MissingToken), StatusCode::UNAUTHORIZED);
-        assert_eq!(StatusCode::from(AuthError::InvalidToken), StatusCode::UNAUTHORIZED);
-        assert_eq!(StatusCode::from(AuthError::TokenExpired), StatusCode::UNAUTHORIZED);
-        assert_eq!(StatusCode::from(AuthError::BlacklistedToken), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            StatusCode::from(AuthError::MissingToken),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            StatusCode::from(AuthError::InvalidToken),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            StatusCode::from(AuthError::TokenExpired),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            StatusCode::from(AuthError::BlacklistedToken),
+            StatusCode::UNAUTHORIZED
+        );
         assert_eq!(
             StatusCode::from(AuthError::InternalError("test".to_string())),
             StatusCode::INTERNAL_SERVER_ERROR
@@ -333,13 +349,13 @@ mod tests {
     async fn auth_middleware_creation_works() {
         let jwt_config = JwtConfig::default();
         let jwt_service = Arc::new(JwtService::new(jwt_config));
-        
+
         let session_config = SessionConfig::default();
         let db = Arc::new(create_mock_database().await);
         let session_manager = Arc::new(SessionManager::new(db, session_config));
 
         let auth_middleware = AuthMiddleware::new(jwt_service, session_manager);
-        
+
         // Should not panic and should be created successfully
         assert!(Arc::strong_count(&auth_middleware.jwt_service) >= 1);
         assert!(Arc::strong_count(&auth_middleware.session_manager) >= 1);
@@ -424,10 +440,9 @@ mod tests {
             .unwrap();
 
         // Add malformed Authorization header
-        request.headers_mut().insert(
-            AUTHORIZATION,
-            HeaderValue::from_static("NotBearer token"),
-        );
+        request
+            .headers_mut()
+            .insert(AUTHORIZATION, HeaderValue::from_static("NotBearer token"));
 
         let token = AuthMiddleware::extract_token_from_request(&request);
         assert_eq!(token, None);

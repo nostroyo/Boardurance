@@ -1,9 +1,9 @@
 use chrono::Utc;
+use mongodb::bson::DateTime as BsonDateTime;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
-use std::collections::{HashMap, HashSet};
-use mongodb::bson::DateTime as BsonDateTime;
 
 use crate::services::car_validation::ValidatedCarData;
 
@@ -16,13 +16,13 @@ pub struct BoostHand {
     /// true = available, false = used
     /// Using String keys for MongoDB compatibility
     pub cards: HashMap<String, bool>,
-    
+
     /// Current cycle number (starts at 1)
     pub current_cycle: u32,
-    
+
     /// Total number of cycles completed
     pub cycles_completed: u32,
-    
+
     /// Number of cards remaining in current cycle
     pub cards_remaining: u32,
 }
@@ -33,16 +33,16 @@ pub struct BoostHand {
 pub struct BoostUsageRecord {
     /// Lap number when the boost was used
     pub lap_number: u32,
-    
+
     /// Boost card value that was used (0-4)
     pub boost_value: u8,
-    
+
     /// Cycle number when the boost was used
     pub cycle_number: u32,
-    
+
     /// Number of cards remaining after this usage
     pub cards_remaining_after: u32,
-    
+
     /// Whether replenishment occurred after this usage
     pub replenishment_occurred: bool,
 }
@@ -53,13 +53,13 @@ pub struct BoostUsageRecord {
 pub struct BoostCycleSummary {
     /// Cycle number
     pub cycle_number: u32,
-    
+
     /// Boost card values used in this cycle (in order)
     pub cards_used: Vec<u8>,
-    
+
     /// Lap numbers when cards were used in this cycle
     pub laps_in_cycle: Vec<u32>,
-    
+
     /// Average boost value for this cycle
     pub average_boost: f32,
 }
@@ -72,7 +72,7 @@ impl BoostHand {
         for i in 0..=4 {
             cards.insert(i.to_string(), true);
         }
-        
+
         Self {
             cards,
             current_cycle: 1,
@@ -80,13 +80,16 @@ impl BoostHand {
             cards_remaining: 5,
         }
     }
-    
+
     /// Check if a specific boost card is available
     #[must_use]
     pub fn is_card_available(&self, boost_value: u8) -> bool {
-        self.cards.get(&boost_value.to_string()).copied().unwrap_or(false)
+        self.cards
+            .get(&boost_value.to_string())
+            .copied()
+            .unwrap_or(false)
     }
-    
+
     /// Use a boost card (mark as unavailable)
     /// Returns Ok(()) if successful, Err with message if card is not available
     /// Automatically triggers replenishment when all cards are used
@@ -94,18 +97,18 @@ impl BoostHand {
         if !self.is_card_available(boost_value) {
             return Err(format!("Boost card {boost_value} is not available"));
         }
-        
+
         self.cards.insert(boost_value.to_string(), false);
         self.cards_remaining -= 1;
-        
+
         // Check if all cards are used - trigger replenishment
         if self.cards_remaining == 0 {
             self.replenish();
         }
-        
+
         Ok(())
     }
-    
+
     /// Replenish all boost cards (internal method)
     /// Called automatically when all cards have been used
     fn replenish(&mut self) {
@@ -116,16 +119,17 @@ impl BoostHand {
         self.cycles_completed += 1;
         self.current_cycle += 1;
     }
-    
+
     /// Get list of available boost card values
     #[must_use]
     pub fn get_available_cards(&self) -> Vec<u8> {
-        let mut available: Vec<u8> = self.cards
+        let mut available: Vec<u8> = self
+            .cards
             .iter()
             .filter(|(_, &is_available)| is_available)
             .filter_map(|(key, _)| key.parse::<u8>().ok())
             .collect();
-        
+
         // Sort for consistent ordering
         available.sort_unstable();
         available
@@ -182,10 +186,10 @@ pub struct Sector {
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub enum SectorType {
-    Start,      // First sector (infinite slots)
-    Straight,   // Straight section
-    Curve,      // Curved section
-    Finish,     // Last sector (infinite slots)
+    Start,    // First sector (infinite slots)
+    Straight, // Straight section
+    Curve,    // Curved section
+    Finish,   // Last sector (infinite slots)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -203,7 +207,7 @@ pub struct RaceParticipant {
     pub is_finished: bool,
     pub finish_position: Option<u32>,
     pub boost_hand: BoostHand,
-    
+
     /// History of boost card usage for this participant
     #[serde(default)]
     pub boost_usage_history: Vec<BoostUsageRecord>,
@@ -320,14 +324,26 @@ impl Race {
         }
     }
 
-    pub fn add_participant(&mut self, player_uuid: Uuid, car_uuid: Uuid, pilot_uuid: Uuid) -> Result<(), String> {
+    pub fn add_participant(
+        &mut self,
+        player_uuid: Uuid,
+        car_uuid: Uuid,
+        pilot_uuid: Uuid,
+    ) -> Result<(), String> {
         // Allow joining races that are Waiting OR InProgress (for late joins)
         if self.status != RaceStatus::Waiting && self.status != RaceStatus::InProgress {
-            return Err(format!("Cannot add participants to a race with status: {:?}", self.status));
+            return Err(format!(
+                "Cannot add participants to a race with status: {:?}",
+                self.status
+            ));
         }
 
         // Check if player is already participating
-        if self.participants.iter().any(|p| p.player_uuid == player_uuid) {
+        if self
+            .participants
+            .iter()
+            .any(|p| p.player_uuid == player_uuid)
+        {
             return Err("Player is already participating in this race".to_string());
         }
 
@@ -378,13 +394,13 @@ impl Race {
         }
 
         self.status = RaceStatus::InProgress;
-        
+
         // Set initial lap characteristic (random for now)
         self.lap_characteristic = Self::generate_lap_characteristic();
-        
+
         // Sort participants in their starting sectors
         self.sort_participants_in_sectors();
-        
+
         self.updated_at = BsonDateTime::now();
         Ok(())
     }
@@ -401,9 +417,9 @@ impl Race {
         }
     }
 
-    /// Process lap with pre-calculated performance values from car components
-    /// This is the new method that uses actual car data for performance calculation
-    pub fn process_lap_with_car_data(&mut self, actions: &[LapAction], performance_calculations: &HashMap<Uuid, PerformanceCalculation>) -> Result<LapResult, String> {
+    /// Simple process lap method for backward compatibility with tests
+    /// Uses a basic performance calculation (base value 10 + boost)
+    pub fn process_lap(&mut self, actions: &[LapAction]) -> Result<LapResult, String> {
         if self.status != RaceStatus::InProgress {
             return Err("Race is not in progress".to_string());
         }
@@ -413,28 +429,103 @@ impl Race {
             if participant.is_finished {
                 continue;
             }
-            if !actions.iter().any(|a| a.player_uuid == participant.player_uuid) {
-                return Err(format!("Missing action for player {}", participant.player_uuid));
+            if !actions
+                .iter()
+                .any(|a| a.player_uuid == participant.player_uuid)
+            {
+                return Err(format!(
+                    "Missing action for player {}",
+                    participant.player_uuid
+                ));
             }
         }
 
         // Validate boost values
         for action in actions {
             if action.boost_value > 5 {
-                return Err(format!("Invalid boost value {} for player {}", action.boost_value, action.player_uuid));
+                return Err(format!(
+                    "Invalid boost value {} for player {}",
+                    action.boost_value, action.player_uuid
+                ));
+            }
+        }
+
+        // Calculate simple performance values for tests (base 10 + boost)
+        let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
+        for action in actions {
+            if let Some(participant) = self
+                .participants
+                .iter()
+                .find(|p| p.player_uuid == action.player_uuid)
+            {
+                if !participant.is_finished {
+                    // Simple calculation: base value 10 + boost value
+                    let base_value = 10u32;
+                    let current_sector = &self.track.sectors[participant.current_sector as usize];
+                    let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
+                    let final_value = capped_base_value + action.boost_value;
+                    participant_values.insert(action.player_uuid, final_value);
+                }
+            }
+        }
+
+        Ok(self.process_lap_internal(actions, &participant_values))
+    }
+
+    /// Process lap with pre-calculated performance values from car components
+    /// This is the new method that uses actual car data for performance calculation
+    pub fn process_lap_with_car_data(
+        &mut self,
+        actions: &[LapAction],
+        performance_calculations: &HashMap<Uuid, PerformanceCalculation>,
+    ) -> Result<LapResult, String> {
+        if self.status != RaceStatus::InProgress {
+            return Err("Race is not in progress".to_string());
+        }
+
+        // Validate all participants have submitted actions
+        for participant in &self.participants {
+            if participant.is_finished {
+                continue;
+            }
+            if !actions
+                .iter()
+                .any(|a| a.player_uuid == participant.player_uuid)
+            {
+                return Err(format!(
+                    "Missing action for player {}",
+                    participant.player_uuid
+                ));
+            }
+        }
+
+        // Validate boost values
+        for action in actions {
+            if action.boost_value > 5 {
+                return Err(format!(
+                    "Invalid boost value {} for player {}",
+                    action.boost_value, action.player_uuid
+                ));
             }
         }
 
         // Use pre-calculated performance values from car components
         let mut participant_values: HashMap<Uuid, u32> = HashMap::new();
         for action in actions {
-            if let Some(participant) = self.participants.iter().find(|p| p.player_uuid == action.player_uuid) {
+            if let Some(participant) = self
+                .participants
+                .iter()
+                .find(|p| p.player_uuid == action.player_uuid)
+            {
                 if !participant.is_finished {
                     // Use the pre-calculated performance from car data
                     if let Some(performance) = performance_calculations.get(&action.player_uuid) {
                         participant_values.insert(action.player_uuid, performance.final_value);
                     } else {
-                        return Err(format!("Missing performance calculation for player {}", action.player_uuid));
+                        return Err(format!(
+                            "Missing performance calculation for player {}",
+                            action.player_uuid
+                        ));
                     }
                 }
             }
@@ -442,15 +533,18 @@ impl Race {
 
         Ok(self.process_lap_internal(actions, &participant_values))
     }
-    
-    /// Internal method that processes lap movements after performance values are calculated
-    fn process_lap_internal(&mut self, actions: &[LapAction], participant_values: &HashMap<Uuid, u32>) -> LapResult {
 
+    /// Internal method that processes lap movements after performance values are calculated
+    fn process_lap_internal(
+        &mut self,
+        actions: &[LapAction],
+        participant_values: &HashMap<Uuid, u32>,
+    ) -> LapResult {
         // Process movements using the new algorithm: best sector to worst sector
         let mut movements = Vec::new();
         #[allow(clippy::cast_possible_truncation)]
         let max_sector = (self.track.sectors.len() - 1) as u32;
-        
+
         // Process sectors from highest to lowest (best to worst)
         for sector_id in (0..=max_sector).rev() {
             let sector_movements = self.process_sector_movements(sector_id, participant_values);
@@ -459,7 +553,11 @@ impl Race {
 
         // Update total values for all participants
         for action in actions {
-            if let Some(participant) = self.participants.iter_mut().find(|p| p.player_uuid == action.player_uuid) {
+            if let Some(participant) = self
+                .participants
+                .iter_mut()
+                .find(|p| p.player_uuid == action.player_uuid)
+            {
                 if !participant.is_finished {
                     if let Some(&final_value) = participant_values.get(&action.player_uuid) {
                         participant.total_value += final_value;
@@ -510,37 +608,47 @@ impl Race {
         }
 
         // 1. Validate player is in race and not finished
-        let participant_index = self.participants
+        let participant_index = self
+            .participants
             .iter()
             .position(|p| p.player_uuid == player_uuid)
             .ok_or("Player not found in race")?;
-        
+
         if self.participants[participant_index].is_finished {
             return Err("Player has already finished the race".to_string());
         }
 
         // 2. Check if player has already submitted an action for this turn
-        if self.pending_actions.iter().any(|a| a.player_uuid == player_uuid) {
+        if self
+            .pending_actions
+            .iter()
+            .any(|a| a.player_uuid == player_uuid)
+        {
             return Err("Player has already submitted an action for this turn".to_string());
         }
 
         // 3. Validate boost value range (0-4 for boost cards)
         if boost_value > 4 {
-            return Err(format!("Invalid boost value: {boost_value}. Must be between 0 and 4"));
+            return Err(format!(
+                "Invalid boost value: {boost_value}. Must be between 0 and 4"
+            ));
         }
 
         // 4. Validate boost card availability and use the card
         #[allow(clippy::cast_possible_truncation)]
         let boost_value_u8 = boost_value as u8;
-        
+
         // Record the cycle number BEFORE using the card (since replenishment increments it)
-        let cycle_before_use = self.participants[participant_index].boost_hand.current_cycle;
-        
+        let cycle_before_use = self.participants[participant_index]
+            .boost_hand
+            .current_cycle;
+
         let boost_usage_result = BoostHandManager::use_boost_card(
             &mut self.participants[participant_index].boost_hand,
             boost_value_u8,
-        ).map_err(|e| e.to_string())?;
-        
+        )
+        .map_err(|e| e.to_string())?;
+
         // Record boost usage in history
         let usage_record = BoostUsageRecord {
             lap_number: self.current_lap,
@@ -549,7 +657,9 @@ impl Race {
             cards_remaining_after: boost_usage_result.cards_remaining,
             replenishment_occurred: boost_usage_result.replenishment_occurred,
         };
-        self.participants[participant_index].boost_usage_history.push(usage_record);
+        self.participants[participant_index]
+            .boost_usage_history
+            .push(usage_record);
 
         // 5. Calculate performance using validated car data
         let performance = self.calculate_performance_with_car_data(
@@ -565,23 +675,26 @@ impl Race {
             boost_value,
         };
         self.pending_actions.push(action);
-        self.action_submissions.insert(player_uuid, Utc::now().timestamp());
-        self.pending_performance_calculations.insert(player_uuid, performance.clone());
+        self.action_submissions
+            .insert(player_uuid, Utc::now().timestamp());
+        self.pending_performance_calculations
+            .insert(player_uuid, performance.clone());
 
         // 7. Check if all participants have submitted actions
         if self.all_actions_submitted() {
             // Clone the pending actions and performance calculations to avoid borrowing issues
             let actions_to_process = self.pending_actions.clone();
             let performance_calculations = self.pending_performance_calculations.clone();
-            
+
             // Process all actions simultaneously with their performance calculations
-            let lap_result = self.process_lap_with_car_data(&actions_to_process, &performance_calculations)?;
-            
+            let lap_result =
+                self.process_lap_with_car_data(&actions_to_process, &performance_calculations)?;
+
             // Clear pending actions and calculations after processing
             self.pending_actions.clear();
             self.action_submissions.clear();
             self.pending_performance_calculations.clear();
-            
+
             Ok(IndividualLapResult::LapProcessed(lap_result))
         } else {
             // Return current state with action recorded
@@ -593,40 +706,36 @@ impl Race {
     }
 
     /// Check if all active participants have submitted actions
-    #[must_use] 
+    #[must_use]
     pub fn all_actions_submitted(&self) -> bool {
-        let active_participants: HashSet<Uuid> = self.participants
+        let active_participants: HashSet<Uuid> = self
+            .participants
             .iter()
             .filter(|p| !p.is_finished)
             .map(|p| p.player_uuid)
             .collect();
-            
-        let submitted_actions: HashSet<Uuid> = self.pending_actions
-            .iter()
-            .map(|a| a.player_uuid)
-            .collect();
-        
+
+        let submitted_actions: HashSet<Uuid> =
+            self.pending_actions.iter().map(|a| a.player_uuid).collect();
+
         // If there are no active participants, no actions are needed
         if active_participants.is_empty() {
             return true;
         }
-        
+
         // If there are active participants but no submitted actions, not all submitted
         if submitted_actions.is_empty() {
             return false;
         }
-            
+
         active_participants == submitted_actions
     }
 
     /// Get list of players who haven't submitted actions yet
-    #[must_use] 
+    #[must_use]
     pub fn get_pending_players(&self) -> Vec<Uuid> {
-        let submitted: HashSet<Uuid> = self.pending_actions
-            .iter()
-            .map(|a| a.player_uuid)
-            .collect();
-            
+        let submitted: HashSet<Uuid> = self.pending_actions.iter().map(|a| a.player_uuid).collect();
+
         self.participants
             .iter()
             .filter(|p| !p.is_finished && !submitted.contains(&p.player_uuid))
@@ -642,31 +751,32 @@ impl Race {
         car_data_map: &HashMap<Uuid, ValidatedCarData>,
     ) -> Result<HashMap<Uuid, PerformanceCalculation>, String> {
         let mut performance_calculations = HashMap::new();
-        
+
         for action in actions {
-            let participant = self.participants
+            let participant = self
+                .participants
                 .iter()
                 .find(|p| p.player_uuid == action.player_uuid)
                 .ok_or_else(|| format!("Player {} not found in race", action.player_uuid))?;
-            
+
             if participant.is_finished {
                 continue;
             }
-            
+
             let car_data = car_data_map
                 .get(&action.player_uuid)
                 .ok_or_else(|| format!("Car data not found for player {}", action.player_uuid))?;
-            
+
             let performance = self.calculate_performance_with_car_data(
                 participant,
                 action.boost_value,
                 car_data,
                 &self.lap_characteristic,
             );
-            
+
             performance_calculations.insert(action.player_uuid, performance);
         }
-        
+
         Ok(performance_calculations)
     }
 
@@ -683,27 +793,27 @@ impl Race {
             LapCharacteristic::Straight => u32::from(car_data.engine.straight_value),
             LapCharacteristic::Curve => u32::from(car_data.engine.curve_value),
         };
-        
+
         let body_value = match lap_characteristic {
             LapCharacteristic::Straight => u32::from(car_data.body.straight_value),
             LapCharacteristic::Curve => u32::from(car_data.body.curve_value),
         };
-        
+
         let pilot_value = match lap_characteristic {
             LapCharacteristic::Straight => u32::from(car_data.pilot.performance.straight_value),
             LapCharacteristic::Curve => u32::from(car_data.pilot.performance.curve_value),
         };
-        
+
         // Calculate base performance
         let base_value = engine_value + body_value + pilot_value;
-        
+
         // Apply sector performance ceiling to base value
         let current_sector = &self.track.sectors[participant.current_sector as usize];
         let capped_base_value = std::cmp::min(base_value, current_sector.max_value);
-        
+
         // Add boost value directly to capped base value
         let final_value = capped_base_value + boost_value;
-        
+
         PerformanceCalculation {
             engine_contribution: engine_value,
             body_contribution: body_value,
@@ -716,16 +826,23 @@ impl Race {
         }
     }
 
-    fn process_sector_movements(&mut self, sector_id: u32, participant_values: &HashMap<Uuid, u32>) -> Vec<ParticipantMovement> {
+    fn process_sector_movements(
+        &mut self,
+        sector_id: u32,
+        participant_values: &HashMap<Uuid, u32>,
+    ) -> Vec<ParticipantMovement> {
         let mut movements = Vec::new();
-        
+
         // Get all participants in this sector with their performance values
-        let mut participants_in_sector: Vec<(usize, u32)> = self.participants
+        let mut participants_in_sector: Vec<(usize, u32)> = self
+            .participants
             .iter()
             .enumerate()
             .filter(|(_, p)| p.current_sector == sector_id && !p.is_finished)
             .filter_map(|(i, p)| {
-                participant_values.get(&p.player_uuid).map(|&value| (i, value))
+                participant_values
+                    .get(&p.player_uuid)
+                    .map(|&value| (i, value))
             })
             .collect();
 
@@ -734,18 +851,29 @@ impl Race {
 
         // Process each participant, but only allow the first-ranked car to move up
         for (rank, &(participant_index, final_value)) in participants_in_sector.iter().enumerate() {
-            let movement = self.calculate_movement_for_participant(participant_index, final_value, sector_id, rank == 0);
+            let movement = self.calculate_movement_for_participant(
+                participant_index,
+                final_value,
+                sector_id,
+                rank == 0,
+            );
             movements.push(movement);
         }
 
         movements
     }
 
-    fn calculate_movement_for_participant(&mut self, participant_index: usize, final_value: u32, current_sector_id: u32, is_first_ranked: bool) -> ParticipantMovement {
+    fn calculate_movement_for_participant(
+        &mut self,
+        participant_index: usize,
+        final_value: u32,
+        current_sector_id: u32,
+        is_first_ranked: bool,
+    ) -> ParticipantMovement {
         let participant = &self.participants[participant_index];
         let player_uuid = participant.player_uuid;
         let from_sector = current_sector_id;
-        
+
         #[allow(clippy::cast_possible_truncation)]
         if current_sector_id >= self.track.sectors.len() as u32 {
             // Invalid sector - shouldn't happen
@@ -779,7 +907,12 @@ impl Race {
         }
     }
 
-    fn move_participant_down(&mut self, participant_index: usize, from_sector: u32, final_value: u32) -> ParticipantMovement {
+    fn move_participant_down(
+        &mut self,
+        participant_index: usize,
+        from_sector: u32,
+        final_value: u32,
+    ) -> ParticipantMovement {
         let player_uuid = self.participants[participant_index].player_uuid;
 
         if from_sector == 0 {
@@ -795,17 +928,23 @@ impl Race {
 
         // Find a sector with available space, moving down
         let mut target_sector = from_sector - 1;
-        
+
         loop {
             let sector = &self.track.sectors[target_sector as usize];
-            
+
             // Check if sector has capacity
             let can_fit = match sector.slot_capacity {
                 None => true, // Infinite capacity
                 Some(capacity) => {
-                    let current_count = self.participants.iter()
+                    let current_count = self
+                        .participants
+                        .iter()
                         .enumerate()
-                        .filter(|(i, p)| *i != participant_index && p.current_sector == target_sector && !p.is_finished)
+                        .filter(|(i, p)| {
+                            *i != participant_index
+                                && p.current_sector == target_sector
+                                && !p.is_finished
+                        })
                         .count();
                     current_count < capacity as usize
                 }
@@ -816,7 +955,7 @@ impl Race {
                 self.participants[participant_index].current_sector = target_sector;
                 // Place at last position (will be re-ranked later)
                 self.participants[participant_index].current_position_in_sector = u32::MAX; // Temporary, will be fixed in re-ranking
-                
+
                 return ParticipantMovement {
                     player_uuid,
                     from_sector,
@@ -831,7 +970,7 @@ impl Race {
                 // Reached sector 0 (infinite capacity), must fit here
                 self.participants[participant_index].current_sector = 0;
                 self.participants[participant_index].current_position_in_sector = u32::MAX;
-                
+
                 return ParticipantMovement {
                     player_uuid,
                     from_sector,
@@ -840,12 +979,17 @@ impl Race {
                     movement_type: MovementType::MovedDown,
                 };
             }
-            
+
             target_sector -= 1;
         }
     }
 
-    fn move_participant_up(&mut self, participant_index: usize, from_sector: u32, final_value: u32) -> ParticipantMovement {
+    fn move_participant_up(
+        &mut self,
+        participant_index: usize,
+        from_sector: u32,
+        final_value: u32,
+    ) -> ParticipantMovement {
         let player_uuid = self.participants[participant_index].player_uuid;
         let next_sector = from_sector + 1;
 
@@ -854,7 +998,7 @@ impl Race {
         if next_sector >= self.track.sectors.len() as u32 {
             // Completed a lap
             self.participants[participant_index].current_lap += 1;
-            
+
             if self.participants[participant_index].current_lap > self.total_laps {
                 // Finished the race
                 self.participants[participant_index].is_finished = true;
@@ -882,9 +1026,13 @@ impl Race {
         let can_move_up = match next_sector_obj.slot_capacity {
             None => true, // Infinite capacity
             Some(capacity) => {
-                let current_count = self.participants.iter()
+                let current_count = self
+                    .participants
+                    .iter()
                     .enumerate()
-                    .filter(|(i, p)| *i != participant_index && p.current_sector == next_sector && !p.is_finished)
+                    .filter(|(i, p)| {
+                        *i != participant_index && p.current_sector == next_sector && !p.is_finished
+                    })
                     .count();
                 current_count < capacity as usize
             }
@@ -911,15 +1059,14 @@ impl Race {
         }
     }
 
-
-
     fn sort_participants_in_sectors(&mut self) {
         // Group participants by sector and sort by total_value (descending)
         let mut sector_groups: HashMap<u32, Vec<&mut RaceParticipant>> = HashMap::new();
-        
+
         for participant in &mut self.participants {
             if !participant.is_finished {
-                sector_groups.entry(participant.current_sector)
+                sector_groups
+                    .entry(participant.current_sector)
                     .or_default()
                     .push(participant);
             }
@@ -928,7 +1075,7 @@ impl Race {
         // Sort each sector group by total_value (descending = better position)
         for participants in sector_groups.values_mut() {
             participants.sort_by(|a, b| b.total_value.cmp(&a.total_value));
-            
+
             // Update position in sector
             for (index, participant) in participants.iter_mut().enumerate() {
                 #[allow(clippy::cast_possible_truncation)]
@@ -941,10 +1088,11 @@ impl Race {
 
     fn get_sector_positions(&self) -> HashMap<String, Vec<RaceParticipant>> {
         let mut positions: HashMap<String, Vec<RaceParticipant>> = HashMap::new();
-        
+
         for participant in &self.participants {
             if !participant.is_finished {
-                positions.entry(participant.current_sector.to_string())
+                positions
+                    .entry(participant.current_sector.to_string())
                     .or_default()
                     .push(participant.clone());
             }
@@ -963,21 +1111,26 @@ impl Race {
         let finished_count = self.participants.iter().filter(|p| p.is_finished).count();
         let all_finished = finished_count == self.participants.len();
         let all_laps_completed = self.current_lap > self.total_laps;
-        
+
         if all_finished || all_laps_completed {
             self.status = RaceStatus::Finished;
-            
+
             // Assign finish positions based on final sector and position
-            let mut all_participants: Vec<&mut RaceParticipant> = self.participants.iter_mut().collect();
-            
+            let mut all_participants: Vec<&mut RaceParticipant> =
+                self.participants.iter_mut().collect();
+
             // Sort by: 1) Finished status, 2) Current sector (higher = better), 3) Position in sector (lower = better), 4) Total value (higher = better)
             all_participants.sort_by(|a, b| {
-                b.is_finished.cmp(&a.is_finished)
+                b.is_finished
+                    .cmp(&a.is_finished)
                     .then_with(|| b.current_sector.cmp(&a.current_sector))
-                    .then_with(|| a.current_position_in_sector.cmp(&b.current_position_in_sector))
+                    .then_with(|| {
+                        a.current_position_in_sector
+                            .cmp(&b.current_position_in_sector)
+                    })
                     .then_with(|| b.total_value.cmp(&a.total_value))
             });
-            
+
             for (index, participant) in all_participants.iter_mut().enumerate() {
                 #[allow(clippy::cast_possible_truncation)]
                 {
@@ -994,21 +1147,22 @@ impl RaceParticipant {
     #[must_use]
     pub fn get_boost_cycle_summaries(&self) -> Vec<BoostCycleSummary> {
         let mut summaries: HashMap<u32, BoostCycleSummary> = HashMap::new();
-        
+
         for record in &self.boost_usage_history {
-            let summary = summaries.entry(record.cycle_number).or_insert_with(|| {
-                BoostCycleSummary {
-                    cycle_number: record.cycle_number,
-                    cards_used: Vec::new(),
-                    laps_in_cycle: Vec::new(),
-                    average_boost: 0.0,
-                }
-            });
-            
+            let summary =
+                summaries
+                    .entry(record.cycle_number)
+                    .or_insert_with(|| BoostCycleSummary {
+                        cycle_number: record.cycle_number,
+                        cards_used: Vec::new(),
+                        laps_in_cycle: Vec::new(),
+                        average_boost: 0.0,
+                    });
+
             summary.cards_used.push(record.boost_value);
             summary.laps_in_cycle.push(record.lap_number);
         }
-        
+
         // Calculate average boost for each cycle
         for summary in summaries.values_mut() {
             if !summary.cards_used.is_empty() {
@@ -1019,13 +1173,13 @@ impl RaceParticipant {
                 }
             }
         }
-        
+
         // Sort by cycle number
         let mut result: Vec<BoostCycleSummary> = summaries.into_values().collect();
         result.sort_by_key(|s| s.cycle_number);
         result
     }
-    
+
     /// Get boost usage history for a specific cycle
     #[must_use]
     pub fn get_boost_usage_for_cycle(&self, cycle_number: u32) -> Vec<&BoostUsageRecord> {
@@ -1034,25 +1188,26 @@ impl RaceParticipant {
             .filter(|record| record.cycle_number == cycle_number)
             .collect()
     }
-    
+
     /// Get total number of boost cards used across all cycles
     #[must_use]
     pub fn get_total_boosts_used(&self) -> usize {
         self.boost_usage_history.len()
     }
-    
+
     /// Get average boost value across all usage
     #[must_use]
     pub fn get_average_boost_value(&self) -> f32 {
         if self.boost_usage_history.is_empty() {
             return 0.0;
         }
-        
-        let sum: u32 = self.boost_usage_history
+
+        let sum: u32 = self
+            .boost_usage_history
             .iter()
             .map(|record| u32::from(record.boost_value))
             .sum();
-        
+
         #[allow(clippy::cast_precision_loss)]
         {
             sum as f32 / self.boost_usage_history.len() as f32
@@ -1157,17 +1312,17 @@ mod tests {
     #[test]
     fn test_boost_hand_initialization() {
         let hand = BoostHand::new();
-        
+
         // Verify initial state
         assert_eq!(hand.cards_remaining, 5, "Should start with 5 cards");
         assert_eq!(hand.current_cycle, 1, "Should start at cycle 1");
         assert_eq!(hand.cycles_completed, 0, "Should have 0 completed cycles");
-        
+
         // Verify all cards are available
         for i in 0..=4 {
             assert!(hand.is_card_available(i), "Card {} should be available", i);
         }
-        
+
         // Verify cards HashMap has correct size
         assert_eq!(hand.cards.len(), 5, "Should have 5 cards in HashMap");
     }
@@ -1175,30 +1330,42 @@ mod tests {
     #[test]
     fn test_boost_hand_use_card() {
         let mut hand = BoostHand::new();
-        
+
         // Use card 2
         let result = hand.use_card(2);
         assert!(result.is_ok(), "Should successfully use card 2");
-        
+
         // Verify card 2 is now unavailable
         assert!(!hand.is_card_available(2), "Card 2 should be unavailable");
         assert_eq!(hand.cards_remaining, 4, "Should have 4 cards remaining");
-        
+
         // Verify other cards are still available
-        assert!(hand.is_card_available(0), "Card 0 should still be available");
-        assert!(hand.is_card_available(1), "Card 1 should still be available");
-        assert!(hand.is_card_available(3), "Card 3 should still be available");
-        assert!(hand.is_card_available(4), "Card 4 should still be available");
+        assert!(
+            hand.is_card_available(0),
+            "Card 0 should still be available"
+        );
+        assert!(
+            hand.is_card_available(1),
+            "Card 1 should still be available"
+        );
+        assert!(
+            hand.is_card_available(3),
+            "Card 3 should still be available"
+        );
+        assert!(
+            hand.is_card_available(4),
+            "Card 4 should still be available"
+        );
     }
 
     #[test]
     fn test_boost_hand_cannot_use_same_card_twice() {
         let mut hand = BoostHand::new();
-        
+
         // Use card 3 first time
         let result1 = hand.use_card(3);
         assert!(result1.is_ok(), "First use should succeed");
-        
+
         // Try to use card 3 again
         let result2 = hand.use_card(3);
         assert!(result2.is_err(), "Second use should fail");
@@ -1212,52 +1379,56 @@ mod tests {
     #[test]
     fn test_boost_hand_replenishment() {
         let mut hand = BoostHand::new();
-        
+
         // Use all 5 cards
         hand.use_card(2).unwrap();
         assert_eq!(hand.cards_remaining, 4);
-        
+
         hand.use_card(0).unwrap();
         assert_eq!(hand.cards_remaining, 3);
-        
+
         hand.use_card(4).unwrap();
         assert_eq!(hand.cards_remaining, 2);
-        
+
         hand.use_card(1).unwrap();
         assert_eq!(hand.cards_remaining, 1);
-        
+
         // Using the last card should trigger replenishment
         hand.use_card(3).unwrap();
-        
+
         // Verify replenishment occurred
         assert_eq!(hand.cards_remaining, 5, "All cards should be replenished");
         assert_eq!(hand.current_cycle, 2, "Should be in cycle 2");
         assert_eq!(hand.cycles_completed, 1, "Should have 1 completed cycle");
-        
+
         // Verify all cards are available again
         for i in 0..=4 {
-            assert!(hand.is_card_available(i), "Card {} should be available after replenishment", i);
+            assert!(
+                hand.is_card_available(i),
+                "Card {} should be available after replenishment",
+                i
+            );
         }
     }
 
     #[test]
     fn test_boost_hand_multiple_cycles() {
         let mut hand = BoostHand::new();
-        
+
         // Complete first cycle
         for i in 0..=4 {
             hand.use_card(i).unwrap();
         }
         assert_eq!(hand.current_cycle, 2);
         assert_eq!(hand.cycles_completed, 1);
-        
+
         // Complete second cycle
         for i in 0..=4 {
             hand.use_card(i).unwrap();
         }
         assert_eq!(hand.current_cycle, 3);
         assert_eq!(hand.cycles_completed, 2);
-        
+
         // Verify all cards are still available
         for i in 0..=4 {
             assert!(hand.is_card_available(i), "Card {} should be available", i);
@@ -1267,19 +1438,27 @@ mod tests {
     #[test]
     fn test_boost_hand_get_available_cards() {
         let mut hand = BoostHand::new();
-        
+
         // Initially all cards should be available
         let available = hand.get_available_cards();
         assert_eq!(available.len(), 5, "Should have 5 available cards");
-        assert_eq!(available, vec![0, 1, 2, 3, 4], "Should return sorted list of all cards");
-        
+        assert_eq!(
+            available,
+            vec![0, 1, 2, 3, 4],
+            "Should return sorted list of all cards"
+        );
+
         // Use some cards
         hand.use_card(1).unwrap();
         hand.use_card(3).unwrap();
-        
+
         let available = hand.get_available_cards();
         assert_eq!(available.len(), 3, "Should have 3 available cards");
-        assert_eq!(available, vec![0, 2, 4], "Should return sorted list of available cards");
+        assert_eq!(
+            available,
+            vec![0, 2, 4],
+            "Should return sorted list of available cards"
+        );
         assert!(!available.contains(&1), "Should not include used card 1");
         assert!(!available.contains(&3), "Should not include used card 3");
     }
@@ -1287,22 +1466,31 @@ mod tests {
     #[test]
     fn test_boost_hand_is_card_available_invalid_card() {
         let hand = BoostHand::new();
-        
+
         // Test with invalid card values
-        assert!(!hand.is_card_available(5), "Card 5 should not be available (out of range)");
-        assert!(!hand.is_card_available(10), "Card 10 should not be available (out of range)");
-        assert!(!hand.is_card_available(255), "Card 255 should not be available (out of range)");
+        assert!(
+            !hand.is_card_available(5),
+            "Card 5 should not be available (out of range)"
+        );
+        assert!(
+            !hand.is_card_available(10),
+            "Card 10 should not be available (out of range)"
+        );
+        assert!(
+            !hand.is_card_available(255),
+            "Card 255 should not be available (out of range)"
+        );
     }
 
     #[test]
     fn test_boost_hand_default_trait() {
         let hand = BoostHand::default();
-        
+
         // Verify default is same as new()
         assert_eq!(hand.cards_remaining, 5);
         assert_eq!(hand.current_cycle, 1);
         assert_eq!(hand.cycles_completed, 0);
-        
+
         for i in 0..=4 {
             assert!(hand.is_card_available(i));
         }
@@ -1311,18 +1499,21 @@ mod tests {
     #[test]
     fn test_boost_hand_use_card_sequence() {
         let mut hand = BoostHand::new();
-        
+
         // Use cards in a specific sequence
         let sequence = vec![4, 1, 3, 0, 2];
-        
+
         for (index, &card) in sequence.iter().enumerate() {
             let result = hand.use_card(card);
             assert!(result.is_ok(), "Should successfully use card {}", card);
-            
+
             // After using the 5th card (index 4), replenishment occurs immediately
             if index == 4 {
                 // Replenishment should have occurred
-                assert_eq!(hand.cards_remaining, 5, "Should be replenished after using all cards");
+                assert_eq!(
+                    hand.cards_remaining, 5,
+                    "Should be replenished after using all cards"
+                );
                 assert_eq!(hand.cycles_completed, 1, "Should have completed 1 cycle");
             } else {
                 // Cards should decrease normally
@@ -1333,7 +1524,7 @@ mod tests {
                 );
             }
         }
-        
+
         // After using all cards, should be replenished
         assert_eq!(hand.cards_remaining, 5);
         assert_eq!(hand.cycles_completed, 1);
@@ -1345,11 +1536,14 @@ mod tests {
     fn test_create_race() {
         let track = create_test_track();
         let race = Race::new("Test Race".to_string(), track, 2);
-        
+
         assert_eq!(race.name, "Test Race");
         assert_eq!(race.total_laps, 2);
         assert_eq!(race.status, RaceStatus::Waiting);
-        assert!(matches!(race.lap_characteristic, LapCharacteristic::Straight));
+        assert!(matches!(
+            race.lap_characteristic,
+            LapCharacteristic::Straight
+        ));
         assert_eq!(race.current_lap, 1);
     }
 
@@ -1357,11 +1551,11 @@ mod tests {
     fn test_add_participant() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
+
         let result = race.add_participant(player_uuid, car_uuid, pilot_uuid);
         assert!(result.is_ok());
         assert_eq!(race.participants.len(), 1);
@@ -1374,14 +1568,15 @@ mod tests {
     fn test_duplicate_participant() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         let result = race.add_participant(player_uuid, car_uuid, pilot_uuid);
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("already participating"));
     }
@@ -1390,45 +1585,50 @@ mod tests {
     fn test_start_race() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         let result = race.start_race();
         assert!(result.is_ok());
         assert_eq!(race.status, RaceStatus::InProgress);
         // Lap characteristic should be set
-        assert!(matches!(race.lap_characteristic, LapCharacteristic::Straight | LapCharacteristic::Curve));
+        assert!(matches!(
+            race.lap_characteristic,
+            LapCharacteristic::Straight | LapCharacteristic::Curve
+        ));
     }
 
     #[test]
     fn test_process_lap_basic_movement() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         // Set participant to start in sector 0 for predictable test
         race.participants[0].current_sector = 0;
-        
+
         race.start_race().unwrap();
-        
+
         // Player adds 5 boost (base 10 + boost 5 = 15)
         // Sector 0 has max_value 10, so player should move up to sector 1
         let actions = vec![LapAction {
             player_uuid,
             boost_value: 5,
         }];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         assert_eq!(result.lap, 1);
         assert_eq!(result.movements.len(), 1);
         assert_eq!(result.movements[0].movement_type, MovementType::MovedUp);
@@ -1440,18 +1640,19 @@ mod tests {
     fn test_move_up_sector() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 3);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         // Set participant to start in sector 0 for predictable test
         race.participants[0].current_sector = 0;
-        
+
         race.start_race().unwrap();
-        
+
         // Player adds enough boost to exceed sector 0 max (10)
         // Base value 10 + boost 5 = 15, which is > sector 0 max (10)
         let actions = vec![LapAction {
@@ -1459,7 +1660,7 @@ mod tests {
             boost_value: 5,
         }];
         let result = race.process_lap(&actions).unwrap();
-        
+
         assert_eq!(result.movements[0].movement_type, MovementType::MovedUp);
         assert_eq!(race.participants[0].current_sector, 1);
         assert_eq!(race.participants[0].total_value, 15);
@@ -1469,31 +1670,35 @@ mod tests {
     fn test_move_down_sector() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         // Move player to sector 1 first
         race.participants[0].current_sector = 1;
-        
+
         race.start_race().unwrap();
-        
+
         // Base value 10 + boost 0 = 10, but sector 1 min is 8, so should stay
         // Let's use a negative scenario: base 5 + boost 0 = 5, which is < sector 1 min (8)
         let actions = vec![LapAction {
             player_uuid,
             boost_value: 0,
         }];
-        
+
         // We need to simulate a low base value for this test
         // For now, let's test with the current implementation
         let result = race.process_lap(&actions).unwrap();
-        
+
         // With base value 10, the participant should stay in sector 1
-        assert_eq!(result.movements[0].movement_type, MovementType::StayedInSector);
+        assert_eq!(
+            result.movements[0].movement_type,
+            MovementType::StayedInSector
+        );
         assert_eq!(race.participants[0].current_sector, 1);
     }
 
@@ -1501,56 +1706,70 @@ mod tests {
     fn test_sector_capacity_limit() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add multiple participants
         let mut player_uuids = Vec::new();
         for _i in 0..5 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set all participants to start in sector 0 for predictable test
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Give different boost values to test performance-based movement priority
-        let actions: Vec<LapAction> = player_uuids.iter().enumerate().map(|(i, &uuid)| LapAction {
-            player_uuid: uuid,
-            boost_value: 5 - (i as u32), // First player gets 5, second gets 4, etc.
-            // This creates final values: 15, 14, 13, 12, 11 (all exceed sector 0 max of 10)
-        }).collect();
-        
+        let actions: Vec<LapAction> = player_uuids
+            .iter()
+            .enumerate()
+            .map(|(i, &uuid)| LapAction {
+                player_uuid: uuid,
+                boost_value: 5 - (i as u32), // First player gets 5, second gets 4, etc.
+                                             // This creates final values: 15, 14, 13, 12, 11 (all exceed sector 0 max of 10)
+            })
+            .collect();
+
         let _ = race.process_lap(&actions).unwrap();
-        
+
         // Count how many are in sector 1 (capacity 3)
-        let sector_1_count = race.participants.iter()
+        let sector_1_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .count();
-        
+
         // Should respect first-ranked rule - only 1 car should move up
         assert_eq!(sector_1_count, 1);
-        
+
         // The remaining 4 should stay in sector 0 due to first-ranked rule
-        let sector_0_count = race.participants.iter()
+        let sector_0_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 0)
             .count();
         assert_eq!(sector_0_count, 4);
-        
+
         // Verify that the participant who moved up is the best performer
-        let moved_up_participant = race.participants.iter()
+        let moved_up_participant = race
+            .participants
+            .iter()
             .find(|p| p.current_sector == 1)
             .expect("Should have one participant in sector 1");
-        
+
         // The best performer should have moved up (boost value 5)
         // Total value should be 15
-        assert_eq!(moved_up_participant.total_value, 15, "Best performer should move up");
+        assert_eq!(
+            moved_up_participant.total_value, 15,
+            "Best performer should move up"
+        );
     }
 
     #[test]
@@ -1585,92 +1804,123 @@ mod tests {
 
         let track = Track::new("Single Slot Track".to_string(), sectors).unwrap();
         let mut race = Race::new("Single Slot Test".to_string(), track, 1);
-        
+
         // Add 3 participants
         let mut player_uuids = Vec::new();
         for _i in 0..3 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set all participants to start in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // All participants try to move up with different performance
         let actions: Vec<LapAction> = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Final: 15 (best)
-            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Final: 14 (second)
-            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Final: 13 (third)
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 5,
+            }, // Final: 15 (best)
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 4,
+            }, // Final: 14 (second)
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 3,
+            }, // Final: 13 (third)
         ];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         // Only ONE car should move to sector 1 (the best performer)
-        let sector_1_count = race.participants.iter()
+        let sector_1_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .count();
         assert_eq!(sector_1_count, 1);
-        
+
         // The other 2 should stay in sector 0
-        let sector_0_count = race.participants.iter()
+        let sector_0_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 0)
             .count();
         assert_eq!(sector_0_count, 2);
-        
+
         // The car that moved up should be the one with the highest performance (boost 5)
-        let moved_up_participant = race.participants.iter()
+        let moved_up_participant = race
+            .participants
+            .iter()
             .find(|p| p.current_sector == 1)
             .unwrap();
         assert_eq!(moved_up_participant.player_uuid, player_uuids[0]);
         assert_eq!(moved_up_participant.total_value, 15); // base 10 + boost 5
-        
+
         // Check that the participant in sector 1 has higher total_value than those in sector 0
-        let stayed_participants: Vec<_> = race.participants.iter()
+        let stayed_participants: Vec<_> = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 0)
             .collect();
-            
+
         for stayed_participant in &stayed_participants {
-            assert!(moved_up_participant.total_value > stayed_participant.total_value,
-                "Moved participant should have higher performance than stayed participant");
+            assert!(
+                moved_up_participant.total_value > stayed_participant.total_value,
+                "Moved participant should have higher performance than stayed participant"
+            );
         }
-        
+
         // Verify the movements were recorded correctly - only 1 car should move up (first-ranked rule)
-        let move_up_count = result.movements.iter()
+        let move_up_count = result
+            .movements
+            .iter()
             .filter(|m| m.movement_type == MovementType::MovedUp)
             .count();
-        assert_eq!(move_up_count, 1, "Should have exactly 1 MovedUp movement (first-ranked car only)");
-        
-        let stayed_count = result.movements.iter()
+        assert_eq!(
+            move_up_count, 1,
+            "Should have exactly 1 MovedUp movement (first-ranked car only)"
+        );
+
+        let stayed_count = result
+            .movements
+            .iter()
             .filter(|m| m.movement_type == MovementType::StayedInSector)
             .count();
-        assert_eq!(stayed_count, 2, "Should have exactly 2 StayedInSector movements");
+        assert_eq!(
+            stayed_count, 2,
+            "Should have exactly 2 StayedInSector movements"
+        );
     }
 
     #[test]
     fn test_invalid_boost_value() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.start_race().unwrap();
-        
+
         let actions = vec![LapAction {
             player_uuid,
             boost_value: 6, // Invalid: max is 5
         }];
-        
+
         let result = race.process_lap(&actions);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid boost value"));
@@ -1681,18 +1931,16 @@ mod tests {
         // Test empty sectors
         let result = Track::new("Empty Track".to_string(), vec![]);
         assert!(result.is_err());
-        
+
         // Test first sector with capacity
-        let sectors = vec![
-            Sector {
-                id: 0,
-                name: "Start".to_string(),
-                min_value: 0,
-                max_value: 10,
-                slot_capacity: Some(5), // Should be None
-                sector_type: SectorType::Start,
-            },
-        ];
+        let sectors = vec![Sector {
+            id: 0,
+            name: "Start".to_string(),
+            min_value: 0,
+            max_value: 10,
+            slot_capacity: Some(5), // Should be None
+            sector_type: SectorType::Start,
+        }];
         let result = Track::new("Invalid Track".to_string(), sectors);
         assert!(result.is_err());
     }
@@ -1701,17 +1949,18 @@ mod tests {
     fn test_sector_full_move_up_blocked() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add 4 participants
         let mut player_uuids = Vec::new();
         for i in 0..4 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
-            
+
             // Set first 3 in sector 1 (capacity 3), last one in sector 0
             if i < 3 {
                 race.participants[i].current_sector = 1;
@@ -1719,21 +1968,36 @@ mod tests {
                 race.participants[i].current_sector = 0;
             }
         }
-        
+
         race.start_race().unwrap();
-        
+
         // All players need actions, but we're only testing the last one
         let actions = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 0 },
-            LapAction { player_uuid: player_uuids[1], boost_value: 0 },
-            LapAction { player_uuid: player_uuids[2], boost_value: 0 },
-            LapAction { player_uuid: player_uuids[3], boost_value: 5 }, // Should exceed sector 0 max
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 0,
+            },
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 0,
+            },
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 0,
+            },
+            LapAction {
+                player_uuid: player_uuids[3],
+                boost_value: 5,
+            }, // Should exceed sector 0 max
         ];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         // Player should stay in sector 0 because sector 1 is full
-        assert_eq!(result.movements[0].movement_type, MovementType::StayedInSector);
+        assert_eq!(
+            result.movements[0].movement_type,
+            MovementType::StayedInSector
+        );
         assert_eq!(race.participants[3].current_sector, 0);
     }
 
@@ -1741,19 +2005,20 @@ mod tests {
     fn test_sector_full_move_down_finds_space() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add participants and fill sectors strategically
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         // Set participant in sector 2
         race.participants[0].current_sector = 2;
-        
+
         race.start_race().unwrap();
-        
+
         // Simulate a very low performance that should move down
         // We'll need to modify the base value calculation for this test
         // For now, test the basic movement down logic
@@ -1761,9 +2026,9 @@ mod tests {
             player_uuid,
             boost_value: 0, // Minimum boost
         }];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         // With current base value of 10, participant should stay in sector 2
         // (since 10 >= sector 2 min_value of 12 is false, it should move down)
         // But our base value is 10, and sector 2 min is 12, so it should move down
@@ -1775,73 +2040,81 @@ mod tests {
     fn test_lap_characteristic_changes() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 3);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.participants[0].current_sector = 0;
-        
+
         race.start_race().unwrap();
-        
+
         let initial_characteristic = race.lap_characteristic.clone();
-        
+
         // Process first lap
         let actions = vec![LapAction {
             player_uuid,
             boost_value: 3,
         }];
-        
+
         let result1 = race.process_lap(&actions).unwrap();
         assert_eq!(result1.lap, 1);
-        
+
         // Lap characteristic might change for next lap
         let second_characteristic = race.lap_characteristic.clone();
-        
+
         // Process second lap
         let result2 = race.process_lap(&actions).unwrap();
         assert_eq!(result2.lap, 2);
-        
+
         // Verify lap characteristics are being tracked
-        assert!(matches!(initial_characteristic, LapCharacteristic::Straight | LapCharacteristic::Curve));
-        assert!(matches!(second_characteristic, LapCharacteristic::Straight | LapCharacteristic::Curve));
+        assert!(matches!(
+            initial_characteristic,
+            LapCharacteristic::Straight | LapCharacteristic::Curve
+        ));
+        assert!(matches!(
+            second_characteristic,
+            LapCharacteristic::Straight | LapCharacteristic::Curve
+        ));
     }
 
     #[test]
     fn test_race_completion_by_laps() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 2); // Only 2 laps
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.participants[0].current_sector = 0;
-        
+
         race.start_race().unwrap();
-        
+
         let actions = vec![LapAction {
             player_uuid,
             boost_value: 2,
         }];
-        
+
         // Process lap 1
         let result1 = race.process_lap(&actions).unwrap();
         assert_eq!(result1.lap, 1);
         assert_eq!(race.status, RaceStatus::InProgress);
-        
+
         // Process lap 2
         let result2 = race.process_lap(&actions).unwrap();
         assert_eq!(result2.lap, 2);
         assert_eq!(race.status, RaceStatus::InProgress);
-        
+
         // Process lap 3 (should complete the race)
         let result3 = race.process_lap(&actions).unwrap();
         assert_eq!(result3.lap, 3);
         assert_eq!(race.status, RaceStatus::Finished);
-        
+
         // Check finish positions are assigned
         assert!(race.participants[0].finish_position.is_some());
     }
@@ -1850,120 +2123,170 @@ mod tests {
     fn test_single_slot_movement_priority() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add 3 participants
         let mut player_uuids = Vec::new();
         for _i in 0..3 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set all participants in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         // Fill sector 1 with 2 participants (capacity is 3, so only 1 slot left)
         race.participants[0].current_sector = 1;
         race.participants[1].current_sector = 1;
         // participant[2] stays in sector 0
-        
+
         race.start_race().unwrap();
-        
+
         // All participants need actions, but only the one in sector 0 can potentially move
         let actions = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 0 }, // Already in sector 1
-            LapAction { player_uuid: player_uuids[1], boost_value: 0 }, // Already in sector 1
-            LapAction { player_uuid: player_uuids[2], boost_value: 5 }, // In sector 0, tries to move up
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 0,
+            }, // Already in sector 1
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 0,
+            }, // Already in sector 1
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 5,
+            }, // In sector 0, tries to move up
         ];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         // Only the participant with higher performance should move up
-        assert_eq!(race.participants[2].current_sector, 1, "Best performer should move up");
-        
+        assert_eq!(
+            race.participants[2].current_sector, 1,
+            "Best performer should move up"
+        );
+
         // Verify movements were recorded (3 total: 2 stay in sector 1, 1 moves up from sector 0)
         assert_eq!(result.movements.len(), 3);
-        
+
         // Find the movement for the participant who was in sector 0
-        let sector_0_movement = result.movements.iter()
+        let sector_0_movement = result
+            .movements
+            .iter()
             .find(|m| m.player_uuid == player_uuids[2])
             .expect("Should find movement for sector 0 participant");
         assert_eq!(sector_0_movement.movement_type, MovementType::MovedUp);
-        
+
         // Verify sector 1 is now at capacity (3 participants)
-        let sector_1_count = race.participants.iter()
+        let sector_1_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .count();
         assert_eq!(sector_1_count, 3, "Sector 1 should be at full capacity");
-        
+
         // Verify movement counts
-        let move_up_count = result.movements.iter()
+        let move_up_count = result
+            .movements
+            .iter()
             .filter(|m| m.movement_type == MovementType::MovedUp)
             .count();
         assert_eq!(move_up_count, 1, "Should have exactly 1 MovedUp movement");
-        
-        let stayed_count = result.movements.iter()
+
+        let stayed_count = result
+            .movements
+            .iter()
             .filter(|m| m.movement_type == MovementType::StayedInSector)
             .count();
-        assert_eq!(stayed_count, 2, "Should have exactly 2 StayedInSector movements");
+        assert_eq!(
+            stayed_count, 2,
+            "Should have exactly 2 StayedInSector movements"
+        );
     }
 
     #[test]
     fn test_multiple_cars_one_slot_performance_priority() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add 4 participants
         let mut player_uuids = Vec::new();
         for _i in 0..4 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set up scenario: sector 1 has 2 cars (capacity 3), sector 0 has 2 cars
         race.participants[0].current_sector = 1; // Already in sector 1
         race.participants[1].current_sector = 1; // Already in sector 1
         race.participants[2].current_sector = 0; // In sector 0, wants to move up
         race.participants[3].current_sector = 0; // In sector 0, wants to move up
-        
+
         race.start_race().unwrap();
-        
+
         // Both cars in sector 0 try to move up, but only 1 slot available in sector 1
         // Give different performance values to test priority
         let actions = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 0 }, // Stay in sector 1
-            LapAction { player_uuid: player_uuids[1], boost_value: 0 }, // Stay in sector 1
-            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Lower performance (base 10 + 3 = 13)
-            LapAction { player_uuid: player_uuids[3], boost_value: 5 }, // Higher performance (base 10 + 5 = 15)
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 0,
+            }, // Stay in sector 1
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 0,
+            }, // Stay in sector 1
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 3,
+            }, // Lower performance (base 10 + 3 = 13)
+            LapAction {
+                player_uuid: player_uuids[3],
+                boost_value: 5,
+            }, // Higher performance (base 10 + 5 = 15)
         ];
-        
+
         let result = race.process_lap(&actions).unwrap();
-        
+
         // Only the best performer (player 3) should move up
-        assert_eq!(race.participants[3].current_sector, 1, "Best performer should move up to sector 1");
-        assert_eq!(race.participants[2].current_sector, 0, "Lower performer should stay in sector 0");
-        
+        assert_eq!(
+            race.participants[3].current_sector, 1,
+            "Best performer should move up to sector 1"
+        );
+        assert_eq!(
+            race.participants[2].current_sector, 0,
+            "Lower performer should stay in sector 0"
+        );
+
         // Verify sector 1 is now at capacity
-        let sector_1_count = race.participants.iter()
+        let sector_1_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .count();
         assert_eq!(sector_1_count, 3, "Sector 1 should be at full capacity");
-        
+
         // Verify exactly one car moved up
-        let move_up_movements: Vec<_> = result.movements.iter()
+        let move_up_movements: Vec<_> = result
+            .movements
+            .iter()
             .filter(|m| m.movement_type == MovementType::MovedUp)
             .collect();
         assert_eq!(move_up_movements.len(), 1, "Exactly one car should move up");
-        assert_eq!(move_up_movements[0].player_uuid, player_uuids[3], "The best performer should be the one who moved up");
+        assert_eq!(
+            move_up_movements[0].player_uuid, player_uuids[3],
+            "The best performer should be the one who moved up"
+        );
     }
 
     #[test]
@@ -1971,25 +2294,29 @@ mod tests {
         let track = create_test_track();
         let track_sector_count = track.sectors.len() as u32;
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add multiple participants
         let mut starting_sectors = Vec::new();
         for _i in 0..10 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             starting_sectors.push(race.participants.last().unwrap().current_sector);
         }
-        
+
         // Verify that not all participants start in the same sector
         let unique_sectors: std::collections::HashSet<_> = starting_sectors.iter().collect();
-        
+
         // With random qualification, we should have some variety
         // (This test might occasionally fail due to randomness, but very unlikely with 10 participants)
-        assert!(unique_sectors.len() > 1, "All participants started in the same sector, qualification not working");
-        
+        assert!(
+            unique_sectors.len() > 1,
+            "All participants started in the same sector, qualification not working"
+        );
+
         // All starting sectors should be valid
         for &sector in &starting_sectors {
             assert!(sector < track_sector_count);
@@ -2000,18 +2327,19 @@ mod tests {
     fn test_sector_performance_ceiling_caps_base_value() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
-        
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
+
         // Set participant to start in sector 0 (max_value = 10)
         race.participants[0].current_sector = 0;
-        
+
         race.start_race().unwrap();
-        
+
         // Give a high boost that would normally result in base value > sector max
         // Base value is 10 (engine 5 + body 3 + pilot 2)
         // Sector 0 max_value is 10, so no capping should occur
@@ -2019,153 +2347,200 @@ mod tests {
             player_uuid,
             boost_value: 3,
         }];
-        
+
         let _result = race.process_lap(&actions).unwrap();
-        
+
         // Final value should be base (10) + boost (3) = 13
         assert_eq!(race.participants[0].total_value, 13);
-        
+
         // Now test with a car that has higher base stats
         // Manually set higher base stats by modifying the calculation
         // We'll create a scenario where base would be 15 but sector max is 10
-        
+
         // Reset for second test
         let mut race2 = Race::new("Test Race 2".to_string(), create_test_track(), 1);
-        race2.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+        race2
+            .add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race2.participants[0].current_sector = 0; // Sector 0 max_value = 10
         race2.start_race().unwrap();
-        
+
         // We need to test the capping logic directly since we can't easily modify car stats
         // Let's verify the capping logic by checking a scenario where it would apply
-        
+
         // Test the capping calculation directly
         let base_value = 15u32; // Hypothetical high base value
-        let sector_max = 10u32;  // Sector 0 max value
+        let sector_max = 10u32; // Sector 0 max value
         let boost = 3u32;
-        
+
         let capped_base = std::cmp::min(base_value, sector_max);
         let final_value = capped_base + boost;
-        
-        assert_eq!(capped_base, 10, "Base value should be capped to sector maximum");
+
+        assert_eq!(
+            capped_base, 10,
+            "Base value should be capped to sector maximum"
+        );
         assert_eq!(final_value, 13, "Final value should be capped base + boost");
-        
+
         // Verify that without capping, the value would be different
         let uncapped_final = base_value + boost;
-        assert_eq!(uncapped_final, 18, "Without capping, final value would be higher");
-        assert_ne!(final_value, uncapped_final, "Capping should make a difference");
+        assert_eq!(
+            uncapped_final, 18,
+            "Without capping, final value would be higher"
+        );
+        assert_ne!(
+            final_value, uncapped_final,
+            "Capping should make a difference"
+        );
     }
 
     #[test]
     fn test_sector_ceiling_different_scenarios() {
         // Test multiple scenarios of sector ceiling effects
-        
+
         // Scenario 1: Base value below sector ceiling (no capping)
         let base_value_1 = 8u32;
         let sector_max_1 = 10u32;
         let boost_1 = 2u32;
-        
+
         let capped_1 = std::cmp::min(base_value_1, sector_max_1);
         let final_1 = capped_1 + boost_1;
-        
+
         assert_eq!(capped_1, 8, "Base value below ceiling should not be capped");
         assert_eq!(final_1, 10, "Final value should be base + boost");
-        
+
         // Scenario 2: Base value exactly at sector ceiling (no capping)
         let base_value_2 = 10u32;
         let sector_max_2 = 10u32;
         let boost_2 = 2u32;
-        
+
         let capped_2 = std::cmp::min(base_value_2, sector_max_2);
         let final_2 = capped_2 + boost_2;
-        
+
         assert_eq!(capped_2, 10, "Base value at ceiling should not be capped");
         assert_eq!(final_2, 12, "Final value should be base + boost");
-        
+
         // Scenario 3: Base value above sector ceiling (capping applied)
         let base_value_3 = 15u32;
         let sector_max_3 = 10u32;
         let boost_3 = 2u32;
-        
+
         let capped_3 = std::cmp::min(base_value_3, sector_max_3);
         let final_3 = capped_3 + boost_3;
-        
+
         assert_eq!(capped_3, 10, "Base value above ceiling should be capped");
         assert_eq!(final_3, 12, "Final value should be capped base + boost");
-        
+
         // Scenario 4: High base value with high boost (capping still applies to base only)
         let base_value_4 = 20u32;
         let sector_max_4 = 5u32;
         let boost_4 = 5u32;
-        
+
         let capped_4 = std::cmp::min(base_value_4, sector_max_4);
         let final_4 = capped_4 + boost_4;
-        
-        assert_eq!(capped_4, 5, "High base value should be capped to low sector ceiling");
-        assert_eq!(final_4, 10, "Final value should be capped base + full boost");
-        
+
+        assert_eq!(
+            capped_4, 5,
+            "High base value should be capped to low sector ceiling"
+        );
+        assert_eq!(
+            final_4, 10,
+            "Final value should be capped base + full boost"
+        );
+
         // Verify the strategic implication: boost becomes more important when capped
         let uncapped_final_4 = base_value_4 + boost_4;
-        assert_eq!(uncapped_final_4, 25, "Without capping, final would be much higher");
-        
+        assert_eq!(
+            uncapped_final_4, 25,
+            "Without capping, final would be much higher"
+        );
+
         let boost_percentage_capped = (boost_4 as f32 / final_4 as f32) * 100.0;
         let boost_percentage_uncapped = (boost_4 as f32 / uncapped_final_4 as f32) * 100.0;
-        
-        assert!(boost_percentage_capped > boost_percentage_uncapped, 
-                "Boost should be proportionally more important when base is capped");
+
+        assert!(
+            boost_percentage_capped > boost_percentage_uncapped,
+            "Boost should be proportionally more important when base is capped"
+        );
     }
 
     #[test]
     fn test_move_up_only_first_ranked_car() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add 3 participants
         let mut player_uuids = Vec::new();
         for _i in 0..3 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set all participants to start in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Give different performance levels to create clear ranking
         let actions: Vec<LapAction> = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Best: 15
-            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Second: 14  
-            LapAction { player_uuid: player_uuids[2], boost_value: 3 }, // Third: 13
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 5,
+            }, // Best: 15
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 4,
+            }, // Second: 14
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 3,
+            }, // Third: 13
         ];
-        
+
         let _result = race.process_lap(&actions).unwrap();
-        
+
         // All cars that exceed the threshold should move up (sector 1 has capacity 3, so space available)
-        let sector_1_participants: Vec<_> = race.participants.iter()
+        let sector_1_participants: Vec<_> = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .collect();
-        
-        assert_eq!(sector_1_participants.len(), 1, "Only the first-ranked car should move up");
-        
+
+        assert_eq!(
+            sector_1_participants.len(),
+            1,
+            "Only the first-ranked car should move up"
+        );
+
         // Verify the moved car is the best performer
         let moved_car = sector_1_participants[0];
         assert_eq!(moved_car.total_value, 15, "Best performer should move up");
-        
+
         // The other cars should stay in sector 0
-        let sector_0_participants: Vec<_> = race.participants.iter()
+        let sector_0_participants: Vec<_> = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 0)
             .collect();
-        
-        assert_eq!(sector_0_participants.len(), 2, "Other cars should stay in sector 0");
-        
+
+        assert_eq!(
+            sector_0_participants.len(),
+            2,
+            "Other cars should stay in sector 0"
+        );
+
         // Verify the cars in sector 0 have lower performance than the moved car
         for participant in &sector_0_participants {
-            assert!(participant.total_value < moved_car.total_value, "Cars in sector 0 should have lower performance");
+            assert!(
+                participant.total_value < moved_car.total_value,
+                "Cars in sector 0 should have lower performance"
+            );
         }
     }
 
@@ -2173,122 +2548,171 @@ mod tests {
     fn test_move_up_with_equal_performance() {
         let track = create_test_track();
         let mut race = Race::new("Test Race".to_string(), track, 1);
-        
+
         // Add 3 participants
         let mut player_uuids = Vec::new();
         for _i in 0..3 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set all participants to start in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Give all cars the same performance level
         let actions: Vec<LapAction> = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 4 }, // All: 14
-            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // All: 14
-            LapAction { player_uuid: player_uuids[2], boost_value: 4 }, // All: 14
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 4,
+            }, // All: 14
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 4,
+            }, // All: 14
+            LapAction {
+                player_uuid: player_uuids[2],
+                boost_value: 4,
+            }, // All: 14
         ];
-        
+
         let _result = race.process_lap(&actions).unwrap();
-        
+
         // With equal performance, only one car should move up (first processed)
-        let sector_1_count = race.participants.iter()
+        let sector_1_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 1)
             .count();
-        
-        assert_eq!(sector_1_count, 1, "Only one car should move up when all have equal performance");
-        
+
+        assert_eq!(
+            sector_1_count, 1,
+            "Only one car should move up when all have equal performance"
+        );
+
         // Two cars should stay in sector 0
-        let sector_0_count = race.participants.iter()
+        let sector_0_count = race
+            .participants
+            .iter()
             .filter(|p| p.current_sector == 0)
             .count();
-        
+
         assert_eq!(sector_0_count, 2, "Two cars should stay in sector 0");
-        
+
         // All cars should have the same total value
-        let all_values: Vec<u32> = race.participants.iter()
-            .map(|p| p.total_value)
-            .collect();
-        
-        assert!(all_values.iter().all(|&v| v == 14), "All cars should have the same total value");
+        let all_values: Vec<u32> = race.participants.iter().map(|p| p.total_value).collect();
+
+        assert!(
+            all_values.iter().all(|&v| v == 14),
+            "All cars should have the same total value"
+        );
     }
 
     #[test]
     fn test_first_ranked_car_progression() {
         let track = create_test_track();
         let mut race = Race::new("Progression Test".to_string(), track, 2);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set both to start in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // LAP 1: Both try to move up, only first-ranked succeeds
         let actions_lap1: Vec<LapAction> = vec![
-            LapAction { player_uuid: player_uuids[0], boost_value: 5 }, // Best performer
-            LapAction { player_uuid: player_uuids[1], boost_value: 4 }, // Second performer
+            LapAction {
+                player_uuid: player_uuids[0],
+                boost_value: 5,
+            }, // Best performer
+            LapAction {
+                player_uuid: player_uuids[1],
+                boost_value: 4,
+            }, // Second performer
         ];
-        
+
         let _result1 = race.process_lap(&actions_lap1).unwrap();
-        
+
         // Only the best car should move to sector 1 (first-ranked rule)
-        assert_eq!(race.participants.iter().filter(|p| p.current_sector == 1).count(), 1);
-        assert_eq!(race.participants.iter().filter(|p| p.current_sector == 0).count(), 1);
-        
+        assert_eq!(
+            race.participants
+                .iter()
+                .filter(|p| p.current_sector == 1)
+                .count(),
+            1
+        );
+        assert_eq!(
+            race.participants
+                .iter()
+                .filter(|p| p.current_sector == 0)
+                .count(),
+            1
+        );
+
         // Verify which car moved
-        let sector_1_car = race.participants.iter().find(|p| p.current_sector == 1).unwrap();
-        let sector_0_car = race.participants.iter().find(|p| p.current_sector == 0).unwrap();
-        
+        let sector_1_car = race
+            .participants
+            .iter()
+            .find(|p| p.current_sector == 1)
+            .unwrap();
+        let sector_0_car = race
+            .participants
+            .iter()
+            .find(|p| p.current_sector == 0)
+            .unwrap();
+
         assert_eq!(sector_1_car.player_uuid, player_uuids[0]); // Best performer moved up
         assert_eq!(sector_0_car.player_uuid, player_uuids[1]); // Second performer stayed
     }
 
     #[test]
     fn test_individual_lap_action_processing() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Individual Action Test".to_string(), track, 2);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         // Set both to start in sector 0
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2296,16 +2720,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2315,95 +2741,98 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Test 1: First player submits action, should be recorded
-        let result1 = race.process_individual_lap_action(
-            player_uuids[0],
-            3,
-            &car_data,
-        ).unwrap();
-        
+        let result1 = race
+            .process_individual_lap_action(player_uuids[0], 3, &car_data)
+            .unwrap();
+
         match result1 {
-            IndividualLapResult::ActionRecorded { predicted_performance, waiting_for_players } => {
+            IndividualLapResult::ActionRecorded {
+                predicted_performance,
+                waiting_for_players,
+            } => {
                 assert_eq!(predicted_performance.boost_value, 3);
                 assert_eq!(waiting_for_players.len(), 1);
                 assert_eq!(waiting_for_players[0], player_uuids[1]);
             }
             _ => panic!("Expected ActionRecorded result"),
         }
-        
+
         // Verify pending actions are stored
         assert_eq!(race.pending_actions.len(), 1);
         assert_eq!(race.pending_actions[0].player_uuid, player_uuids[0]);
         assert_eq!(race.pending_actions[0].boost_value, 3);
-        
+
         // Test 2: Second player submits action, should process lap
-        let result2 = race.process_individual_lap_action(
-            player_uuids[1],
-            2,
-            &car_data,
-        ).unwrap();
-        
+        let result2 = race
+            .process_individual_lap_action(player_uuids[1], 2, &car_data)
+            .unwrap();
+
         match result2 {
             IndividualLapResult::LapProcessed(lap_result) => {
                 assert_eq!(lap_result.movements.len(), 2);
                 // Both players should have moved (performance exceeds sector 0 max)
-                assert!(lap_result.movements.iter().any(|m| m.movement_type == MovementType::MovedUp));
+                assert!(lap_result
+                    .movements
+                    .iter()
+                    .any(|m| m.movement_type == MovementType::MovedUp));
             }
             _ => panic!("Expected LapProcessed result"),
         }
-        
+
         // Verify pending actions are cleared after processing
         assert_eq!(race.pending_actions.len(), 0);
         assert_eq!(race.action_submissions.len(), 0);
-        
+
         // Test 3: Try to submit action for same player again in the same turn (should fail)
         // First, let's add an action to simulate a pending state
         race.pending_actions.push(LapAction {
             player_uuid: player_uuids[0],
             boost_value: 1,
         });
-        
-        let result3 = race.process_individual_lap_action(
-            player_uuids[0],
-            1,
-            &car_data,
-        );
-        
+
+        let result3 = race.process_individual_lap_action(player_uuids[0], 1, &car_data);
+
         // This should fail because player already submitted an action
         assert!(result3.is_err());
         assert!(result3.unwrap_err().contains("already submitted an action"));
-        
+
         // Clear the test action
         race.pending_actions.clear();
     }
 
     #[test]
     fn test_individual_lap_action_validation() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Validation Test".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.participants[0].current_sector = 0;
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2411,16 +2840,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2430,66 +2861,63 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Test invalid boost value
         let result = race.process_individual_lap_action(
             player_uuid,
             6, // Invalid: max is 5
             &car_data,
         );
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid boost value"));
-        
+
         // Test non-existent player
         let non_existent_player = Uuid::new_v4();
-        let result = race.process_individual_lap_action(
-            non_existent_player,
-            3,
-            &car_data,
-        );
-        
+        let result = race.process_individual_lap_action(non_existent_player, 3, &car_data);
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Player not found"));
-        
+
         // Test race not in progress
         race.status = RaceStatus::Finished;
-        let result = race.process_individual_lap_action(
-            player_uuid,
-            3,
-            &car_data,
-        );
-        
+        let result = race.process_individual_lap_action(player_uuid, 3, &car_data);
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Race is not in progress"));
     }
 
     #[test]
     fn test_boost_card_validation_in_race() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Boost Card Test".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.participants[0].current_sector = 0;
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2497,16 +2925,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2516,75 +2946,72 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Verify initial boost hand state
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
         assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
         assert!(race.participants[0].boost_hand.is_card_available(2));
-        
+
         // Use boost card 2
-        let result = race.process_individual_lap_action(
-            player_uuid,
-            2,
-            &car_data,
-        );
-        
+        let result = race.process_individual_lap_action(player_uuid, 2, &car_data);
+
         assert!(result.is_ok());
-        
+
         // Verify card 2 is now unavailable
         assert!(!race.participants[0].boost_hand.is_card_available(2));
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
-        
+
         // Clear pending actions to test again
         race.pending_actions.clear();
         race.action_submissions.clear();
         race.pending_performance_calculations.clear();
-        
+
         // Try to use card 2 again - should fail
-        let result = race.process_individual_lap_action(
-            player_uuid,
-            2,
-            &car_data,
-        );
-        
+        let result = race.process_individual_lap_action(player_uuid, 2, &car_data);
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not available"));
     }
 
     #[test]
     fn test_boost_card_replenishment_triggers_correctly() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Replenishment Test".to_string(), track, 10);
-        
+
         // Add 2 participants to test individual actions
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2592,16 +3019,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2611,38 +3040,40 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Use all 5 boost cards for player 1
         let boost_sequence_p1 = vec![2, 0, 4, 1, 3];
         let boost_sequence_p2 = vec![0, 1, 2, 3, 4];
-        
+
         for (index, &boost_value) in boost_sequence_p1.iter().enumerate() {
             // Player 1 submits action
-            let result = race.process_individual_lap_action(
-                player_uuids[0],
-                boost_value,
-                &car_data,
+            let result =
+                race.process_individual_lap_action(player_uuids[0], boost_value, &car_data);
+
+            assert!(
+                result.is_ok(),
+                "Failed to use boost card {} for player 1",
+                boost_value
             );
-            
-            assert!(result.is_ok(), "Failed to use boost card {} for player 1", boost_value);
-            
+
             // Player 2 submits action to complete the lap
             let _result2 = race.process_individual_lap_action(
                 player_uuids[1],
                 boost_sequence_p2[index],
                 &car_data,
             );
-            
+
             // Check cards remaining after each use
             if index < 4 {
                 // Before last card
@@ -2656,23 +3087,20 @@ mod tests {
             } else {
                 // After using the 5th card, replenishment should occur
                 assert_eq!(
-                    race.participants[0].boost_hand.cards_remaining,
-                    5,
+                    race.participants[0].boost_hand.cards_remaining, 5,
                     "All cards should be replenished"
                 );
                 assert_eq!(
-                    race.participants[0].boost_hand.current_cycle,
-                    2,
+                    race.participants[0].boost_hand.current_cycle, 2,
                     "Should be in cycle 2"
                 );
                 assert_eq!(
-                    race.participants[0].boost_hand.cycles_completed,
-                    1,
+                    race.participants[0].boost_hand.cycles_completed, 1,
                     "Should have 1 completed cycle"
                 );
             }
         }
-        
+
         // Verify all cards are available again after replenishment
         for i in 0..=4 {
             assert!(
@@ -2681,43 +3109,50 @@ mod tests {
                 i
             );
         }
-        
+
         // Test that we can use the same cards again in the new cycle
         let result = race.process_individual_lap_action(
             player_uuids[0],
             2, // Same card we used first in previous cycle
             &car_data,
         );
-        
-        assert!(result.is_ok(), "Should be able to use card 2 again after replenishment");
+
+        assert!(
+            result.is_ok(),
+            "Should be able to use card 2 again after replenishment"
+        );
         assert!(!race.participants[0].boost_hand.is_card_available(2));
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
     }
 
     #[test]
     fn test_boost_card_multiple_cycles() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Multiple Cycles Test".to_string(), track, 20);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2725,16 +3160,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2744,41 +3181,38 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Complete 3 full cycles (15 laps total)
         for cycle in 1..=3 {
             for card in 0..=4 {
                 // Player 1 uses a card
-                let result = race.process_individual_lap_action(
-                    player_uuids[0],
-                    card,
-                    &car_data,
+                let result = race.process_individual_lap_action(player_uuids[0], card, &car_data);
+
+                assert!(
+                    result.is_ok(),
+                    "Cycle {}, card {} should work for player 1",
+                    cycle,
+                    card
                 );
-                
-                assert!(result.is_ok(), "Cycle {}, card {} should work for player 1", cycle, card);
-                
+
                 // Player 2 completes the lap (also uses the same card sequence)
-                let _result2 = race.process_individual_lap_action(
-                    player_uuids[1],
-                    card,
-                    &car_data,
-                );
+                let _result2 = race.process_individual_lap_action(player_uuids[1], card, &car_data);
             }
-            
+
             // After each cycle, verify replenishment occurred
             assert_eq!(
-                race.participants[0].boost_hand.cards_remaining,
-                5,
+                race.participants[0].boost_hand.cards_remaining, 5,
                 "Cycle {}: All cards should be replenished",
                 cycle
             );
@@ -2789,19 +3223,17 @@ mod tests {
                 cycle
             );
             assert_eq!(
-                race.participants[0].boost_hand.cycles_completed,
-                cycle,
+                race.participants[0].boost_hand.cycles_completed, cycle,
                 "Cycle {}: Should have completed {} cycles",
-                cycle,
-                cycle
+                cycle, cycle
             );
         }
-        
+
         // Verify final state after 3 complete cycles
         assert_eq!(race.participants[0].boost_hand.current_cycle, 4);
         assert_eq!(race.participants[0].boost_hand.cycles_completed, 3);
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
-        
+
         // All cards should be available
         for i in 0..=4 {
             assert!(race.participants[0].boost_hand.is_card_available(i));
@@ -2810,20 +3242,24 @@ mod tests {
 
     #[test]
     fn test_boost_card_invalid_value_rejected() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Invalid Boost Test".to_string(), track, 2);
-        
+
         let player_uuid = Uuid::new_v4();
         let car_uuid = Uuid::new_v4();
         let pilot_uuid = Uuid::new_v4();
-        
-        race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+
+        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+            .unwrap();
         race.participants[0].current_sector = 0;
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2831,16 +3267,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2850,29 +3288,26 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Test boost value > 4 (invalid)
-        let result = race.process_individual_lap_action(
-            player_uuid,
-            5,
-            &car_data,
-        );
-        
+        let result = race.process_individual_lap_action(player_uuid, 5, &car_data);
+
         assert!(result.is_err());
         let error_msg = result.unwrap_err();
         assert!(error_msg.contains("Invalid boost value"));
         assert!(error_msg.contains("Must be between 0 and 4"));
-        
+
         // Verify boost hand state unchanged
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
         assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
@@ -2882,28 +3317,32 @@ mod tests {
 
     #[test]
     fn test_boost_usage_history_records_created() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("History Test".to_string(), track, 10);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -2911,16 +3350,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -2930,37 +3371,32 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Initially, history should be empty
         assert_eq!(race.participants[0].boost_usage_history.len(), 0);
-        
+
         // Use 3 boost cards
         let boost_sequence: Vec<u8> = vec![2, 0, 4];
-        
+
         for (index, &boost_value) in boost_sequence.iter().enumerate() {
-            race.process_individual_lap_action(
-                player_uuids[0],
-                u32::from(boost_value),
-                &car_data,
-            ).unwrap();
-            
+            race.process_individual_lap_action(player_uuids[0], u32::from(boost_value), &car_data)
+                .unwrap();
+
             // Complete lap with player 2
-            race.process_individual_lap_action(
-                player_uuids[1],
-                u32::from(boost_value),
-                &car_data,
-            ).unwrap();
-            
+            race.process_individual_lap_action(player_uuids[1], u32::from(boost_value), &car_data)
+                .unwrap();
+
             // Verify history record was created
             assert_eq!(
                 race.participants[0].boost_usage_history.len(),
@@ -2968,7 +3404,7 @@ mod tests {
                 "Should have {} history records",
                 index + 1
             );
-            
+
             // Verify the latest record
             let latest_record = &race.participants[0].boost_usage_history[index];
             assert_eq!(latest_record.boost_value, boost_value);
@@ -2981,28 +3417,32 @@ mod tests {
 
     #[test]
     fn test_boost_usage_history_tracks_replenishment() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Replenishment History Test".to_string(), track, 10);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -3010,16 +3450,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -3029,42 +3471,37 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Use all 5 boost cards to trigger replenishment
         for card in 0..=4 {
-            race.process_individual_lap_action(
-                player_uuids[0],
-                card,
-                &car_data,
-            ).unwrap();
-            
-            race.process_individual_lap_action(
-                player_uuids[1],
-                card,
-                &car_data,
-            ).unwrap();
+            race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                .unwrap();
+
+            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+                .unwrap();
         }
-        
+
         // Verify we have 5 history records
         assert_eq!(race.participants[0].boost_usage_history.len(), 5);
-        
+
         // Verify the last record shows replenishment occurred
         let last_record = &race.participants[0].boost_usage_history[4];
         assert_eq!(last_record.boost_value, 4);
         assert_eq!(last_record.cycle_number, 1);
         assert_eq!(last_record.cards_remaining_after, 5); // Replenished
         assert!(last_record.replenishment_occurred);
-        
+
         // Verify earlier records don't show replenishment
         for i in 0..4 {
             assert!(!race.participants[0].boost_usage_history[i].replenishment_occurred);
@@ -3073,28 +3510,32 @@ mod tests {
 
     #[test]
     fn test_boost_cycle_summaries() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Cycle Summary Test".to_string(), track, 15);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -3102,16 +3543,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -3121,61 +3564,50 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Complete 2 full cycles
         // Cycle 1: use cards 0, 1, 2, 3, 4
         for card in 0..=4 {
-            race.process_individual_lap_action(
-                player_uuids[0],
-                card,
-                &car_data,
-            ).unwrap();
-            
-            race.process_individual_lap_action(
-                player_uuids[1],
-                card,
-                &car_data,
-            ).unwrap();
+            race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                .unwrap();
+
+            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+                .unwrap();
         }
-        
+
         // Cycle 2: use cards 4, 3, 2, 1, 0 (reverse order)
         for card in (0..=4).rev() {
-            race.process_individual_lap_action(
-                player_uuids[0],
-                card,
-                &car_data,
-            ).unwrap();
-            
-            race.process_individual_lap_action(
-                player_uuids[1],
-                card,
-                &car_data,
-            ).unwrap();
+            race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                .unwrap();
+
+            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+                .unwrap();
         }
-        
+
         // Get cycle summaries
         let summaries = race.participants[0].get_boost_cycle_summaries();
-        
+
         // Should have 2 cycle summaries
         assert_eq!(summaries.len(), 2);
-        
+
         // Verify cycle 1 summary
         let cycle1 = &summaries[0];
         assert_eq!(cycle1.cycle_number, 1);
         assert_eq!(cycle1.cards_used, vec![0, 1, 2, 3, 4]);
         assert_eq!(cycle1.laps_in_cycle, vec![1, 2, 3, 4, 5]);
         assert_eq!(cycle1.average_boost, 2.0); // (0+1+2+3+4)/5 = 2.0
-        
+
         // Verify cycle 2 summary
         let cycle2 = &summaries[1];
         assert_eq!(cycle2.cycle_number, 2);
@@ -3186,28 +3618,32 @@ mod tests {
 
     #[test]
     fn test_boost_usage_statistics() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Statistics Test".to_string(), track, 10);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -3215,16 +3651,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -3234,42 +3672,37 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Use specific boost cards: 3, 4, 2
         let boost_sequence = vec![3, 4, 2];
-        
+
         for &boost_value in &boost_sequence {
-            race.process_individual_lap_action(
-                player_uuids[0],
-                boost_value,
-                &car_data,
-            ).unwrap();
-            
-            race.process_individual_lap_action(
-                player_uuids[1],
-                boost_value,
-                &car_data,
-            ).unwrap();
+            race.process_individual_lap_action(player_uuids[0], boost_value, &car_data)
+                .unwrap();
+
+            race.process_individual_lap_action(player_uuids[1], boost_value, &car_data)
+                .unwrap();
         }
-        
+
         let participant = &race.participants[0];
-        
+
         // Test total boosts used
         assert_eq!(participant.get_total_boosts_used(), 3);
-        
+
         // Test average boost value: (3 + 4 + 2) / 3 = 3.0
         assert_eq!(participant.get_average_boost_value(), 3.0);
-        
+
         // Test get_boost_usage_for_cycle
         let cycle1_usage = participant.get_boost_usage_for_cycle(1);
         assert_eq!(cycle1_usage.len(), 3);
@@ -3280,28 +3713,32 @@ mod tests {
 
     #[test]
     fn test_boost_usage_history_multiple_cycles() {
+        use crate::domain::{
+            Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
+            PilotPerformance, PilotRarity, PilotSkills,
+        };
         use crate::services::car_validation::ValidatedCarData;
-        use crate::domain::{Engine, Body, Pilot, Car, EngineName, BodyName, PilotName, ComponentRarity, PilotClass, PilotRarity, PilotSkills, PilotPerformance};
 
         let track = create_test_track();
         let mut race = Race::new("Multi-Cycle History Test".to_string(), track, 15);
-        
+
         // Add 2 participants
         let mut player_uuids = Vec::new();
         for _i in 0..2 {
             let player_uuid = Uuid::new_v4();
             let car_uuid = Uuid::new_v4();
             let pilot_uuid = Uuid::new_v4();
-            race.add_participant(player_uuid, car_uuid, pilot_uuid).unwrap();
+            race.add_participant(player_uuid, car_uuid, pilot_uuid)
+                .unwrap();
             player_uuids.push(player_uuid);
         }
-        
+
         for participant in &mut race.participants {
             participant.current_sector = 0;
         }
-        
+
         race.start_race().unwrap();
-        
+
         // Create mock validated car data
         let engine = Engine::new(
             EngineName::parse("Test Engine").unwrap(),
@@ -3309,16 +3746,18 @@ mod tests {
             5,
             4,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let body = Body::new(
             BodyName::parse("Test Body").unwrap(),
             ComponentRarity::Common,
             4,
             5,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let skills = PilotSkills::new(6, 6, 7, 5).unwrap();
         let performance = PilotPerformance::new(3, 3).unwrap();
         let pilot = Pilot::new(
@@ -3328,39 +3767,34 @@ mod tests {
             skills,
             performance,
             None,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
-        
+
         let car_data = ValidatedCarData {
             car,
             engine,
             body,
             pilot,
         };
-        
+
         // Complete 2 full cycles (10 laps)
         for _cycle in 1..=2 {
             for card in 0..=4 {
-                race.process_individual_lap_action(
-                    player_uuids[0],
-                    card,
-                    &car_data,
-                ).unwrap();
-                
-                race.process_individual_lap_action(
-                    player_uuids[1],
-                    card,
-                    &car_data,
-                ).unwrap();
+                race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                    .unwrap();
+
+                race.process_individual_lap_action(player_uuids[1], card, &car_data)
+                    .unwrap();
             }
         }
-        
+
         let participant = &race.participants[0];
-        
+
         // Should have 10 history records (2 cycles * 5 cards)
         assert_eq!(participant.boost_usage_history.len(), 10);
-        
+
         // Verify cycle numbers in history
         for i in 0..5 {
             assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
@@ -3368,19 +3802,19 @@ mod tests {
         for i in 5..10 {
             assert_eq!(participant.boost_usage_history[i].cycle_number, 2);
         }
-        
+
         // Verify replenishment flags
         assert!(participant.boost_usage_history[4].replenishment_occurred); // End of cycle 1
         assert!(participant.boost_usage_history[9].replenishment_occurred); // End of cycle 2
-        
+
         // Get cycle summaries
         let summaries = participant.get_boost_cycle_summaries();
         assert_eq!(summaries.len(), 2);
-        
+
         // Verify both cycles have 5 cards each
         assert_eq!(summaries[0].cards_used.len(), 5);
         assert_eq!(summaries[1].cards_used.len(), 5);
-        
+
         // Test statistics
         assert_eq!(participant.get_total_boosts_used(), 10);
         assert_eq!(participant.get_average_boost_value(), 2.0); // (0+1+2+3+4)*2 / 10 = 2.0

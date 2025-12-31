@@ -77,7 +77,12 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
-    pub async fn get_player_with_custom_cookie(&self, uuid: &str, cookie_name: &str, cookie_value: &str) -> reqwest::Response {
+    pub async fn get_player_with_custom_cookie(
+        &self,
+        uuid: &str,
+        cookie_name: &str,
+        cookie_value: &str,
+    ) -> reqwest::Response {
         self.client
             .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
             .header("Cookie", &format!("{}={}", cookie_name, cookie_value))
@@ -88,7 +93,8 @@ impl TestApp {
 
     // Helper to extract cookies from response headers
     pub fn extract_cookies(&self, response: &reqwest::Response) -> String {
-        response.headers()
+        response
+            .headers()
             .get_all("set-cookie")
             .iter()
             .map(|h| h.to_str().unwrap())
@@ -97,7 +103,12 @@ impl TestApp {
     }
 
     // Helper to create a test user and return their UUID and cookies
-    pub async fn create_test_user(&self, email: &str, password: &str, team_name: &str) -> (String, String) {
+    pub async fn create_test_user(
+        &self,
+        email: &str,
+        password: &str,
+        team_name: &str,
+    ) -> (String, String) {
         let register_body = json!({
             "email": email,
             "password": password,
@@ -161,7 +172,7 @@ async fn spawn_app() -> TestApp {
 
     let db_name = configuration.database.database_name.clone();
     let base_url = "http://127.0.0.1".to_string();
-    
+
     // Get database connection
     let database = get_connection_pool(&configuration.database)
         .await
@@ -170,9 +181,7 @@ async fn spawn_app() -> TestApp {
     let server = run(listener, database, base_url)
         .await
         .expect("Failed to build application.");
-    let _ = tokio::spawn(async move {
-        server.await.expect("Server failed to start")
-    });
+    let _ = tokio::spawn(async move { server.await.expect("Server failed to start") });
 
     // Give the server a moment to start
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -195,18 +204,22 @@ async fn spawn_app() -> TestApp {
 async fn tampered_access_token_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract access token and tamper with it
     let access_token = extract_token_from_cookies(&cookies, "access_token");
     let tampered_token = tamper_with_token(&access_token);
 
     // Act - Try to use tampered token
-    let response = app.get_player_with_auth_header(&user_uuid, &tampered_token).await;
+    let response = app
+        .get_player_with_auth_header(&user_uuid, &tampered_token)
+        .await;
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Invalid token signature");
 }
@@ -216,8 +229,10 @@ async fn tampered_access_token_rejected() {
 async fn tampered_refresh_token_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (_user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (_user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract refresh token and tamper with it
     let refresh_token = extract_token_from_cookies(&cookies, "refresh_token");
     let tampered_token = tamper_with_token(&refresh_token);
@@ -228,7 +243,7 @@ async fn tampered_refresh_token_rejected() {
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Invalid token signature");
 }
@@ -238,8 +253,10 @@ async fn tampered_refresh_token_rejected() {
 async fn completely_invalid_token_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, _cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, _cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     let invalid_tokens = vec![
         "invalid.jwt.token",
         "not-a-jwt-at-all",
@@ -251,16 +268,31 @@ async fn completely_invalid_token_rejected() {
 
     for invalid_token in invalid_tokens {
         // Act - Try to use invalid token
-        let response = app.get_player_with_auth_header(&user_uuid, invalid_token).await;
+        let response = app
+            .get_player_with_auth_header(&user_uuid, invalid_token)
+            .await;
 
         // Assert - Should be unauthorized
-        assert_eq!(401, response.status().as_u16(), "Failed for token: {}", invalid_token);
-        
+        assert_eq!(
+            401,
+            response.status().as_u16(),
+            "Failed for token: {}",
+            invalid_token
+        );
+
         let response_body: Value = response.json().await.expect("Failed to parse response");
         assert!(
-            response_body["error"].as_str().unwrap().contains("Invalid token") ||
-            response_body["error"].as_str().unwrap().contains("Malformed token"),
-            "Unexpected error message for token {}: {}", invalid_token, response_body["error"]
+            response_body["error"]
+                .as_str()
+                .unwrap()
+                .contains("Invalid token")
+                || response_body["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("Malformed token"),
+            "Unexpected error message for token {}: {}",
+            invalid_token,
+            response_body["error"]
         );
     }
 }
@@ -274,21 +306,25 @@ async fn completely_invalid_token_rejected() {
 async fn expired_access_token_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract access token
     let access_token = extract_token_from_cookies(&cookies, "access_token");
-    
+
     // Create an expired version of the token (this would require modifying JWT service for testing)
     // For now, we simulate by waiting longer than token expiry or using a pre-expired token
     let expired_token = create_expired_token(&access_token);
 
     // Act - Try to use expired token
-    let response = app.get_player_with_auth_header(&user_uuid, &expired_token).await;
+    let response = app
+        .get_player_with_auth_header(&user_uuid, &expired_token)
+        .await;
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Token has expired");
 }
@@ -298,11 +334,13 @@ async fn expired_access_token_rejected() {
 async fn expired_refresh_token_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (_user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (_user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract refresh token
     let refresh_token = extract_token_from_cookies(&cookies, "refresh_token");
-    
+
     // Create an expired version of the refresh token
     let expired_token = create_expired_token(&refresh_token);
     let expired_cookies = format!("refresh_token={}", expired_token);
@@ -312,7 +350,7 @@ async fn expired_refresh_token_rejected() {
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Refresh token has expired");
 }
@@ -326,21 +364,25 @@ async fn expired_refresh_token_rejected() {
 async fn blacklisted_token_after_logout_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract access token before logout
     let access_token = extract_token_from_cookies(&cookies, "access_token");
-    
+
     // Logout user (which should blacklist the token)
     let logout_response = app.post_logout(&cookies).await;
     assert_eq!(200, logout_response.status().as_u16());
 
     // Act - Try to use blacklisted token
-    let response = app.get_player_with_auth_header(&user_uuid, &access_token).await;
+    let response = app
+        .get_player_with_auth_header(&user_uuid, &access_token)
+        .await;
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Token has been revoked");
 }
@@ -350,11 +392,13 @@ async fn blacklisted_token_after_logout_rejected() {
 async fn blacklisted_refresh_token_after_logout_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (_user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (_user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract refresh token before logout
     let refresh_token = extract_token_from_cookies(&cookies, "refresh_token");
-    
+
     // Logout user (which should blacklist all tokens)
     let logout_response = app.post_logout(&cookies).await;
     assert_eq!(200, logout_response.status().as_u16());
@@ -365,7 +409,7 @@ async fn blacklisted_refresh_token_after_logout_rejected() {
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Refresh token has been revoked");
 }
@@ -375,29 +419,37 @@ async fn blacklisted_refresh_token_after_logout_rejected() {
 async fn old_tokens_invalid_after_password_change() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract tokens before password change
     let old_access_token = extract_token_from_cookies(&cookies, "access_token");
-    
+
     // Simulate password change (this would invalidate all existing sessions)
     // In a real implementation, this would be done through a password change endpoint
     // For now, we simulate by creating a new session and expecting old tokens to be invalid
-    
+
     // Login again (simulating password change that creates new session)
     let _new_cookies = app.login_user("user@example.com", "newpassword123").await;
-    
+
     // Act - Try to use old token after password change
-    let response = app.get_player_with_auth_header(&user_uuid, &old_access_token).await;
+    let response = app
+        .get_player_with_auth_header(&user_uuid, &old_access_token)
+        .await;
 
     // Assert - Should be unauthorized (old session invalidated)
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert!(
-        response_body["error"].as_str().unwrap().contains("revoked") ||
-        response_body["error"].as_str().unwrap().contains("invalid session"),
-        "Expected revocation error, got: {}", response_body["error"]
+        response_body["error"].as_str().unwrap().contains("revoked")
+            || response_body["error"]
+                .as_str()
+                .unwrap()
+                .contains("invalid session"),
+        "Expected revocation error, got: {}",
+        response_body["error"]
     );
 }
 
@@ -410,19 +462,20 @@ async fn old_tokens_invalid_after_password_change() {
 async fn cookies_have_security_attributes() {
     // Arrange
     let app = spawn_app().await;
-    
+
     // Act - Register user and check cookie attributes
     let register_body = json!({
         "email": "user@example.com",
         "password": "password123",
         "team_name": "User Team"
     });
-    
+
     let response = app.post_register(&register_body).await;
     assert_eq!(201, response.status().as_u16());
 
     // Assert - Check that cookies have proper security attributes
-    let set_cookie_headers: Vec<&str> = response.headers()
+    let set_cookie_headers: Vec<&str> = response
+        .headers()
         .get_all("set-cookie")
         .iter()
         .map(|h| h.to_str().unwrap())
@@ -431,12 +484,26 @@ async fn cookies_have_security_attributes() {
     for cookie_header in &set_cookie_headers {
         if cookie_header.contains("access_token=") || cookie_header.contains("refresh_token=") {
             // Check security attributes
-            assert!(cookie_header.contains("HttpOnly"), "Cookie should be HttpOnly: {}", cookie_header);
-            assert!(cookie_header.contains("Secure") || !cookie_header.contains("Secure"), "Cookie security depends on HTTPS"); // Allow both for testing
-            assert!(cookie_header.contains("SameSite="), "Cookie should have SameSite attribute: {}", cookie_header);
-            
+            assert!(
+                cookie_header.contains("HttpOnly"),
+                "Cookie should be HttpOnly: {}",
+                cookie_header
+            );
+            assert!(
+                cookie_header.contains("Secure") || !cookie_header.contains("Secure"),
+                "Cookie security depends on HTTPS"
+            ); // Allow both for testing
+            assert!(
+                cookie_header.contains("SameSite="),
+                "Cookie should have SameSite attribute: {}",
+                cookie_header
+            );
+
             // Check that sensitive cookies are not accessible via JavaScript
-            assert!(cookie_header.contains("HttpOnly"), "Auth cookies must be HttpOnly");
+            assert!(
+                cookie_header.contains("HttpOnly"),
+                "Auth cookies must be HttpOnly"
+            );
         }
     }
 }
@@ -446,10 +513,13 @@ async fn cookies_have_security_attributes() {
 async fn missing_cookie_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, _cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
+    let (user_uuid, _cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
 
     // Act - Try to access protected route without any cookies
-    let response = app.client
+    let response = app
+        .client
         .get(&format!("{}/api/v1/players/{}", &app.address, user_uuid))
         .send()
         .await
@@ -457,7 +527,7 @@ async fn missing_cookie_rejected() {
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Authentication required");
 }
@@ -467,17 +537,21 @@ async fn missing_cookie_rejected() {
 async fn wrong_cookie_name_rejected() {
     // Arrange
     let app = spawn_app().await;
-    let (user_uuid, cookies) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Extract token value but use wrong cookie name
     let access_token = extract_token_from_cookies(&cookies, "access_token");
 
     // Act - Try to use token with wrong cookie name
-    let response = app.get_player_with_custom_cookie(&user_uuid, "wrong_token_name", &access_token).await;
+    let response = app
+        .get_player_with_custom_cookie(&user_uuid, "wrong_token_name", &access_token)
+        .await;
 
     // Assert - Should be unauthorized
     assert_eq!(401, response.status().as_u16());
-    
+
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Authentication required");
 }
@@ -491,28 +565,30 @@ async fn wrong_cookie_name_rejected() {
 async fn multiple_concurrent_sessions_isolated() {
     // Arrange
     let app = spawn_app().await;
-    
+
     // Create user and get first session
-    let (user_uuid, cookies1) = app.create_test_user("user@example.com", "password123", "User Team").await;
-    
+    let (user_uuid, cookies1) = app
+        .create_test_user("user@example.com", "password123", "User Team")
+        .await;
+
     // Login again to get second session
     let cookies2 = app.login_user("user@example.com", "password123").await;
-    
+
     // Verify both sessions work
     let response1 = app.get_player(&user_uuid, &cookies1).await;
     assert_eq!(200, response1.status().as_u16());
-    
+
     let response2 = app.get_player(&user_uuid, &cookies2).await;
     assert_eq!(200, response2.status().as_u16());
-    
+
     // Logout first session
     let logout_response = app.post_logout(&cookies1).await;
     assert_eq!(200, logout_response.status().as_u16());
-    
+
     // Act & Assert - First session should be invalid, second should still work
     let response1_after_logout = app.get_player(&user_uuid, &cookies1).await;
     assert_eq!(401, response1_after_logout.status().as_u16());
-    
+
     let response2_after_logout = app.get_player(&user_uuid, &cookies2).await;
     assert_eq!(200, response2_after_logout.status().as_u16());
 }
@@ -526,7 +602,11 @@ fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
     for cookie in cookies.split(';') {
         let cookie = cookie.trim();
         if cookie.starts_with(&format!("{}=", token_name)) {
-            return cookie[token_name.len() + 1..].split(';').next().unwrap().to_string();
+            return cookie[token_name.len() + 1..]
+                .split(';')
+                .next()
+                .unwrap()
+                .to_string();
         }
     }
     panic!("Token {} not found in cookies", token_name);

@@ -2,19 +2,19 @@
 
 use crate::app_state::AppState;
 use crate::configuration::{DatabaseSettings, Settings};
-use crate::routes::{health_check, players, races, auth};
-use crate::services::{JwtService, JwtConfig, SessionManager, SessionConfig};
 use crate::middleware::{AuthMiddleware, RequireRole};
+use crate::routes::{auth, health_check, players, races};
+use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
 use std::sync::Arc;
 
+use axum::http::Method;
 use tokio::net::TcpListener as TokioTcpListener;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use axum::http::Method;
 
 pub struct Application {
     port: u16,
@@ -24,17 +24,22 @@ pub struct Application {
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
         let connection_pool = match get_connection_pool(&configuration.database).await {
-        Ok(pool) => {
-            tracing::info!("Successfully connected to MongoDB");
-            pool
-        }
-        Err(e) => {
-            tracing::warn!("Failed to connect to MongoDB: {}. Server will run in degraded mode.", e);
-            // Create a mock database for testing
-            let client = mongodb::Client::with_uri_str("mongodb://localhost:27017").await.unwrap();
-            client.database("mock_database")
-        }
-    };
+            Ok(pool) => {
+                tracing::info!("Successfully connected to MongoDB");
+                pool
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to connect to MongoDB: {}. Server will run in degraded mode.",
+                    e
+                );
+                // Create a mock database for testing
+                let client = mongodb::Client::with_uri_str("mongodb://localhost:27017")
+                    .await
+                    .unwrap();
+                client.database("mock_database")
+            }
+        };
 
         let address = format!(
             "{}:{}",
@@ -42,7 +47,12 @@ impl Application {
         );
         let listener = TokioTcpListener::bind(&address).await?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, connection_pool, configuration.application.base_url).await?;
+        let server = run(
+            listener,
+            connection_pool,
+            configuration.application.base_url,
+        )
+        .await?;
 
         Ok(Self { port, server })
     }
@@ -222,11 +232,14 @@ pub async fn run(
         audience: "racing-game-client".to_string(),
     };
     let jwt_service = Arc::new(JwtService::new(jwt_config));
-    
+
     // Initialize session manager
     let session_config = SessionConfig::default();
-    let session_manager = Arc::new(SessionManager::new(Arc::new(db_pool.clone()), session_config));
-    
+    let session_manager = Arc::new(SessionManager::new(
+        Arc::new(db_pool.clone()),
+        session_config,
+    ));
+
     // Create application state for auth routes
     let app_state = AppState::new(db_pool.clone(), jwt_service, session_manager);
 
@@ -236,7 +249,10 @@ pub async fn run(
     // Create admin-protected routes with AppState and middleware
     let admin_routes = players::admin_routes()
         .layer(RequireRole::admin())
-        .layer(AuthMiddleware::new(app_state.jwt_service.clone(), app_state.session_manager.clone()))
+        .layer(AuthMiddleware::new(
+            app_state.jwt_service.clone(),
+            app_state.session_manager.clone(),
+        ))
         .with_state(app_state.clone());
 
     // Create main app with Database state for other routes
@@ -255,13 +271,19 @@ pub async fn run(
                     "http://localhost:5174".parse().unwrap(),
                     "http://localhost:5175".parse().unwrap(),
                 ])
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::OPTIONS,
+                ])
                 .allow_headers([
                     axum::http::header::CONTENT_TYPE,
                     axum::http::header::AUTHORIZATION,
                     axum::http::header::ACCEPT,
                 ])
-                .allow_credentials(true)
+                .allow_credentials(true),
         )
         .with_state(db_pool);
 
@@ -276,7 +298,9 @@ pub async fn run(
     Ok(server)
 }
 
-pub async fn get_connection_pool(configuration: &DatabaseSettings) -> Result<Database, mongodb::error::Error> {
+pub async fn get_connection_pool(
+    configuration: &DatabaseSettings,
+) -> Result<Database, mongodb::error::Error> {
     // Try with authentication first, fallback to no auth for local development
     let connection_string = if configuration.username.is_empty() {
         configuration.connection_string_without_auth()
