@@ -87,22 +87,22 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
   const getSizeDimensions = () => {
     switch (size) {
       case 'small':
-        return { 
-          width: { base: 20, sm: 24 }, 
-          height: { base: 15, sm: 18 }, 
-          pixelSize: { base: 2.5, sm: 3 } 
+        return {
+          width: { base: 20, sm: 24 },
+          height: { base: 15, sm: 18 },
+          pixelSize: { base: 2.5, sm: 3 },
         };
       case 'large':
-        return { 
-          width: { base: 32, sm: 40 }, 
-          height: { base: 24, sm: 30 }, 
-          pixelSize: { base: 4, sm: 5 } 
+        return {
+          width: { base: 32, sm: 40 },
+          height: { base: 24, sm: 30 },
+          pixelSize: { base: 4, sm: 5 },
         };
       default: // medium
-        return { 
-          width: { base: 26, sm: 32 }, 
-          height: { base: 20, sm: 24 }, 
-          pixelSize: { base: 3.25, sm: 4 } 
+        return {
+          width: { base: 26, sm: 32 },
+          height: { base: 20, sm: 24 },
+          pixelSize: { base: 3.25, sm: 4 },
         };
     }
   };
@@ -136,7 +136,7 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
   const getContainerStyle = (): string => {
     const baseStyle = 'relative inline-block transition-all duration-300';
     const animationClass = spriteStyle.animations[animationState];
-    
+
     let playerStyle = '';
     if (isPlayer) {
       playerStyle = 'ring-2 ring-blue-400 ring-opacity-50 shadow-lg shadow-blue-500/30';
@@ -163,7 +163,12 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
                 minWidth: '2px',
                 minHeight: '2px',
                 // Debug: Add a border to see if pixels are being rendered
-                border: typeof window !== 'undefined' && window.location.hostname === 'localhost' && pixel !== 0 ? '1px solid rgba(255,255,255,0.1)' : 'none',
+                border:
+                  typeof window !== 'undefined' &&
+                  window.location.hostname === 'localhost' &&
+                  pixel !== 0
+                    ? '1px solid rgba(255,255,255,0.1)'
+                    : 'none',
               }}
             />
           );
@@ -189,14 +194,14 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
           {participant.player_name} ({dimensions.width.base}x{dimensions.height.base})
         </div>
       )}
-      
+
       {/* 8-bit pixel car */}
       <div className="relative">
         {renderPixelPattern()}
-        
+
         {/* Debug: Show a simple colored rectangle as fallback */}
         {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
-          <div 
+          <div
             className="absolute top-0 left-0 opacity-50"
             style={{
               width: `${dimensions.width.base}px`,
@@ -206,12 +211,12 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
             }}
           />
         )}
-        
+
         {/* Player indicator overlay - Mobile responsive */}
         {isPlayer && (
           <div className="absolute -top-0.5 sm:-top-1 -right-0.5 sm:-right-1 w-2 h-2 sm:w-3 sm:h-3 bg-blue-400 rounded-full border border-white animate-pulse" />
         )}
-        
+
         {/* Car name label (optional, for debugging) - Mobile responsive */}
         {size === 'large' && (
           <div className="absolute -bottom-5 sm:-bottom-6 left-1/2 transform -translate-x-1/2 text-[10px] sm:text-xs text-gray-300 whitespace-nowrap">

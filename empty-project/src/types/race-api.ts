@@ -83,7 +83,12 @@ export interface PerformancePreview {
 // Turn Phase Types (from /turn-phase endpoint)
 // ============================================================================
 
-export type TurnPhaseStatus = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'TurnProcessed' | 'Complete';
+export type TurnPhaseStatus =
+  | 'WaitingForPlayers'
+  | 'AllSubmitted'
+  | 'Processing'
+  | 'TurnProcessed'
+  | 'Complete';
 
 export interface TurnPhase {
   turn_phase: TurnPhaseStatus;

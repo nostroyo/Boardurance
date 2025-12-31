@@ -98,6 +98,13 @@ export const SimultaneousTurnController: React.FC<SimultaneousTurnControllerProp
         icon: '🏁',
         label: 'Turn Complete',
       },
+      TurnProcessed: {
+        color: 'text-indigo-400',
+        bgColor: 'bg-indigo-900/20',
+        borderColor: 'border-indigo-800',
+        icon: '✅',
+        label: 'Turn Processed',
+      },
     };
 
     const config = phaseConfig[currentTurnPhase];

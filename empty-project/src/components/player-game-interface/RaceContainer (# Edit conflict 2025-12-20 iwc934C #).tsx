@@ -216,8 +216,8 @@ export function RaceContainer({
       });
 
       const turnPhase = await withErrorHandling(
-        () => raceAPIService.getTurnPhase(raceUuid), 
-        'fetching turn phase'
+        () => raceAPIService.getTurnPhase(raceUuid),
+        'fetching turn phase',
       );
       console.log('[RaceContainer] Turn phase loaded successfully');
 
@@ -231,7 +231,9 @@ export function RaceContainer({
       // Debug: Log the real data being used
       console.log('[RaceContainer] Real data summary:', {
         carData: carData ? 'loaded' : 'missing',
-        localView: localView ? `${localView.visible_participants.length} participants, ${localView.visible_sectors.length} sectors` : 'missing',
+        localView: localView
+          ? `${localView.visible_participants.length} participants, ${localView.visible_sectors.length} sectors`
+          : 'missing',
         turnPhase: turnPhase ? turnPhase.turn_phase : 'missing',
       });
 
@@ -239,13 +241,17 @@ export function RaceContainer({
       if (localView) {
         console.log('[RaceContainer] Local view data:', {
           centerSector: localView.center_sector,
-          visibleSectors: localView.visible_sectors.map(s => ({ id: s.id, name: s.name, occupancy: s.current_occupancy })),
-          participants: localView.visible_participants.map(p => ({ 
-            name: p.player_name, 
-            sector: p.current_sector, 
+          visibleSectors: localView.visible_sectors.map((s) => ({
+            id: s.id,
+            name: s.name,
+            occupancy: s.current_occupancy,
+          })),
+          participants: localView.visible_participants.map((p) => ({
+            name: p.player_name,
+            sector: p.current_sector,
             position: p.position_in_sector,
-            uuid: p.player_uuid.slice(0, 8)
-          }))
+            uuid: p.player_uuid.slice(0, 8),
+          })),
         });
       }
 

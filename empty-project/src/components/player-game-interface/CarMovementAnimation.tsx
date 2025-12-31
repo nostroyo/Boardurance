@@ -41,39 +41,42 @@ const CarMovementAnimationComponent: React.FC<CarMovementAnimationProps> = ({
     }
   }, [movements]);
 
-  const startAnimation = useCallback((newMovements: CarMovement[]) => {
-    setAnimationState({
-      isAnimating: true,
-      currentMovements: newMovements,
-      progress: 0,
-    });
+  const startAnimation = useCallback(
+    (newMovements: CarMovement[]) => {
+      setAnimationState({
+        isAnimating: true,
+        currentMovements: newMovements,
+        progress: 0,
+      });
 
-    // Animate progress from 0 to 1
-    const startTime = Date.now();
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      // Animate progress from 0 to 1
+      const startTime = Date.now();
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
 
-      setAnimationState((prev) => ({
-        ...prev,
-        progress,
-      }));
+        setAnimationState((prev) => ({
+          ...prev,
+          progress,
+        }));
 
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        // Animation complete
-        setAnimationState({
-          isAnimating: false,
-          currentMovements: [],
-          progress: 1,
-        });
-        onAnimationComplete?.();
-      }
-    };
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Animation complete
+          setAnimationState({
+            isAnimating: false,
+            currentMovements: [],
+            progress: 1,
+          });
+          onAnimationComplete?.();
+        }
+      };
 
-    requestAnimationFrame(animate);
-  }, [duration, onAnimationComplete]);
+      requestAnimationFrame(animate);
+    },
+    [duration, onAnimationComplete],
+  );
 
   // Calculate easing function for smooth animation
   const easeInOutCubic = (t: number): number => {
@@ -85,27 +88,27 @@ const CarMovementAnimationComponent: React.FC<CarMovementAnimationProps> = ({
     if (!animationState.isAnimating) return '';
 
     const movement = animationState.currentMovements.find(
-      (m) => m.participantUuid === participantUuid
+      (m) => m.participantUuid === participantUuid,
     );
 
     if (!movement || movement.movementType === 'Stay') return '';
 
     const easedProgress = easeInOutCubic(animationState.progress);
-    
+
     // Calculate movement direction and distance
     const sectorDifference = movement.toSector - movement.fromSector;
     const positionDifference = movement.toPosition - movement.fromPosition;
-    
+
     // Translate based on sector and position changes
     const sectorOffset = sectorDifference * 100; // 100px per sector (adjust as needed)
     const positionOffset = positionDifference * 60; // 60px per position slot
-    
+
     const totalOffsetX = sectorOffset + positionOffset;
     const currentOffsetX = totalOffsetX * easedProgress;
-    
+
     // Add slight vertical bounce for visual appeal
     const bounceHeight = Math.sin(easedProgress * Math.PI) * 10;
-    
+
     return `translateX(${currentOffsetX}px) translateY(${-bounceHeight}px)`;
   };
 

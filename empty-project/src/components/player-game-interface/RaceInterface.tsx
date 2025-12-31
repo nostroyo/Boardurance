@@ -125,10 +125,18 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                 <div className="bg-gray-800 rounded-lg p-4">
                   <h3 className="text-lg font-semibold mb-3">Your Car</h3>
                   <div className="space-y-2 text-sm">
-                    <div><span className="text-gray-400">Car:</span> {carData.car.name}</div>
-                    <div><span className="text-gray-400">Pilot:</span> {carData.pilot.name}</div>
-                    <div><span className="text-gray-400">Engine:</span> {carData.engine.name}</div>
-                    <div><span className="text-gray-400">Body:</span> {carData.body.name}</div>
+                    <div>
+                      <span className="text-gray-400">Car:</span> {carData.car.name}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Pilot:</span> {carData.pilot.name}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Engine:</span> {carData.engine.name}
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Body:</span> {carData.body.name}
+                    </div>
                   </div>
                 </div>
               )}
@@ -197,7 +205,9 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
           {/* Debug Info (Development Only) */}
           {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
             <div className="bg-gray-800 rounded-lg p-4 text-xs">
-              <h3 className="text-sm font-semibold mb-2 text-yellow-400">Debug Info - RaceInterface</h3>
+              <h3 className="text-sm font-semibold mb-2 text-yellow-400">
+                Debug Info - RaceInterface
+              </h3>
               <div className="grid grid-cols-2 gap-4 text-gray-400">
                 <div>
                   <div>Race UUID: {raceUuid}</div>
@@ -232,7 +242,6 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
               )}
             </div>
           )}
-
         </div>
       </div>
     );

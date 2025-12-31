@@ -26,10 +26,10 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
   const [localView, setLocalView] = useState<LocalView | null>(null);
   const [boostAvailability, setBoostAvailability] = useState<BoostAvailability | null>(null);
   const [currentTurnPhase, setCurrentTurnPhase] = useState<TurnPhaseStatus>('WaitingForPlayers');
-  
+
   // Enhanced state for boost availability debugging
   const [boostAvailabilityError, setBoostAvailabilityError] = useState<string | null>(null);
-  const [isLoadingBoostAvailability, setIsLoadingBoostAvailability] = useState(false);
+  const [isLoadingBoostAvailability] = useState(false);
   const [boostAvailabilityRetryCount, setBoostAvailabilityRetryCount] = useState(0);
 
   // Fetch local view data from API (no mock fallbacks)
@@ -61,15 +61,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
     try {
       await actions.initializeRace(raceUuid, playerUuid);
       // Fetch additional data for redesigned interface
-      await Promise.all([
-        fetchLocalView(),
-        fetchBoostAvailability()
-      ]);
+      await Promise.all([fetchLocalView(), fetchBoostAvailability()]);
       retryCountRef.current = 0; // Reset retry count on success
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize race';
 
-      if (retryCountRef.current < maxRetries && errorMessage.includes('network') || errorMessage.includes('timeout')) {
+      if (
+        (retryCountRef.current < maxRetries && errorMessage.includes('network')) ||
+        errorMessage.includes('timeout')
+      ) {
         retryCountRef.current++;
         const delay = 1000 * Math.pow(2, retryCountRef.current - 1); // Exponential backoff
 
@@ -102,15 +102,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
       try {
         // Update race data
         await actions.updateRaceData();
-        
+
         // Update redesigned interface data with better error handling
         const promises = [fetchLocalView()];
-        
+
         // Only fetch boost availability if race is in progress and we don't have data or had an error
         if (state.race?.status === 'InProgress' && (!boostAvailability || boostAvailabilityError)) {
           promises.push(fetchBoostAvailability());
         }
-        
+
         await Promise.allSettled(promises); // Use allSettled to prevent one failure from stopping others
 
         // Check turn phase if race is in progress
@@ -140,7 +140,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
         pollingRef.current = null;
       }
     };
-  }, [state.race, raceUuid, actions, currentTurnPhase, state.hasSubmittedAction, fetchLocalView, fetchBoostAvailability]);
+  }, [
+    state.race,
+    raceUuid,
+    actions,
+    currentTurnPhase,
+    state.hasSubmittedAction,
+    fetchLocalView,
+    fetchBoostAvailability,
+  ]);
 
   // Handle race completion with enhanced feedback
   useEffect(() => {
@@ -306,13 +314,13 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               lap_characteristic: state.race.lap_characteristic,
               submitted_players: [], // TODO: Get from API
               pending_players: [], // TODO: Get from API
-              total_active_players: state.race.participants.length
+              total_active_players: state.race.participants.length,
             }}
             raceStatus={
-              state.race.status === 'Finished' 
-                ? 'Completed' 
-                : state.race.status === 'InProgress' 
-                  ? 'InProgress' 
+              state.race.status === 'Finished'
+                ? 'Completed'
+                : state.race.status === 'InProgress'
+                  ? 'InProgress'
                   : 'NotStarted'
             }
             hasSubmittedAction={state.hasSubmittedAction}
@@ -353,7 +361,9 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:gap-3 text-sm">
                 <div className="bg-gray-700/50 p-2 rounded">
                   <span className="text-gray-400 block text-xs">Current Sector:</span>
-                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.current_sector}</p>
+                  <p className="font-medium text-sm sm:text-base">
+                    {state.playerParticipant?.current_sector}
+                  </p>
                 </div>
                 <div className="bg-gray-700/50 p-2 rounded">
                   <span className="text-gray-400 block text-xs">Position:</span>
@@ -363,11 +373,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 </div>
                 <div className="bg-gray-700/50 p-2 rounded">
                   <span className="text-gray-400 block text-xs">Current Lap:</span>
-                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.current_lap}</p>
+                  <p className="font-medium text-sm sm:text-base">
+                    {state.playerParticipant?.current_lap}
+                  </p>
                 </div>
                 <div className="bg-gray-700/50 p-2 rounded">
                   <span className="text-gray-400 block text-xs">Total Value:</span>
-                  <p className="font-medium text-sm sm:text-base">{state.playerParticipant?.total_value}</p>
+                  <p className="font-medium text-sm sm:text-base">
+                    {state.playerParticipant?.total_value}
+                  </p>
                 </div>
               </div>
             </div>
@@ -383,19 +397,22 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 boostAvailabilityError,
                 hasSubmittedAction: state.hasSubmittedAction,
                 retryCount: boostAvailabilityRetryCount,
-                shouldShowButtons: state.race?.status === 'InProgress' && 
-                                 currentTurnPhase === 'WaitingForPlayers' && 
-                                 boostAvailability && 
-                                 !state.hasSubmittedAction
-              };
-              
-              console.log('[PlayerGameInterface] Boost button conditions:', debugInfo);
-              
-              // Show boost control panel when all conditions are met
-              if (state.race?.status === 'InProgress' &&
+                shouldShowButtons:
+                  state.race?.status === 'InProgress' &&
                   currentTurnPhase === 'WaitingForPlayers' &&
                   boostAvailability &&
-                  !state.hasSubmittedAction) {
+                  !state.hasSubmittedAction,
+              };
+
+              console.log('[PlayerGameInterface] Boost button conditions:', debugInfo);
+
+              // Show boost control panel when all conditions are met
+              if (
+                state.race?.status === 'InProgress' &&
+                currentTurnPhase === 'WaitingForPlayers' &&
+                boostAvailability &&
+                !state.hasSubmittedAction
+              ) {
                 return (
                   <BoostControlPanel
                     selectedBoost={state.selectedBoost}
@@ -408,13 +425,15 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   />
                 );
               }
-              
+
               // Show loading state while fetching boost availability
-              if (state.race?.status === 'InProgress' &&
-                  currentTurnPhase === 'WaitingForPlayers' &&
-                  !boostAvailability &&
-                  isLoadingBoostAvailability &&
-                  !state.hasSubmittedAction) {
+              if (
+                state.race?.status === 'InProgress' &&
+                currentTurnPhase === 'WaitingForPlayers' &&
+                !boostAvailability &&
+                isLoadingBoostAvailability &&
+                !state.hasSubmittedAction
+              ) {
                 return (
                   <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
                     <div className="text-center py-4 sm:py-6">
@@ -422,20 +441,20 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                       <p className="text-blue-400 font-medium text-sm sm:text-base mb-1">
                         Loading Boost Options...
                       </p>
-                      <p className="text-gray-400 text-xs">
-                        Fetching available boost cards
-                      </p>
+                      <p className="text-gray-400 text-xs">Fetching available boost cards</p>
                     </div>
                   </div>
                 );
               }
-              
+
               // Show error state with retry option
-              if (state.race?.status === 'InProgress' &&
-                  currentTurnPhase === 'WaitingForPlayers' &&
-                  !boostAvailability &&
-                  boostAvailabilityError &&
-                  !state.hasSubmittedAction) {
+              if (
+                state.race?.status === 'InProgress' &&
+                currentTurnPhase === 'WaitingForPlayers' &&
+                !boostAvailability &&
+                boostAvailabilityError &&
+                !state.hasSubmittedAction
+              ) {
                 return (
                   <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-red-500">
                     <div className="text-center py-4 sm:py-6">
@@ -443,9 +462,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                       <p className="text-red-400 font-medium text-sm sm:text-base mb-2">
                         Boost Options Unavailable
                       </p>
-                      <p className="text-gray-400 text-xs mb-3">
-                        {boostAvailabilityError}
-                      </p>
+                      <p className="text-gray-400 text-xs mb-3">{boostAvailabilityError}</p>
                       <button
                         onClick={() => {
                           setBoostAvailabilityRetryCount(0);
@@ -459,7 +476,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   </div>
                 );
               }
-              
+
               // Show action submitted state
               if (state.hasSubmittedAction) {
                 return (
@@ -481,14 +498,16 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   </div>
                 );
               }
-              
+
               // Show race finished state
               if (state.race?.status === 'Finished') {
                 return (
                   <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
                     <div className="text-center py-4 sm:py-6">
                       <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏁</div>
-                      <p className="text-blue-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Finished</p>
+                      <p className="text-blue-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">
+                        Race Finished
+                      </p>
                       {state.playerParticipant?.finish_position && (
                         <p className="text-gray-300 text-sm sm:text-base">
                           Final Position:{' '}
@@ -501,26 +520,32 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                   </div>
                 );
               }
-              
+
               // Show race waiting state
               if (state.race?.status === 'Waiting') {
                 return (
                   <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
                     <div className="text-center py-4 sm:py-6">
                       <div className="text-yellow-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏳</div>
-                      <p className="text-yellow-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">Race Starting Soon</p>
-                      <p className="text-gray-400 text-xs sm:text-sm">Waiting for race to begin...</p>
+                      <p className="text-yellow-400 font-medium text-base sm:text-lg mb-1 sm:mb-2">
+                        Race Starting Soon
+                      </p>
+                      <p className="text-gray-400 text-xs sm:text-sm">
+                        Waiting for race to begin...
+                      </p>
                     </div>
                   </div>
                 );
               }
-              
+
               // Default state - turn actions not available
               return (
                 <div className="bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-700">
                   <div className="text-center py-4 sm:py-6">
                     <div className="text-gray-400 text-3xl sm:text-4xl mb-2 sm:mb-3">⏸️</div>
-                    <p className="text-gray-400 font-medium text-sm sm:text-base">Turn actions not available</p>
+                    <p className="text-gray-400 font-medium text-sm sm:text-base">
+                      Turn actions not available
+                    </p>
                     <p className="text-gray-500 text-xs sm:text-sm mt-1 sm:mt-2">
                       Current phase: {currentTurnPhase}
                     </p>
@@ -551,9 +576,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
                 <div className="text-red-200 text-lg sm:text-xl flex-shrink-0">⚠️</div>
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium mb-1 text-sm sm:text-base">Error</h4>
-                  <p className="text-xs sm:text-sm text-red-100 break-words">
-                    {state.error}
-                  </p>
+                  <p className="text-xs sm:text-sm text-red-100 break-words">{state.error}</p>
                   {(state.error.includes('network') || state.error.includes('timeout')) && (
                     <button
                       onClick={handleRetry}
@@ -586,9 +609,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               <div>Boost Availability: {boostAvailability ? '✓ Loaded' : '✗ Missing'}</div>
               <div>Can Submit: {state.race?.status === 'InProgress' ? 'Yes' : 'No'}</div>
               <div>Has Submitted: {state.hasSubmittedAction ? 'Yes' : 'No'}</div>
-              {localView && (
-                <div>Visible Sectors: {localView.visible_sectors.length}</div>
-              )}
+              {localView && <div>Visible Sectors: {localView.visible_sectors.length}</div>}
               {boostAvailability && (
                 <div>Available Boosts: [{boostAvailability.available_cards.join(', ')}]</div>
               )}
@@ -609,8 +630,12 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
             <div className="bg-gray-800 rounded-lg p-4 sm:p-6 text-center border border-gray-700 max-w-sm w-full">
               <div className="text-blue-400 text-3xl sm:text-4xl mb-2 sm:mb-3">🏎️</div>
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">Processing Turn</h3>
-              <p className="text-gray-300 text-xs sm:text-sm mb-3 sm:mb-4">Calculating race results...</p>
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">
+                Processing Turn
+              </h3>
+              <p className="text-gray-300 text-xs sm:text-sm mb-3 sm:mb-4">
+                Calculating race results...
+              </p>
               <div className="w-24 sm:w-32 bg-gray-700 rounded-full h-1.5 sm:h-2 mx-auto">
                 <div className="bg-blue-500 h-1.5 sm:h-2 rounded-full animate-pulse"></div>
               </div>

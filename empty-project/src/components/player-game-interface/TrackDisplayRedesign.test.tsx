@@ -91,7 +91,7 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     expect(screen.getByText('Track View')).toBeInTheDocument();
@@ -105,7 +105,7 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     // Should show all sectors by their aria-labels
@@ -122,7 +122,7 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     // Should show capacity indicators
@@ -139,7 +139,7 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     // Should show value ranges
@@ -152,14 +152,14 @@ describe('TrackDisplayRedesign', () => {
 
   it('calls onSectorClick when sector is clicked', () => {
     const mockOnSectorClick = vi.fn();
-    
+
     render(
       <TrackDisplayRedesign
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
         onSectorClick={mockOnSectorClick}
-      />
+      />,
     );
 
     // Click on a sector (the SectorGrid component should handle the click)
@@ -171,14 +171,14 @@ describe('TrackDisplayRedesign', () => {
 
   it('calls onSlotClick when slot is clicked', () => {
     const mockOnSlotClick = vi.fn();
-    
+
     render(
       <TrackDisplayRedesign
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
         onSlotClick={mockOnSlotClick}
-      />
+      />,
     );
 
     // Click on a position slot (the PositionSlot component should handle the click)
@@ -202,7 +202,7 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={animatingState}
-      />
+      />,
     );
 
     expect(screen.getByText('Processing sector movements...')).toBeInTheDocument();
@@ -220,7 +220,7 @@ describe('TrackDisplayRedesign', () => {
         localView={emptyLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     expect(screen.getByText('No Track Data')).toBeInTheDocument();
@@ -233,12 +233,14 @@ describe('TrackDisplayRedesign', () => {
         localView={mockLocalView}
         playerUuid="test-player"
         animationState={mockAnimationState}
-      />
+      />,
     );
 
     expect(screen.getByText('Your sector')).toBeInTheDocument();
     expect(screen.getByText('Available capacity')).toBeInTheDocument();
     expect(screen.getByText('Full capacity')).toBeInTheDocument();
-    expect(screen.getByText('Scroll to view all sectors • Click sectors for details')).toBeInTheDocument();
+    expect(
+      screen.getByText('Scroll to view all sectors • Click sectors for details'),
+    ).toBeInTheDocument();
   });
 });

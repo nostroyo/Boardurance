@@ -42,9 +42,11 @@ const PositionSlotComponent: React.FC<PositionSlotProps> = ({
     if (isOccupied && participant) {
       // Debug logging
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        console.log(`[PositionSlot] Rendering CarSprite for ${participant.player_name} in slot ${slotNumber}`);
+        console.log(
+          `[PositionSlot] Rendering CarSprite for ${participant.player_name} in slot ${slotNumber}`,
+        );
       }
-      
+
       // Show 8-bit car sprite with debug wrapper
       return (
         <div className="relative">

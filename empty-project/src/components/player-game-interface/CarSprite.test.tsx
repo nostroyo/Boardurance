@@ -28,12 +28,7 @@ const mockPlayerParticipant: LocalView['visible_participants'][0] = {
 
 describe('CarSprite', () => {
   it('renders car sprite with correct participant information', () => {
-    render(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-      />
-    );
+    render(<CarSprite participant={mockParticipant} isPlayer={false} />);
 
     const sprite = screen.getByRole('img');
     expect(sprite).toBeInTheDocument();
@@ -41,16 +36,11 @@ describe('CarSprite', () => {
   });
 
   it('renders player car with special highlighting', () => {
-    render(
-      <CarSprite
-        participant={mockPlayerParticipant}
-        isPlayer={true}
-      />
-    );
+    render(<CarSprite participant={mockPlayerParticipant} isPlayer={true} />);
 
     const sprite = screen.getByRole('img');
     expect(sprite).toBeInTheDocument();
-    
+
     // Check for player indicator (blue dot)
     const playerIndicator = sprite.querySelector('.bg-blue-400');
     expect(playerIndicator).toBeInTheDocument();
@@ -58,23 +48,13 @@ describe('CarSprite', () => {
 
   it('applies correct size styling', () => {
     const { rerender } = render(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        size="small"
-      />
+      <CarSprite participant={mockParticipant} isPlayer={false} size="small" />,
     );
 
     let sprite = screen.getByRole('img');
     expect(sprite).toHaveStyle({ width: '24px', height: '18px' });
 
-    rerender(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        size="large"
-      />
-    );
+    rerender(<CarSprite participant={mockParticipant} isPlayer={false} size="large" />);
 
     sprite = screen.getByRole('img');
     expect(sprite).toHaveStyle({ width: '40px', height: '30px' });
@@ -82,33 +62,19 @@ describe('CarSprite', () => {
 
   it('applies correct animation state classes', () => {
     const { rerender } = render(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        animationState="idle"
-      />
+      <CarSprite participant={mockParticipant} isPlayer={false} animationState="idle" />,
     );
 
     let container = screen.getByRole('img');
     expect(container).toHaveClass('animate-pulse');
 
-    rerender(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        animationState="moving"
-      />
-    );
+    rerender(<CarSprite participant={mockParticipant} isPlayer={false} animationState="moving" />);
 
     container = screen.getByRole('img');
     expect(container).toHaveClass('animate-bounce');
 
     rerender(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        animationState="highlighted"
-      />
+      <CarSprite participant={mockParticipant} isPlayer={false} animationState="highlighted" />,
     );
 
     container = screen.getByRole('img');
@@ -119,16 +85,12 @@ describe('CarSprite', () => {
     const participant1 = { ...mockParticipant, player_uuid: 'player-1' };
     const participant2 = { ...mockParticipant, player_uuid: 'player-2' };
 
-    const { rerender } = render(
-      <CarSprite participant={participant1} isPlayer={false} />
-    );
+    const { rerender } = render(<CarSprite participant={participant1} isPlayer={false} />);
 
     const sprite1 = screen.getByRole('img');
     const pixels1 = sprite1.querySelectorAll('div[style*="background"]');
 
-    rerender(
-      <CarSprite participant={participant2} isPlayer={false} />
-    );
+    rerender(<CarSprite participant={participant2} isPlayer={false} />);
 
     const sprite2 = screen.getByRole('img');
     const pixels2 = sprite2.querySelectorAll('div[style*="background"]');
@@ -140,15 +102,10 @@ describe('CarSprite', () => {
   });
 
   it('renders 8-bit pixel pattern correctly', () => {
-    render(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-      />
-    );
+    render(<CarSprite participant={mockParticipant} isPlayer={false} />);
 
     const sprite = screen.getByRole('img');
-    
+
     // Check that pixel pattern is rendered (8x6 grid)
     const pixelRows = sprite.querySelectorAll('div.flex');
     expect(pixelRows).toHaveLength(6); // 6 rows in the pattern
@@ -159,24 +116,13 @@ describe('CarSprite', () => {
   });
 
   it('shows car name for large size sprites', () => {
-    render(
-      <CarSprite
-        participant={mockParticipant}
-        isPlayer={false}
-        size="large"
-      />
-    );
+    render(<CarSprite participant={mockParticipant} isPlayer={false} size="large" />);
 
     expect(screen.getByText('Test Car')).toBeInTheDocument();
   });
 
   it('includes player indicator in tooltip for player cars', () => {
-    render(
-      <CarSprite
-        participant={mockPlayerParticipant}
-        isPlayer={true}
-      />
-    );
+    render(<CarSprite participant={mockPlayerParticipant} isPlayer={true} />);
 
     const sprite = screen.getByRole('img');
     expect(sprite).toHaveAttribute('title', expect.stringContaining('(You)'));

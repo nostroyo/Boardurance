@@ -55,7 +55,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     // Should show 5 position slots
@@ -73,7 +73,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     // Should only show participants in sector 1
@@ -88,7 +88,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     const playerSprite = screen.getByLabelText(/Car sprite for Player 1/);
@@ -101,13 +101,13 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
-    const carContainers = screen.getAllByRole('img').map(img => img.parentElement);
-    
+    const carContainers = screen.getAllByRole('img').map((img) => img.parentElement);
+
     // Each car should have a unique position
-    const positions = carContainers.map(container => {
+    const positions = carContainers.map((container) => {
       const style = window.getComputedStyle(container!);
       return `${style.left}-${style.top}`;
     });
@@ -118,14 +118,14 @@ describe('CarSpritePositioning', () => {
 
   it('handles car click events', () => {
     const onCarClick = vi.fn();
-    
+
     render(
       <CarSpritePositioning
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
         onCarClick={onCarClick}
-      />
+      />,
     );
 
     const carSprite = screen.getByLabelText(/Car sprite for Player 1/);
@@ -136,13 +136,13 @@ describe('CarSpritePositioning', () => {
 
   it('shows sector capacity warning when full', () => {
     const fullSector = { ...mockSector, slot_capacity: 2, current_occupancy: 2 };
-    
+
     render(
       <CarSpritePositioning
         sector={fullSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     expect(screen.getByText(/Sector Full/)).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants.slice(0, 1)}
         playerUuid="player-1"
-      />
+      />,
     );
 
     let carSprite = screen.getByRole('img');
@@ -167,7 +167,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     carSprite = screen.getAllByRole('img')[0];
@@ -180,7 +180,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={mockParticipants}
         playerUuid="player-1"
-      />
+      />,
     );
 
     // Should show position indicators
@@ -194,7 +194,7 @@ describe('CarSpritePositioning', () => {
         sector={mockSector}
         participants={[]} // No participants
         playerUuid="player-1"
-      />
+      />,
     );
 
     // Should show empty slots

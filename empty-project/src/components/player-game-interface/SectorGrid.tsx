@@ -26,19 +26,20 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
     const filteredParticipants = participants
       .filter((p) => p.current_sector === sector.id)
       .sort((a, b) => a.position_in_sector - b.position_in_sector);
-    
+
     // Debug logging
     if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.log(`[SectorGrid] Sector ${sector.id} participants:`, filteredParticipants);
-      console.log(`[SectorGrid] Sector ${sector.id} participant positions:`, 
-        filteredParticipants.map(p => ({ 
-          name: p.player_name, 
+      console.log(
+        `[SectorGrid] Sector ${sector.id} participant positions:`,
+        filteredParticipants.map((p) => ({
+          name: p.player_name,
           position: p.position_in_sector,
-          uuid: p.player_uuid.slice(0, 8) 
-        }))
+          uuid: p.player_uuid.slice(0, 8),
+        })),
       );
     }
-    
+
     return filteredParticipants;
   }, [participants, sector.id]);
 
@@ -50,11 +51,14 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
     // Debug: Log all participants and their positions
     if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.log(`[SectorGrid] Creating slots for sector ${sector.id}:`);
-      console.log(`[SectorGrid] Available participants:`, sectorParticipants.map(p => ({
-        name: p.player_name,
-        position: p.position_in_sector,
-        uuid: p.player_uuid.slice(0, 8)
-      })));
+      console.log(
+        `[SectorGrid] Available participants:`,
+        sectorParticipants.map((p) => ({
+          name: p.player_name,
+          position: p.position_in_sector,
+          uuid: p.player_uuid.slice(0, 8),
+        })),
+      );
     }
 
     for (let i = 1; i <= maxSlots; i++) {
@@ -68,7 +72,7 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
         console.log(`[SectorGrid] Slot ${i} (backend pos ${backendPosition}):`, {
           participant: participant ? participant.player_name : 'empty',
           isPlayerSlot,
-          participantPosition: participant?.position_in_sector
+          participantPosition: participant?.position_in_sector,
         });
       }
 

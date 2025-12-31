@@ -82,11 +82,11 @@ const setScreenSize = (width: number) => {
   window.matchMedia = vi.fn().mockImplementation((query) => {
     const breakpoints = {
       '(min-width: 1024px)': width >= 1024, // lg
-      '(min-width: 768px)': width >= 768,   // md
-      '(min-width: 640px)': width >= 640,   // sm
-      '(min-width: 475px)': width >= 475,   // xs
+      '(min-width: 768px)': width >= 768, // md
+      '(min-width: 640px)': width >= 640, // sm
+      '(min-width: 475px)': width >= 475, // xs
     };
-    
+
     return {
       ...mockMatchMedia(query),
       matches: breakpoints[query as keyof typeof breakpoints] || false,
@@ -106,17 +106,12 @@ describe('Responsive Layout Tests', () => {
   describe('TrackDisplayRedesign Responsive Behavior', () => {
     it('should render with desktop layout on large screens', () => {
       setScreenSize(1024);
-      
-      render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+
+      render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Check that the component renders
       expect(screen.getByText('Track View')).toBeInTheDocument();
-      
+
       // Check for desktop-specific classes (these would be applied by Tailwind)
       const header = screen.getByText('Track View').closest('div');
       expect(header).toHaveClass('lg:px-6'); // Desktop padding
@@ -124,13 +119,8 @@ describe('Responsive Layout Tests', () => {
 
     it('should render with tablet layout on medium screens', () => {
       setScreenSize(768);
-      
-      render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+
+      render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Should still show most desktop features but with adjusted spacing
       expect(screen.getByText('Track View')).toBeInTheDocument();
@@ -139,13 +129,8 @@ describe('Responsive Layout Tests', () => {
 
     it('should render with mobile layout on small screens', () => {
       setScreenSize(375);
-      
-      render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+
+      render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Mobile should have compact layout
       expect(screen.getByText('Track View')).toBeInTheDocument();
@@ -157,10 +142,7 @@ describe('Responsive Layout Tests', () => {
       // Test mobile height
       setScreenSize(375);
       const { rerender } = render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
+        <TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />,
       );
 
       let scrollContainer = document.querySelector('.h-64');
@@ -168,12 +150,7 @@ describe('Responsive Layout Tests', () => {
 
       // Test desktop height
       setScreenSize(1024);
-      rerender(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+      rerender(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       scrollContainer = document.querySelector('.lg\\:h-\\[28rem\\]');
       expect(scrollContainer).toBeInTheDocument();
@@ -193,12 +170,12 @@ describe('Responsive Layout Tests', () => {
 
     it('should render 6-column grid on desktop', () => {
       setScreenSize(1024);
-      
+
       render(<BoostControlPanel {...mockProps} />);
 
       const buttonGrid = document.querySelector('.sm\\:grid-cols-6');
       expect(buttonGrid).toBeInTheDocument();
-      
+
       // All boost buttons should be visible
       for (let i = 0; i <= 5; i++) {
         expect(screen.getByRole('button', { name: `Select boost value ${i}` })).toBeInTheDocument();
@@ -207,12 +184,12 @@ describe('Responsive Layout Tests', () => {
 
     it('should render 3-column grid on mobile', () => {
       setScreenSize(375);
-      
+
       render(<BoostControlPanel {...mockProps} />);
 
       const buttonGrid = document.querySelector('.grid-cols-3');
       expect(buttonGrid).toBeInTheDocument();
-      
+
       // All boost buttons should still be accessible
       for (let i = 0; i <= 5; i++) {
         expect(screen.getByRole('button', { name: `Select boost value ${i}` })).toBeInTheDocument();
@@ -221,11 +198,11 @@ describe('Responsive Layout Tests', () => {
 
     it('should have touch-friendly button sizes on mobile', () => {
       setScreenSize(375);
-      
+
       render(<BoostControlPanel {...mockProps} />);
 
       const buttons = screen.getAllByRole('button', { name: /Select boost value/ });
-      buttons.forEach(button => {
+      buttons.forEach((button) => {
         expect(button).toHaveClass('min-h-[48px]'); // Touch-friendly minimum height
         expect(button).toHaveClass('touch-manipulation'); // Touch optimization
       });
@@ -233,7 +210,7 @@ describe('Responsive Layout Tests', () => {
 
     it('should stack confirmation dialog buttons on mobile', () => {
       setScreenSize(375);
-      
+
       render(<BoostControlPanel {...mockProps} selectedBoost={3} />);
 
       // Click validate to show confirmation
@@ -252,14 +229,14 @@ describe('Responsive Layout Tests', () => {
 
     it('should render 2-column info grid on desktop', () => {
       setScreenSize(1024);
-      
+
       render(
         <SectorGrid
           sector={mockSector}
           participants={mockParticipants}
           isPlayerSector={false}
           playerUuid="player-1"
-        />
+        />,
       );
 
       const infoGrid = document.querySelector('.sm\\:grid-cols-2');
@@ -268,14 +245,14 @@ describe('Responsive Layout Tests', () => {
 
     it('should render single-column info grid on mobile', () => {
       setScreenSize(375);
-      
+
       render(
         <SectorGrid
           sector={mockSector}
           participants={mockParticipants}
           isPlayerSector={false}
           playerUuid="player-1"
-        />
+        />,
       );
 
       const infoGrid = document.querySelector('.grid-cols-1');
@@ -284,14 +261,14 @@ describe('Responsive Layout Tests', () => {
 
     it('should wrap position slots on mobile', () => {
       setScreenSize(375);
-      
+
       render(
         <SectorGrid
           sector={mockSector}
           participants={mockParticipants}
           isPlayerSector={false}
           playerUuid="player-1"
-        />
+        />,
       );
 
       const slotContainer = document.querySelector('.flex-wrap');
@@ -302,16 +279,13 @@ describe('Responsive Layout Tests', () => {
   describe('Cross-Component Layout Integration', () => {
     it('should maintain proper spacing across all breakpoints', () => {
       const breakpoints = [375, 640, 768, 1024, 1280];
-      
-      breakpoints.forEach(width => {
+
+      breakpoints.forEach((width) => {
         setScreenSize(width);
-        
+
         const { rerender } = render(
           <div className="space-y-4 sm:space-y-6">
-            <TrackDisplayRedesign
-              localView={mockLocalView}
-              playerUuid="player-1"
-            />
+            <TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />
             <BoostControlPanel
               selectedBoost={null}
               availableBoosts={[0, 1, 2, 3, 4]}
@@ -321,26 +295,21 @@ describe('Responsive Layout Tests', () => {
               hasSubmitted={false}
               turnPhase="WaitingForPlayers"
             />
-          </div>
+          </div>,
         );
 
         // Components should render without layout issues
         expect(screen.getByText('Track View')).toBeInTheDocument();
         expect(screen.getByText('Boost Control')).toBeInTheDocument();
-        
+
         rerender(<div />); // Clean up for next iteration
       });
     });
 
     it('should handle text truncation on small screens', () => {
       setScreenSize(320); // Very small screen
-      
-      render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+
+      render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Text should be truncated appropriately
       const trackTitle = screen.getByText('Track View');
@@ -351,7 +320,7 @@ describe('Responsive Layout Tests', () => {
   describe('Accessibility on Different Screen Sizes', () => {
     it('should maintain touch targets of at least 44px on mobile', () => {
       setScreenSize(375);
-      
+
       render(
         <BoostControlPanel
           selectedBoost={null}
@@ -361,11 +330,11 @@ describe('Responsive Layout Tests', () => {
           isSubmitting={false}
           hasSubmitted={false}
           turnPhase="WaitingForPlayers"
-        />
+        />,
       );
 
       const buttons = screen.getAllByRole('button');
-      buttons.forEach(button => {
+      buttons.forEach((button) => {
         // Should have minimum touch target size
         expect(button).toHaveClass('min-h-[48px]');
       });
@@ -373,13 +342,8 @@ describe('Responsive Layout Tests', () => {
 
     it('should provide appropriate text sizes for readability', () => {
       setScreenSize(375);
-      
-      render(
-        <TrackDisplayRedesign
-          localView={mockLocalView}
-          playerUuid="player-1"
-        />
-      );
+
+      render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Text should be readable on mobile - check for responsive text classes
       const statusText = screen.getByText(/Player in sector/);

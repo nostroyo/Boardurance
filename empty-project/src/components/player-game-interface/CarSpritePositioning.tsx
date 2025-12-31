@@ -32,14 +32,14 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
     // Horizontal layout: positions 1-5 arranged left to right
     const slotsPerRow = 5;
     const slotWidth = 60; // Width including spacing
-    
+
     // Center the grid horizontally
     const totalWidth = slotsPerRow * slotWidth;
     const startX = -totalWidth / 2 + slotWidth / 2;
-    
+
     const x = startX + (slotNumber - 1) * slotWidth;
     const y = 0; // Single row for now
-    
+
     return { x, y };
   };
 
@@ -51,7 +51,7 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
 
     return sectorParticipants.map((participant) => {
       const isPlayer = participant.player_uuid === playerUuid;
-      
+
       // Calculate grid position based on position_in_sector
       // Arrange cars in a 5-slot horizontal grid (positions 1-5)
       const position = participant.position_in_sector;
@@ -69,10 +69,10 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
   // Handle car overlap prevention
   const getCarPositionStyle = (car: PositionedCar, index: number): React.CSSProperties => {
     const basePosition = car.gridPosition;
-    
+
     // Add slight offset for overlapping cars (shouldn't happen with proper positioning)
     const overlapOffset = index * 2;
-    
+
     return {
       position: 'absolute',
       left: `calc(50% + ${basePosition.x}px)`,
@@ -87,7 +87,7 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
   const getContainerDimensions = (): { width: number; height: number } => {
     const minWidth = 300; // Minimum width for 5 slots
     const minHeight = 80; // Minimum height for car sprites
-    
+
     return {
       width: Math.max(minWidth, positionedCars.length * 60),
       height: minHeight,
@@ -123,14 +123,10 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
               <div
                 key={slotNumber}
                 className={`w-12 h-12 border-2 border-dashed rounded-lg flex items-center justify-center text-xs transition-all duration-300 ${
-                  hasCarInSlot
-                    ? 'border-gray-600 bg-gray-800/30'
-                    : 'border-gray-700 bg-gray-900/20'
+                  hasCarInSlot ? 'border-gray-600 bg-gray-800/30' : 'border-gray-700 bg-gray-900/20'
                 }`}
               >
-                {!hasCarInSlot && (
-                  <span className="text-gray-500 font-mono">{slotNumber}</span>
-                )}
+                {!hasCarInSlot && <span className="text-gray-500 font-mono">{slotNumber}</span>}
               </div>
             );
           })}
@@ -151,7 +147,7 @@ const CarSpritePositioningComponent: React.FC<CarSpritePositioningProps> = ({
             size={carSize}
             animationState={car.isPlayer ? 'highlighted' : animationState}
           />
-          
+
           {/* Position number indicator */}
           <div className="absolute -bottom-2 -right-2 w-4 h-4 bg-gray-800 border border-gray-600 rounded-full flex items-center justify-center text-xs text-gray-300 font-mono">
             {car.position}

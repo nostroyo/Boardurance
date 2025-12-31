@@ -62,7 +62,12 @@ interface APIResponse<T = unknown> {
 }
 
 // Turn phase types for player game interface
-export type TurnPhase = 'WaitingForPlayers' | 'AllSubmitted' | 'Processing' | 'TurnProcessed' | 'Complete';
+export type TurnPhase =
+  | 'WaitingForPlayers'
+  | 'AllSubmitted'
+  | 'Processing'
+  | 'TurnProcessed'
+  | 'Complete';
 
 // Race polling configuration
 export interface RacePollingConfig {
@@ -446,6 +451,7 @@ export const raceStatusUtils = {
       AllSubmitted: '#F59E0B', // Yellow
       Processing: '#3B82F6', // Blue
       Complete: '#6B7280', // Gray
+      TurnProcessed: '#8B5CF6', // Purple
     };
     return colors[turnPhase] || '#6B7280';
   },

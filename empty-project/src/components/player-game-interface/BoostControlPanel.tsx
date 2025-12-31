@@ -267,7 +267,9 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
             <div className="flex items-start space-x-2 sm:space-x-3">
               <span className="text-yellow-400 text-lg sm:text-xl flex-shrink-0">⚠️</span>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-yellow-400 mb-1 text-sm sm:text-base">Confirm Turn Validation</p>
+                <p className="font-medium text-yellow-400 mb-1 text-sm sm:text-base">
+                  Confirm Turn Validation
+                </p>
                 <p className="text-xs sm:text-sm text-gray-300 mb-2">
                   You are about to validate your turn with boost value:{' '}
                   <span className="font-bold text-yellow-400">{selectedBoost}</span>
@@ -347,7 +349,9 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
             <div className="flex items-start space-x-2">
               <span className="text-red-400 text-base sm:text-lg flex-shrink-0">⚠️</span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-red-400 mb-1">Invalid Selection</p>
+                <p className="text-xs sm:text-sm font-medium text-red-400 mb-1">
+                  Invalid Selection
+                </p>
                 <p className="text-xs text-gray-400">
                   This boost card has already been used in the current cycle
                 </p>
