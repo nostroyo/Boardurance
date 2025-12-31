@@ -1,28 +1,41 @@
-# Rust
+# Rust Build Artifacts
 /target/
 **/*.rs.bk
 Cargo.lock
 
-# Environment variables
+# Environment Variables and Secrets
 .env
 .env.local
+.env.development
+.env.test
 .env.production
+.env.staging
 
-# Configuration
+# Configuration files with secrets
 configuration/local.yaml
 configuration/production.yaml
+configuration/staging.yaml
+*.key
+*.pem
+secrets/
+.secrets/
+
+# Database
+*.db
+*.sqlite
 
 # Docker
 .docker/
 docker-compose.override.yml
 
-# Scripts
+# Logs and Runtime
 *.log
+logs/
 
-# IDE
+# Editor and IDE
 .vscode/
 .idea/
 
-# OS
+# OS generated files
 .DS_Store
 Thumbs.db

@@ -9,9 +9,8 @@ When you start a new feature create a new branch on git with the name of the fea
 ```sh
 git checkout -b feature/my-feature
 ```
-When I finished the end-to-end test and I say that everything is good, you can merge your changes back into the main branch. BUT NEVER by yourself, always wait for my approval
+When I finished the end-to-end test and I say that everything is good, you can prepare a merge request on Github.
 
-```sh
 
 When you finish a task inside your feature branch always commit with the task number and the name of the task. This will allow you to have a clean working directory and not have to worry about conflicts when you merge your changes back into the feature branch.
 

@@ -1,0 +1,98 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'rust-backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'rust-backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./rust-backend
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password
+          MONGO_INITDB_DATABASE: racing_game_test
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          rust-backend/target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust-backend/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Check Rust formatting
+      run: cargo fmt --check
+
+    - name: Run Clippy linting
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Check compilation
+      run: cargo check --all-targets --all-features
+
+    - name: Run unit tests
+      run: cargo test --lib --bins
+      env:
+        APP_ENVIRONMENT: test
+        APP_DATABASE__HOST: localhost
+        APP_DATABASE__PORT: 27017
+        APP_DATABASE__USERNAME: admin
+        APP_DATABASE__PASSWORD: password
+        APP_DATABASE__DATABASE_NAME: racing_game_test
+        APP_DATABASE__REQUIRE_SSL: false
+
+    - name: Run integration tests
+      run: cargo test --test '*'
+      env:
+        APP_ENVIRONMENT: test
+        APP_DATABASE__HOST: localhost
+        APP_DATABASE__PORT: 27017
+        APP_DATABASE__USERNAME: admin
+        APP_DATABASE__PASSWORD: password
+        APP_DATABASE__DATABASE_NAME: racing_game_test
+        APP_DATABASE__REQUIRE_SSL: false
+
+    - name: Build application
+      run: cargo build --release
+
+    - name: Run security audit
+      run: |
+        cargo install cargo-audit --quiet
+        cargo audit
+      continue-on-error: true
