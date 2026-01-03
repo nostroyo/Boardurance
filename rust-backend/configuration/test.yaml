@@ -2,7 +2,7 @@ application:
   port: 3001
 database:
   host: "localhost"
-  port: 27018
+  port: 27017
   database_name: "rust_backend_test"
   username: ""
   password: ""
