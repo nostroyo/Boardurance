@@ -21,7 +21,7 @@ impl TestApp {
     // Authentication helpers
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -31,7 +31,7 @@ impl TestApp {
 
     pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/login", &self.address))
+            .post(format!("{}/api/v1/auth/login", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -42,7 +42,7 @@ impl TestApp {
     // Player endpoint helpers
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -51,8 +51,8 @@ impl TestApp {
 
     pub async fn get_player_with_auth_header(&self, uuid: &str, token: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
-            .header("Authorization", &format!("Bearer {}", token))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .header("Authorization", &format!("Bearer {token}"))
             .send()
             .await
             .expect("Failed to execute request.")
@@ -60,7 +60,7 @@ impl TestApp {
 
     pub async fn get_all_players(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players", &self.address))
+            .get(format!("{}/api/v1/players", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -69,7 +69,7 @@ impl TestApp {
 
     pub async fn get_player_by_email(&self, email: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!(
+            .get(format!(
                 "{}/api/v1/players/by-email/{}",
                 &self.address, email
             ))
@@ -80,7 +80,7 @@ impl TestApp {
     }
 
     // Helper to extract cookies from response headers
-    pub fn extract_cookies(&self, response: &reqwest::Response) -> String {
+    pub fn extract_cookies(response: &reqwest::Response) -> String {
         response
             .headers()
             .get_all("set-cookie")
@@ -106,7 +106,7 @@ impl TestApp {
         let response = self.post_register(&register_body).await;
         assert_eq!(201, response.status().as_u16());
 
-        let cookies = self.extract_cookies(&response);
+        let cookies = TestApp::extract_cookies(&response);
         let response_body: Value = response.json().await.expect("Failed to parse response");
         let user_uuid = response_body["user"]["uuid"].as_str().unwrap().to_string();
 
@@ -155,7 +155,7 @@ async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let address = format!("http://127.0.0.1:{port}");
 
     let base_url = "http://127.0.0.1".to_string();
 
@@ -311,7 +311,7 @@ async fn unauthenticated_access_to_protected_routes_blocked() {
     // Act - Try to access protected route without authentication
     let response = app
         .client
-        .get(&format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
         .send()
         .await
         .expect("Failed to execute request.");
@@ -348,7 +348,7 @@ async fn invalid_token_access_blocked() {
 fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
     for cookie in cookies.split(';') {
         let cookie = cookie.trim();
-        if cookie.starts_with(&format!("{}=", token_name)) {
+        if cookie.starts_with(&format!("{token_name}=")) {
             return cookie[token_name.len() + 1..]
                 .split(';')
                 .next()
@@ -356,5 +356,5 @@ fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
                 .to_string();
         }
     }
-    panic!("Token {} not found in cookies", token_name);
+    panic!("Token {token_name} not found in cookies");
 }

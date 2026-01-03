@@ -132,8 +132,7 @@ impl Player {
 
     pub fn validate_for_game(&self) -> Result<(), String> {
         let car = self
-            .cars
-            .get(0)
+            .cars.first()
             .ok_or("Player must have at least one car".to_string())?;
 
         if !car.is_complete() {

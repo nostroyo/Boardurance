@@ -303,7 +303,7 @@ impl CarValidationService {
     fn get_car_pilot(car: &Car, player: &Player) -> Result<Pilot, CarValidationError> {
         // Validate that car has exactly 3 pilots
         car.validate_pilots()
-            .map_err(|e| CarValidationError::InvalidConfiguration(e))?;
+            .map_err(CarValidationError::InvalidConfiguration)?;
 
         // Use the first pilot as the primary pilot for validation
         let pilot_uuid = car

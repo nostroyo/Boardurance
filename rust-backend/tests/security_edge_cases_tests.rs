@@ -22,7 +22,7 @@ impl TestApp {
     // Authentication helpers
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -32,7 +32,7 @@ impl TestApp {
 
     pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/login", &self.address))
+            .post(format!("{}/api/v1/auth/login", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -42,7 +42,7 @@ impl TestApp {
 
     pub async fn post_logout(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/logout", &self.address))
+            .post(format!("{}/api/v1/auth/logout", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -51,7 +51,7 @@ impl TestApp {
 
     pub async fn post_refresh(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/refresh", &self.address))
+            .post(format!("{}/api/v1/auth/refresh", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -61,7 +61,7 @@ impl TestApp {
     // Protected endpoint helpers
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -70,8 +70,8 @@ impl TestApp {
 
     pub async fn get_player_with_auth_header(&self, uuid: &str, token: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
-            .header("Authorization", &format!("Bearer {}", token))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .header("Authorization", &format!("Bearer {token}"))
             .send()
             .await
             .expect("Failed to execute request.")
@@ -84,15 +84,15 @@ impl TestApp {
         cookie_value: &str,
     ) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
-            .header("Cookie", &format!("{}={}", cookie_name, cookie_value))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .header("Cookie", &format!("{cookie_name}={cookie_value}"))
             .send()
             .await
             .expect("Failed to execute request.")
     }
 
     // Helper to extract cookies from response headers
-    pub fn extract_cookies(&self, response: &reqwest::Response) -> String {
+    pub fn extract_cookies(response: &reqwest::Response) -> String {
         response
             .headers()
             .get_all("set-cookie")
@@ -118,7 +118,7 @@ impl TestApp {
         let response = self.post_register(&register_body).await;
         assert_eq!(201, response.status().as_u16());
 
-        let cookies = self.extract_cookies(&response);
+        let cookies = TestApp::extract_cookies(&response);
         let response_body: Value = response.json().await.expect("Failed to parse response");
         let user_uuid = response_body["user"]["uuid"].as_str().unwrap().to_string();
 
@@ -135,7 +135,7 @@ impl TestApp {
         let response = self.post_login(&login_body).await;
         assert_eq!(200, response.status().as_u16());
 
-        self.extract_cookies(&response)
+        TestApp::extract_cookies(&response)
     }
 }
 
@@ -168,7 +168,7 @@ async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let address = format!("http://127.0.0.1:{port}");
 
     let db_name = configuration.database.database_name.clone();
     let base_url = "http://127.0.0.1".to_string();
@@ -236,7 +236,7 @@ async fn tampered_refresh_token_rejected() {
     // Extract refresh token and tamper with it
     let refresh_token = extract_token_from_cookies(&cookies, "refresh_token");
     let tampered_token = tamper_with_token(&refresh_token);
-    let tampered_cookies = format!("refresh_token={}", tampered_token);
+    let tampered_cookies = format!("refresh_token={tampered_token}");
 
     // Act - Try to use tampered refresh token
     let response = app.post_refresh(&tampered_cookies).await;
@@ -276,8 +276,7 @@ async fn completely_invalid_token_rejected() {
         assert_eq!(
             401,
             response.status().as_u16(),
-            "Failed for token: {}",
-            invalid_token
+            "Failed for token: {invalid_token}"
         );
 
         let response_body: Value = response.json().await.expect("Failed to parse response");
@@ -343,7 +342,7 @@ async fn expired_refresh_token_rejected() {
 
     // Create an expired version of the refresh token
     let expired_token = create_expired_token(&refresh_token);
-    let expired_cookies = format!("refresh_token={}", expired_token);
+    let expired_cookies = format!("refresh_token={expired_token}");
 
     // Act - Try to refresh with expired token
     let response = app.post_refresh(&expired_cookies).await;
@@ -404,7 +403,7 @@ async fn blacklisted_refresh_token_after_logout_rejected() {
     assert_eq!(200, logout_response.status().as_u16());
 
     // Act - Try to use blacklisted refresh token
-    let blacklisted_cookies = format!("refresh_token={}", refresh_token);
+    let blacklisted_cookies = format!("refresh_token={refresh_token}");
     let response = app.post_refresh(&blacklisted_cookies).await;
 
     // Assert - Should be unauthorized
@@ -486,8 +485,7 @@ async fn cookies_have_security_attributes() {
             // Check security attributes
             assert!(
                 cookie_header.contains("HttpOnly"),
-                "Cookie should be HttpOnly: {}",
-                cookie_header
+                "Cookie should be HttpOnly: {cookie_header}"
             );
             assert!(
                 cookie_header.contains("Secure") || !cookie_header.contains("Secure"),
@@ -495,8 +493,7 @@ async fn cookies_have_security_attributes() {
             ); // Allow both for testing
             assert!(
                 cookie_header.contains("SameSite="),
-                "Cookie should have SameSite attribute: {}",
-                cookie_header
+                "Cookie should have SameSite attribute: {cookie_header}"
             );
 
             // Check that sensitive cookies are not accessible via JavaScript
@@ -520,7 +517,7 @@ async fn missing_cookie_rejected() {
     // Act - Try to access protected route without any cookies
     let response = app
         .client
-        .get(&format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
         .send()
         .await
         .expect("Failed to execute request.");
@@ -601,7 +598,7 @@ async fn multiple_concurrent_sessions_isolated() {
 fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
     for cookie in cookies.split(';') {
         let cookie = cookie.trim();
-        if cookie.starts_with(&format!("{}=", token_name)) {
+        if cookie.starts_with(&format!("{token_name}=")) {
             return cookie[token_name.len() + 1..]
                 .split(';')
                 .next()
@@ -609,7 +606,7 @@ fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
                 .to_string();
         }
     }
-    panic!("Token {} not found in cookies", token_name);
+    panic!("Token {token_name} not found in cookies");
 }
 
 // Helper function to tamper with a JWT token (simple character replacement)
@@ -621,7 +618,7 @@ fn tamper_with_token(token: &str) -> String {
         token.replacen('b', "a", 1)
     } else {
         // If no 'a' or 'b', just append a character to break the signature
-        format!("{}x", token)
+        format!("{token}x")
     }
 }
 
@@ -630,5 +627,5 @@ fn create_expired_token(token: &str) -> String {
     // In a real implementation, this would create a token with past expiration
     // For testing purposes, we'll return a recognizably invalid token
     // that should be rejected by the JWT validation
-    format!("expired.{}", token)
+    format!("expired.{token}")
 }

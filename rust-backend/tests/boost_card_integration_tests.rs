@@ -34,7 +34,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(&format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", &self.address))
             .header("Content-Type", "application/json")
             .json(&register_body)
             .send()
@@ -43,7 +43,7 @@ impl TestApp {
 
         assert_eq!(201, response.status().as_u16());
 
-        let cookies = self.extract_cookies(&response);
+        let cookies = TestApp::extract_cookies(&response);
         let response_body: Value = response.json().await.expect("Failed to parse response");
         let user_uuid = response_body["user"]["uuid"].as_str().unwrap().to_string();
 
@@ -51,7 +51,7 @@ impl TestApp {
     }
 
     // Helper to extract cookies from response headers
-    pub fn extract_cookies(&self, response: &reqwest::Response) -> String {
+    pub fn extract_cookies(response: &reqwest::Response) -> String {
         response
             .headers()
             .get_all("set-cookie")
@@ -89,7 +89,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(&format!("{}/api/v1/races", &self.address))
+            .post(format!("{}/api/v1/races", &self.address))
             .header("Cookie", cookies)
             .json(&race_body)
             .send()
@@ -116,7 +116,7 @@ impl TestApp {
         });
 
         self.client
-            .post(&format!(
+            .post(format!(
                 "{}/api/v1/races/{}/register",
                 &self.address, race_uuid
             ))
@@ -130,7 +130,7 @@ impl TestApp {
     // Helper to start race
     pub async fn start_race(&self, race_uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .post(&format!(
+            .post(format!(
                 "{}/api/v1/races/{}/start",
                 &self.address, race_uuid
             ))
@@ -156,7 +156,7 @@ impl TestApp {
         });
 
         self.client
-            .post(&format!(
+            .post(format!(
                 "{}/api/v1/races/{}/apply-lap",
                 &self.address, race_uuid
             ))
@@ -198,7 +198,7 @@ impl TestApp {
     pub async fn get_player_first_car(&self, player_uuid: &str, cookies: &str) -> String {
         let response = self
             .client
-            .get(&format!("{}/api/v1/players/{}", &self.address, player_uuid))
+            .get(format!("{}/api/v1/players/{}", &self.address, player_uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -243,7 +243,7 @@ async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let address = format!("http://127.0.0.1:{port}");
 
     let server = run(listener, database, configuration.application.base_url)
         .await
@@ -411,8 +411,7 @@ async fn test_boost_hand_replenishes_after_all_cards_used() {
         assert_eq!(
             200,
             lap_response.status().as_u16(),
-            "Failed to use boost card {}",
-            boost_value
+            "Failed to use boost card {boost_value}"
         );
     }
 

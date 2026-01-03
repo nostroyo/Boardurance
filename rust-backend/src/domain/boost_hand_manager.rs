@@ -34,7 +34,7 @@ pub struct BoostAvailability {
     pub available_cards: Vec<u8>,
 
     /// Full hand state (for detailed view)
-    /// Using String keys for MongoDB compatibility
+    /// Using String keys for `MongoDB` compatibility
     pub hand_state: HashMap<String, bool>,
 
     /// Current cycle information
@@ -279,7 +279,7 @@ mod tests {
         // All cards should be valid initially
         for i in 0..=4 {
             let result = BoostHandManager::validate_boost_selection(&hand, i);
-            assert!(result.is_ok(), "Card {} should be valid", i);
+            assert!(result.is_ok(), "Card {i} should be valid");
         }
     }
 

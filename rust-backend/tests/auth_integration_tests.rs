@@ -21,7 +21,7 @@ struct TestApp {
 impl TestApp {
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -31,7 +31,7 @@ impl TestApp {
 
     pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/login", &self.address))
+            .post(format!("{}/api/v1/auth/login", &self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -41,7 +41,7 @@ impl TestApp {
 
     pub async fn post_logout(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/logout", &self.address))
+            .post(format!("{}/api/v1/auth/logout", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -50,7 +50,7 @@ impl TestApp {
 
     pub async fn post_refresh(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(&format!("{}/api/v1/auth/refresh", &self.address))
+            .post(format!("{}/api/v1/auth/refresh", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -59,7 +59,7 @@ impl TestApp {
 
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -68,7 +68,7 @@ impl TestApp {
 
     pub async fn get_all_players(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .get(&format!("{}/api/v1/players", &self.address))
+            .get(format!("{}/api/v1/players", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -76,7 +76,7 @@ impl TestApp {
     }
 
     // Helper to extract cookies from response headers
-    pub fn extract_cookies(&self, response: &reqwest::Response) -> String {
+    pub fn extract_cookies(response: &reqwest::Response) -> String {
         response
             .headers()
             .get_all("set-cookie")
@@ -102,7 +102,7 @@ impl TestApp {
         let response = self.post_register(&register_body).await;
         assert_eq!(201, response.status().as_u16());
 
-        let cookies = self.extract_cookies(&response);
+        let cookies = TestApp::extract_cookies(&response);
         let response_body: Value = response.json().await.expect("Failed to parse response");
         let user_uuid = response_body["user"]["uuid"].as_str().unwrap().to_string();
 
@@ -144,7 +144,7 @@ async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let address = format!("http://127.0.0.1:{port}");
 
     let server = run(listener, database, configuration.application.base_url)
         .await
@@ -409,7 +409,7 @@ async fn logout_invalidates_session_and_clears_cookies() {
     assert_eq!(200, logout_response.status().as_u16());
 
     // Extract cookies before consuming response
-    let clear_cookies = app.extract_cookies(&logout_response);
+    let clear_cookies = TestApp::extract_cookies(&logout_response);
 
     let logout_body: Value = logout_response
         .json()
@@ -439,7 +439,7 @@ async fn token_refresh_generates_new_access_token() {
     assert_eq!(200, refresh_response.status().as_u16());
 
     // Extract cookies before consuming response
-    let new_cookies = app.extract_cookies(&refresh_response);
+    let new_cookies = TestApp::extract_cookies(&refresh_response);
 
     let refresh_body: Value = refresh_response
         .json()
@@ -491,10 +491,10 @@ async fn session_management_prevents_token_reuse_after_logout() {
     assert_eq!(200, logout_response.status().as_u16());
 
     // Act & Assert - Try to use blacklisted access token
-    let auth_header = format!("Bearer {}", access_token);
+    let auth_header = format!("Bearer {access_token}");
     let protected_response = app
         .client
-        .get(&format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
         .header("Authorization", &auth_header)
         .send()
         .await
@@ -502,7 +502,7 @@ async fn session_management_prevents_token_reuse_after_logout() {
     assert_eq!(401, protected_response.status().as_u16());
 
     // Act & Assert - Try to use blacklisted refresh token
-    let refresh_cookie = format!("refresh_token={}", refresh_token);
+    let refresh_cookie = format!("refresh_token={refresh_token}");
     let refresh_response = app.post_refresh(&refresh_cookie).await;
     assert_eq!(401, refresh_response.status().as_u16());
 }
@@ -590,7 +590,7 @@ async fn registration_creates_user_with_starter_assets() {
 fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
     for cookie in cookies.split(';') {
         let cookie = cookie.trim();
-        if cookie.starts_with(&format!("{}=", token_name)) {
+        if cookie.starts_with(&format!("{token_name}=")) {
             return cookie[token_name.len() + 1..]
                 .split(';')
                 .next()
@@ -598,5 +598,5 @@ fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
                 .to_string();
         }
     }
-    panic!("Token {} not found in cookies", token_name);
+    panic!("Token {token_name} not found in cookies");
 }
