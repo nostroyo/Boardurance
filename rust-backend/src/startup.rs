@@ -260,7 +260,7 @@ pub async fn run(
         .route("/health_check", get(health_check))
         .nest("/api/v1", players::routes())
         .nest("/api/v1", races::routes())
-        .merge(auth_routes) // Merge the auth routes that already have their state
+        .nest("/api/v1", auth_routes) // Nest auth routes under /api/v1
         .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
