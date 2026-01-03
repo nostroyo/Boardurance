@@ -187,7 +187,7 @@ async fn player_can_access_own_resources() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - User tries to access their own player resource
@@ -207,10 +207,10 @@ async fn player_cannot_access_other_player_resources() {
     // Arrange
     let app = spawn_app().await;
     let (_user1_uuid, user1_cookies) = app
-        .create_test_user("user1@example.com", "password123", "User 1")
+        .create_test_user("user1@example.com", "Password123", "User 1")
         .await;
     let (user2_uuid, _user2_cookies) = app
-        .create_test_user("user2@example.com", "password123", "User 2")
+        .create_test_user("user2@example.com", "Password123", "User 2")
         .await;
 
     // Act - User 1 tries to access User 2's player resource
@@ -236,10 +236,10 @@ async fn admin_can_access_any_player_resources() {
     // Arrange
     let app = spawn_app().await;
     let (_admin_uuid, admin_cookies) = app
-        .create_admin_user("admin@example.com", "password123", "Admin Team")
+        .create_admin_user("admin@example.com", "Password123", "Admin Team")
         .await;
     let (user_uuid, _user_cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Admin tries to access regular user's resource
@@ -259,7 +259,7 @@ async fn regular_user_cannot_access_admin_only_routes() {
     // Arrange
     let app = spawn_app().await;
     let (_user_uuid, user_cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Regular user tries to access admin-only route (get all players)
@@ -278,10 +278,10 @@ async fn admin_can_access_admin_only_routes() {
     // Arrange
     let app = spawn_app().await;
     let (_admin_uuid, admin_cookies) = app
-        .create_admin_user("admin@example.com", "password123", "Admin Team")
+        .create_admin_user("admin@example.com", "Password123", "Admin Team")
         .await;
     let (_user_uuid, _user_cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Admin tries to access admin-only route (get all players)
@@ -305,7 +305,7 @@ async fn unauthenticated_access_to_protected_routes_blocked() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, _user_cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Try to access protected route without authentication
@@ -329,7 +329,7 @@ async fn invalid_token_access_blocked() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, _user_cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Try to access protected route with invalid token

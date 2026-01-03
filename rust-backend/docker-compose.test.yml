@@ -4,17 +4,17 @@ services:
   mongodb-test:
     image: mongo:7.0
     container_name: rust-backend-mongodb-test
+    restart: unless-stopped
     ports:
-      - "27018:27017"  # Different port for test to avoid conflicts
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: test_admin
-      MONGO_INITDB_ROOT_PASSWORD: test_password
-      MONGO_INITDB_DATABASE: rust_backend_test
+      - "27018:27017"  # Use different port to avoid conflicts
+    # No authentication for tests - similar to CI environment
     volumes:
-      - ./docker/mongo-test-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - mongodb_test_data:/data/db
     networks:
       - rust-backend-test-network
-    command: --quiet  # Reduce log verbosity for tests
+
+volumes:
+  mongodb_test_data:
 
 networks:
   rust-backend-test-network:

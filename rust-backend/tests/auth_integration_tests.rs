@@ -166,7 +166,7 @@ async fn register_returns_201_for_valid_form_data() {
     let app = spawn_app().await;
     let body = json!({
         "email": "test@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -190,7 +190,7 @@ async fn register_returns_400_for_invalid_email() {
     let app = spawn_app().await;
     let body = json!({
         "email": "invalid-email",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -224,7 +224,7 @@ async fn register_returns_409_for_duplicate_email() {
     let app = spawn_app().await;
     let body = json!({
         "email": "test@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -250,7 +250,7 @@ async fn login_returns_200_for_valid_credentials() {
     let app = spawn_app().await;
     let register_body = json!({
         "email": "test@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -259,7 +259,7 @@ async fn login_returns_200_for_valid_credentials() {
 
     let login_body = json!({
         "email": "test@example.com",
-        "password": "password123"
+        "password": "Password123"
     });
 
     // Act
@@ -281,7 +281,7 @@ async fn login_returns_401_for_invalid_credentials() {
     let app = spawn_app().await;
     let register_body = json!({
         "email": "test@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -309,7 +309,7 @@ async fn login_returns_401_for_nonexistent_user() {
     let app = spawn_app().await;
     let login_body = json!({
         "email": "nonexistent@example.com",
-        "password": "password123"
+        "password": "Password123"
     });
 
     // Act
@@ -328,7 +328,7 @@ async fn basic_authentication_flow_works() {
     let app = spawn_app().await;
     let register_body = json!({
         "email": "test@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "Test Team"
     });
 
@@ -345,7 +345,7 @@ async fn basic_authentication_flow_works() {
     // Act & Assert - Login with same credentials
     let login_body = json!({
         "email": "test@example.com",
-        "password": "password123"
+        "password": "Password123"
     });
 
     let login_response = app.post_login(&login_body).await;
@@ -370,7 +370,7 @@ async fn complete_authentication_flow_with_jwt_tokens() {
 
     // Act & Assert - Register user and get JWT tokens
     let (user_uuid, cookies) = app
-        .create_test_user("test@example.com", "password123", "Test Team")
+        .create_test_user("test@example.com", "Password123", "Test Team")
         .await;
 
     // Verify cookies contain access and refresh tokens
@@ -394,7 +394,7 @@ async fn logout_invalidates_session_and_clears_cookies() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("test@example.com", "password123", "Test Team")
+        .create_test_user("test@example.com", "Password123", "Test Team")
         .await;
 
     // Verify token works before logout
@@ -428,7 +428,7 @@ async fn token_refresh_generates_new_access_token() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("test@example.com", "password123", "Test Team")
+        .create_test_user("test@example.com", "Password123", "Test Team")
         .await;
 
     // Act - Refresh token
@@ -475,7 +475,7 @@ async fn session_management_prevents_token_reuse_after_logout() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("test@example.com", "password123", "Test Team")
+        .create_test_user("test@example.com", "Password123", "Test Team")
         .await;
 
     // Extract individual tokens for testing
@@ -510,10 +510,10 @@ async fn multiple_user_sessions_are_isolated() {
 
     // Create two different users
     let (user1_uuid, user1_cookies) = app
-        .create_test_user("user1@example.com", "password123", "User 1")
+        .create_test_user("user1@example.com", "Password123", "User 1")
         .await;
     let (user2_uuid, user2_cookies) = app
-        .create_test_user("user2@example.com", "password123", "User 2")
+        .create_test_user("user2@example.com", "Password123", "User 2")
         .await;
 
     // Act & Assert - User 1 can access their own data
@@ -552,7 +552,7 @@ async fn registration_creates_user_with_starter_assets() {
 
     // Act - Register user
     let (user_uuid, cookies) = app
-        .create_test_user("test@example.com", "password123", "Test Team")
+        .create_test_user("test@example.com", "Password123", "Test Team")
         .await;
 
     // Act & Assert - Get user data and verify starter assets

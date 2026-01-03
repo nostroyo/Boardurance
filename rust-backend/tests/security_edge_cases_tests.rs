@@ -205,7 +205,7 @@ async fn tampered_access_token_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract access token and tamper with it
@@ -230,7 +230,7 @@ async fn tampered_refresh_token_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (_user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract refresh token and tamper with it
@@ -254,7 +254,7 @@ async fn completely_invalid_token_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, _cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     let invalid_tokens = vec![
@@ -307,7 +307,7 @@ async fn expired_access_token_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract access token
@@ -335,7 +335,7 @@ async fn expired_refresh_token_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (_user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract refresh token
@@ -365,7 +365,7 @@ async fn blacklisted_token_after_logout_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract access token before logout
@@ -393,7 +393,7 @@ async fn blacklisted_refresh_token_after_logout_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (_user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract refresh token before logout
@@ -420,7 +420,7 @@ async fn old_tokens_invalid_after_password_change() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract tokens before password change
@@ -431,7 +431,7 @@ async fn old_tokens_invalid_after_password_change() {
     // For now, we simulate by creating a new session and expecting old tokens to be invalid
 
     // Login again (simulating password change that creates new session)
-    let _new_cookies = app.login_user("user@example.com", "newpassword123").await;
+    let _new_cookies = app.login_user("user@example.com", "NewPassword123").await;
 
     // Act - Try to use old token after password change
     let response = app
@@ -466,7 +466,7 @@ async fn cookies_have_security_attributes() {
     // Act - Register user and check cookie attributes
     let register_body = json!({
         "email": "user@example.com",
-        "password": "password123",
+        "password": "Password123",
         "team_name": "User Team"
     });
 
@@ -514,7 +514,7 @@ async fn missing_cookie_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, _cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Act - Try to access protected route without any cookies
@@ -538,7 +538,7 @@ async fn wrong_cookie_name_rejected() {
     // Arrange
     let app = spawn_app().await;
     let (user_uuid, cookies) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Extract token value but use wrong cookie name
@@ -568,11 +568,11 @@ async fn multiple_concurrent_sessions_isolated() {
 
     // Create user and get first session
     let (user_uuid, cookies1) = app
-        .create_test_user("user@example.com", "password123", "User Team")
+        .create_test_user("user@example.com", "Password123", "User Team")
         .await;
 
     // Login again to get second session
-    let cookies2 = app.login_user("user@example.com", "password123").await;
+    let cookies2 = app.login_user("user@example.com", "Password123").await;
 
     // Verify both sessions work
     let response1 = app.get_player(&user_uuid, &cookies1).await;
