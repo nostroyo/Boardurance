@@ -1,4 +1,4 @@
-﻿use axum::{
+use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
@@ -1717,7 +1717,9 @@ pub async fn get_car_data(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<CarDataResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1729,7 +1731,9 @@ pub async fn get_car_data(
         ));
     };
 
-    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) { uuid } else {
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1992,7 +1996,9 @@ pub async fn get_performance_preview(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PerformancePreviewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2004,7 +2010,9 @@ pub async fn get_performance_preview(
         ));
     };
 
-    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) { uuid } else {
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2270,7 +2278,9 @@ pub async fn get_turn_phase(
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<TurnPhaseResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUID
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2501,7 +2511,9 @@ pub async fn get_local_view(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LocalViewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2513,7 +2525,9 @@ pub async fn get_local_view(
         ));
     };
 
-    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) { uuid } else {
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2744,7 +2758,9 @@ pub async fn get_boost_availability(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<BoostAvailabilityResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2756,7 +2772,9 @@ pub async fn get_boost_availability(
         ));
     };
 
-    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) { uuid } else {
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2986,7 +3004,9 @@ pub async fn get_lap_history(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LapHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) { uuid } else {
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -2998,7 +3018,9 @@ pub async fn get_lap_history(
         ));
     };
 
-    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) { uuid } else {
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
         tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
         return Err((
             StatusCode::BAD_REQUEST,
@@ -3595,7 +3617,9 @@ pub async fn start_race_in_db(
     let collection = database.collection::<Race>("races");
 
     // Get the race first
-    let mut race = if let Some(race) = get_race_by_uuid(database, race_uuid).await? { race } else {
+    let mut race = if let Some(race) = get_race_by_uuid(database, race_uuid).await? {
+        race
+    } else {
         tracing::warn!("Race not found: {}", race_uuid);
         return Ok(None);
     };
