@@ -150,7 +150,7 @@ mod tests {
         assert!(Password::new("NoDigitPass".to_string()).is_err());
 
         // Empty
-        assert!(Password::new("".to_string()).is_err());
+        assert!(Password::new(String::new()).is_err());
     }
 
     #[test]

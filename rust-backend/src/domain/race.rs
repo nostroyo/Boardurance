@@ -14,7 +14,7 @@ use crate::services::car_validation::ValidatedCarData;
 pub struct BoostHand {
     /// Availability state for each boost card (0-4)
     /// true = available, false = used
-    /// Using String keys for MongoDB compatibility
+    /// Using String keys for `MongoDB` compatibility
     pub cards: HashMap<String, bool>,
 
     /// Current cycle number (starts at 1)
@@ -1320,7 +1320,7 @@ mod tests {
 
         // Verify all cards are available
         for i in 0..=4 {
-            assert!(hand.is_card_available(i), "Card {} should be available", i);
+            assert!(hand.is_card_available(i), "Card {i} should be available");
         }
 
         // Verify cards HashMap has correct size
@@ -1405,8 +1405,7 @@ mod tests {
         for i in 0..=4 {
             assert!(
                 hand.is_card_available(i),
-                "Card {} should be available after replenishment",
-                i
+                "Card {i} should be available after replenishment"
             );
         }
     }
@@ -1431,7 +1430,7 @@ mod tests {
 
         // Verify all cards are still available
         for i in 0..=4 {
-            assert!(hand.is_card_available(i), "Card {} should be available", i);
+            assert!(hand.is_card_available(i), "Card {i} should be available");
         }
     }
 
@@ -1501,11 +1500,11 @@ mod tests {
         let mut hand = BoostHand::new();
 
         // Use cards in a specific sequence
-        let sequence = vec![4, 1, 3, 0, 2];
+        let sequence = [4, 1, 3, 0, 2];
 
         for (index, &card) in sequence.iter().enumerate() {
             let result = hand.use_card(card);
-            assert!(result.is_ok(), "Should successfully use card {}", card);
+            assert!(result.is_ok(), "Should successfully use card {card}");
 
             // After using the 5th card (index 4), replenishment occurs immediately
             if index == 4 {
@@ -3053,8 +3052,8 @@ mod tests {
         };
 
         // Use all 5 boost cards for player 1
-        let boost_sequence_p1 = vec![2, 0, 4, 1, 3];
-        let boost_sequence_p2 = vec![0, 1, 2, 3, 4];
+        let boost_sequence_p1 = [2, 0, 4, 1, 3];
+        let boost_sequence_p2 = [0, 1, 2, 3, 4];
 
         for (index, &boost_value) in boost_sequence_p1.iter().enumerate() {
             // Player 1 submits action
@@ -3063,8 +3062,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Failed to use boost card {} for player 1",
-                boost_value
+                "Failed to use boost card {boost_value} for player 1"
             );
 
             // Player 2 submits action to complete the lap
@@ -3105,8 +3103,7 @@ mod tests {
         for i in 0..=4 {
             assert!(
                 race.participants[0].boost_hand.is_card_available(i),
-                "Card {} should be available after replenishment",
-                i
+                "Card {i} should be available after replenishment"
             );
         }
 
@@ -3201,9 +3198,7 @@ mod tests {
 
                 assert!(
                     result.is_ok(),
-                    "Cycle {}, card {} should work for player 1",
-                    cycle,
-                    card
+                    "Cycle {cycle}, card {card} should work for player 1"
                 );
 
                 // Player 2 completes the lap (also uses the same card sequence)
@@ -3213,19 +3208,16 @@ mod tests {
             // After each cycle, verify replenishment occurred
             assert_eq!(
                 race.participants[0].boost_hand.cards_remaining, 5,
-                "Cycle {}: All cards should be replenished",
-                cycle
+                "Cycle {cycle}: All cards should be replenished"
             );
             assert_eq!(
                 race.participants[0].boost_hand.current_cycle,
                 cycle + 1,
-                "Cycle {}: Should be in next cycle",
-                cycle
+                "Cycle {cycle}: Should be in next cycle"
             );
             assert_eq!(
                 race.participants[0].boost_hand.cycles_completed, cycle,
-                "Cycle {}: Should have completed {} cycles",
-                cycle, cycle
+                "Cycle {cycle}: Should have completed {cycle} cycles"
             );
         }
 
@@ -3606,14 +3598,20 @@ mod tests {
         assert_eq!(cycle1.cycle_number, 1);
         assert_eq!(cycle1.cards_used, vec![0, 1, 2, 3, 4]);
         assert_eq!(cycle1.laps_in_cycle, vec![1, 2, 3, 4, 5]);
-        assert_eq!(cycle1.average_boost, 2.0); // (0+1+2+3+4)/5 = 2.0
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(cycle1.average_boost, 2.0); // (0+1+2+3+4)/5 = 2.0
+        }
 
         // Verify cycle 2 summary
         let cycle2 = &summaries[1];
         assert_eq!(cycle2.cycle_number, 2);
         assert_eq!(cycle2.cards_used, vec![4, 3, 2, 1, 0]);
         assert_eq!(cycle2.laps_in_cycle, vec![6, 7, 8, 9, 10]);
-        assert_eq!(cycle2.average_boost, 2.0); // (4+3+2+1+0)/5 = 2.0
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(cycle2.average_boost, 2.0); // (4+3+2+1+0)/5 = 2.0
+        }
     }
 
     #[test]
@@ -3701,7 +3699,10 @@ mod tests {
         assert_eq!(participant.get_total_boosts_used(), 3);
 
         // Test average boost value: (3 + 4 + 2) / 3 = 3.0
-        assert_eq!(participant.get_average_boost_value(), 3.0);
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(participant.get_average_boost_value(), 3.0);
+        }
 
         // Test get_boost_usage_for_cycle
         let cycle1_usage = participant.get_boost_usage_for_cycle(1);
@@ -3817,7 +3818,10 @@ mod tests {
 
         // Test statistics
         assert_eq!(participant.get_total_boosts_used(), 10);
-        assert_eq!(participant.get_average_boost_value(), 2.0); // (0+1+2+3+4)*2 / 10 = 2.0
+        #[allow(clippy::float_cmp)]
+        {
+            assert_eq!(participant.get_average_boost_value(), 2.0); // (0+1+2+3+4)*2 / 10 = 2.0
+        }
     }
 
     // ========== End Boost Usage History Tests ==========

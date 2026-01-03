@@ -4,6 +4,6 @@ database:
   host: "localhost"
   port: 27017
   database_name: "rust_backend_test"
-  username: "rust_app"
-  password: "rust_password"
+  username: ""
+  password: ""
   require_ssl: false

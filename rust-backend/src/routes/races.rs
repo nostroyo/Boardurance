@@ -1,4 +1,4 @@
-﻿use axum::{
+use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
@@ -30,7 +30,7 @@ fn to_bson_safe<T: serde::Serialize>(
     field_name: &str,
 ) -> Result<mongodb::bson::Bson, mongodb::error::Error> {
     mongodb::bson::to_bson(value).map_err(|e| {
-        mongodb::error::Error::custom(format!("Failed to serialize {}: {}", field_name, e))
+        mongodb::error::Error::custom(format!("Failed to serialize {field_name}: {e}"))
     })
 }
 
@@ -144,12 +144,12 @@ pub struct DetailedRaceStatusResponse {
 /// When all cards are used, the hand automatically replenishes.
 ///
 /// # Performance Calculation
-/// Final performance = base_performance * (1 + boost_value * 0.08)
-/// - boost_value 0: No boost (1.0x multiplier)
-/// - boost_value 1: 8% boost (1.08x multiplier)
-/// - boost_value 2: 16% boost (1.16x multiplier)
-/// - boost_value 3: 24% boost (1.24x multiplier)
-/// - boost_value 4: 32% boost (1.32x multiplier)
+/// Final performance = `base_performance` * (1 + `boost_value` * 0.08)
+/// - `boost_value` 0: No boost (1.0x multiplier)
+/// - `boost_value` 1: 8% boost (1.08x multiplier)
+/// - `boost_value` 2: 16% boost (1.16x multiplier)
+/// - `boost_value` 3: 24% boost (1.24x multiplier)
+/// - `boost_value` 4: 32% boost (1.32x multiplier)
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApplyLapRequest {
     /// UUID of the player making the lap action
@@ -513,7 +513,7 @@ pub struct ErrorResponse {
 /// * `sector` - The current sector with min/max thresholds
 ///
 /// # Returns
-/// * `MovementProbability` - MoveUp if >= max, Stay if between min/max, MoveDown if < min
+/// * `MovementProbability` - `MoveUp` if >= max, Stay if between min/max, `MoveDown` if < min
 fn calculate_movement_probability(final_value: u32, sector: &Sector) -> MovementProbability {
     if final_value >= sector.max_value {
         MovementProbability::MoveUp
@@ -544,6 +544,7 @@ fn calculate_movement_probability(final_value: u32, sector: &Sector) -> Movement
 /// ```
 fn get_visible_sector_ids(center: u32, total_sectors: usize) -> Vec<u32> {
     let mut ids = Vec::new();
+    #[allow(clippy::cast_possible_truncation)]
     let total = total_sectors as i32;
 
     // Calculate center Â±2 sectors with proper wrapping
@@ -1259,7 +1260,7 @@ pub async fn get_race_status_detailed(
 /// - Players have 5 boost cards (values 0-4) available per cycle
 /// - Each card can only be used once per cycle
 /// - When all 5 cards are used, the hand automatically replenishes
-/// - Boost cards multiply performance: base_value * (1 + boost_value * 0.08)
+/// - Boost cards multiply performance: `base_value` * (1 + `boost_value` * 0.08)
 ///
 /// # Boost Card Usage Flow
 /// 1. Player selects an available boost card (0-4)
@@ -1716,34 +1717,32 @@ pub async fn get_car_data(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<CarDataResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race and find participant
@@ -1767,7 +1766,7 @@ pub async fn get_car_data(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -1806,7 +1805,7 @@ pub async fn get_car_data(
                 Json(ErrorResponse {
                     error: "CAR_VALIDATION_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to validate car: {}", e)),
+                    details: Some(format!("Failed to validate car: {e}")),
                 }),
             ));
         }
@@ -1876,9 +1875,9 @@ pub async fn get_car_data(
 /// `final_value = base_value * (1.0 + boost_value * 0.08)`
 ///
 /// Movement probabilities are determined by comparing final values to sector thresholds:
-/// - MoveUp: final_value >= sector.max_value
-/// - Stay: sector.min_value <= final_value < sector.max_value
-/// - MoveDown: final_value < sector.min_value
+/// - `MoveUp`: `final_value` >= `sector.max_value`
+/// - Stay: `sector.min_value` <= `final_value` < `sector.max_value`
+/// - `MoveDown`: `final_value` < `sector.min_value`
 #[utoipa::path(
     get,
     path = "/api/v1/races/{race_uuid}/players/{player_uuid}/performance-preview",
@@ -1997,34 +1996,32 @@ pub async fn get_performance_preview(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PerformancePreviewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race
@@ -2048,7 +2045,7 @@ pub async fn get_performance_preview(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -2113,7 +2110,7 @@ pub async fn get_performance_preview(
                 Json(ErrorResponse {
                     error: "CAR_VALIDATION_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to validate car: {}", e)),
+                    details: Some(format!("Failed to validate car: {e}")),
                 }),
             ));
         }
@@ -2170,7 +2167,7 @@ pub async fn get_performance_preview(
             boost_value,
             is_available,
             final_value,
-            movement_probability: format!("{:?}", movement_probability),
+            movement_probability: format!("{movement_probability:?}"),
         });
     }
 
@@ -2201,16 +2198,16 @@ pub async fn get_performance_preview(
 ///
 /// This endpoint returns the current turn phase state for simultaneous turn resolution.
 /// It provides information about:
-/// - Current turn phase (WaitingForPlayers, AllSubmitted, Processing, Complete)
+/// - Current turn phase (`WaitingForPlayers`, `AllSubmitted`, Processing, Complete)
 /// - Current lap number and lap characteristic
 /// - List of players who have submitted actions
 /// - List of players who are still pending action submission
 /// - Total number of active players
 ///
 /// Turn phases are determined by:
-/// - Complete: Race status is not InProgress
-/// - AllSubmitted: All active participants have submitted actions
-/// - WaitingForPlayers: Some participants haven't submitted actions yet
+/// - Complete: Race status is not `InProgress`
+/// - `AllSubmitted`: All active participants have submitted actions
+/// - `WaitingForPlayers`: Some participants haven't submitted actions yet
 #[utoipa::path(
     get,
     path = "/api/v1/races/{race_uuid}/turn-phase",
@@ -2281,19 +2278,18 @@ pub async fn get_turn_phase(
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<TurnPhaseResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUID
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race from database
@@ -2317,7 +2313,7 @@ pub async fn get_turn_phase(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -2343,7 +2339,7 @@ pub async fn get_turn_phase(
     let pending_players: Vec<String> = race
         .get_pending_players()
         .iter()
-        .map(|uuid| uuid.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
 
     // 6. Calculate total active players (not finished)
@@ -2515,34 +2511,32 @@ pub async fn get_local_view(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LocalViewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race from database
@@ -2566,7 +2560,7 @@ pub async fn get_local_view(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -2680,7 +2674,7 @@ pub async fn get_local_view(
 /// - Each player has 5 boost cards (values 0-4) per cycle
 /// - Cards can only be used once per cycle
 /// - When all 5 cards are used, the hand replenishes automatically
-/// - Next replenishment occurs when cards_remaining reaches 0
+/// - Next replenishment occurs when `cards_remaining` reaches 0
 #[utoipa::path(
     get,
     path = "/api/v1/races/{race_uuid}/players/{player_uuid}/boost-availability",
@@ -2764,34 +2758,32 @@ pub async fn get_boost_availability(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<BoostAvailabilityResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race from database
@@ -2815,7 +2807,7 @@ pub async fn get_boost_availability(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -3012,34 +3004,32 @@ pub async fn get_lap_history(
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LapHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
-    let race_uuid = match Uuid::parse_str(&race_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race_uuid = if let Ok(uuid) = Uuid::parse_str(&race_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid race UUID format: {}", race_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(_) => {
-            tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "INVALID_UUID".to_string(),
-                    message: "Invalid UUID format".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player_uuid = if let Ok(uuid) = Uuid::parse_str(&player_uuid_str) {
+        uuid
+    } else {
+        tracing::warn!("Invalid player UUID format: {}", player_uuid_str);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "INVALID_UUID".to_string(),
+                message: "Invalid UUID format".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 2. Fetch race from database
@@ -3063,7 +3053,7 @@ pub async fn get_lap_history(
                 Json(ErrorResponse {
                     error: "DATABASE_ERROR".to_string(),
                     message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {}", e)),
+                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -3627,12 +3617,11 @@ pub async fn start_race_in_db(
     let collection = database.collection::<Race>("races");
 
     // Get the race first
-    let mut race = match get_race_by_uuid(database, race_uuid).await? {
-        Some(race) => race,
-        None => {
-            tracing::warn!("Race not found: {}", race_uuid);
-            return Ok(None);
-        }
+    let mut race = if let Some(race) = get_race_by_uuid(database, race_uuid).await? {
+        race
+    } else {
+        tracing::warn!("Race not found: {}", race_uuid);
+        return Ok(None);
     };
 
     // Validate race can be started
@@ -3892,8 +3881,7 @@ async fn submit_player_action_in_db(
     // Validate boost value (0-4)
     if boost_value > 4 {
         return Err(mongodb::error::Error::custom(format!(
-            "Invalid boost value: {}. Must be between 0 and 4",
-            boost_value
+            "Invalid boost value: {boost_value}. Must be between 0 and 4"
         )));
     }
 
@@ -3949,7 +3937,7 @@ async fn submit_player_action_in_db(
         let actions = race.pending_actions.clone();
 
         // Process the turn using the existing game logic
-        match process_lap_in_db(&database, race_uuid, actions).await {
+        match process_lap_in_db(database, race_uuid, actions).await {
             Ok(Some((_lap_result, _race_status))) => {
                 tracing::info!(
                     "Turn auto-processed successfully for race {}. Ready for next turn.",
@@ -3973,8 +3961,7 @@ async fn submit_player_action_in_db(
             Err(e) => {
                 tracing::error!("Turn processing failed for race {}: {:?}", race_uuid, e);
                 return Err(mongodb::error::Error::custom(format!(
-                    "Turn processing failed: {}",
-                    e
+                    "Turn processing failed: {e}"
                 )));
             }
         }

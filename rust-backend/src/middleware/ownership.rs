@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn extract_param_from_path_works() {
         let uuid_str = "123e4567-e89b-12d3-a456-426614174000";
-        let path = format!("/players/{}/cars", uuid_str);
+        let path = format!("/players/{uuid_str}/cars");
 
         let extracted = extract_param_from_path(&path, "player_uuid");
         assert_eq!(extracted, Some(uuid_str.to_string()));
@@ -459,7 +459,7 @@ mod tests {
         let uuid_str = "123e4567-e89b-12d3-a456-426614174000";
         let request = Request::builder()
             .method(Method::GET)
-            .uri(format!("/players/{}/cars", uuid_str))
+            .uri(format!("/players/{uuid_str}/cars"))
             .body(Body::empty())
             .unwrap();
 

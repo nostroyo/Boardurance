@@ -23,10 +23,6 @@ jobs:
     services:
       mongodb:
         image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: admin
-          MONGO_INITDB_ROOT_PASSWORD: password
-          MONGO_INITDB_DATABASE: racing_game_test
         ports:
           - 27017:27017
         options: >-
@@ -72,8 +68,8 @@ jobs:
         APP_ENVIRONMENT: test
         APP_DATABASE__HOST: localhost
         APP_DATABASE__PORT: 27017
-        APP_DATABASE__USERNAME: admin
-        APP_DATABASE__PASSWORD: password
+        APP_DATABASE__USERNAME: ""
+        APP_DATABASE__PASSWORD: ""
         APP_DATABASE__DATABASE_NAME: racing_game_test
         APP_DATABASE__REQUIRE_SSL: false
 
@@ -83,8 +79,8 @@ jobs:
         APP_ENVIRONMENT: test
         APP_DATABASE__HOST: localhost
         APP_DATABASE__PORT: 27017
-        APP_DATABASE__USERNAME: admin
-        APP_DATABASE__PASSWORD: password
+        APP_DATABASE__USERNAME: ""
+        APP_DATABASE__PASSWORD: ""
         APP_DATABASE__DATABASE_NAME: racing_game_test
         APP_DATABASE__REQUIRE_SSL: false
 
