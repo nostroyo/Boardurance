@@ -11,6 +11,7 @@ switch ($Command.ToLower()) {
         Write-Host "  dev-ui       - Start development with MongoDB Express UI" -ForegroundColor White
         Write-Host "  start-docker - Start Docker containers only (MongoDB)" -ForegroundColor White
         Write-Host "  test         - Run tests with test MongoDB" -ForegroundColor White
+        Write-Host "  test-unit    - Run unit tests only (no database required)" -ForegroundColor White
         Write-Host "  test-all     - Run all test suites" -ForegroundColor White
         Write-Host "  test-api     - Test API endpoints only" -ForegroundColor White
         Write-Host "  test-infra   - Test infrastructure only" -ForegroundColor White
@@ -113,6 +114,11 @@ switch ($Command.ToLower()) {
     "test" {
         Write-Host "Running comprehensive test suite..." -ForegroundColor Green
         & .\tests\run-all-tests.ps1
+    }
+    
+    "test-unit" {
+        Write-Host "Running unit tests (no database required)..." -ForegroundColor Green
+        & .\run-unit-tests.ps1
     }
     
     "test-all" {
