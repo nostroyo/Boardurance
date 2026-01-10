@@ -266,7 +266,7 @@ fn test_invalid_boost_value_handling() {
 #[test]
 fn test_boost_availability_response_structure() {
     // Arrange
-    let (race, player_uuids) = create_test_race_with_participants(1);
+    let (race, _player_uuids) = create_test_race_with_participants(1);
     let participant = &race.participants[0];
 
     // Act - Create boost availability response

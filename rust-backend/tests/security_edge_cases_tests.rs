@@ -14,7 +14,7 @@ static TRACING: std::sync::Once = std::sync::Once::new();
 
 struct TestApp {
     pub address: String,
-    pub db_name: String,
+    pub _db_name: String,
     pub client: reqwest::Client,
 }
 

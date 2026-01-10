@@ -14,7 +14,7 @@ static TRACING: std::sync::Once = std::sync::Once::new();
 
 struct TestApp {
     pub address: String,
-    pub db_name: String,
+    pub _db_name: String,
     pub client: reqwest::Client,
 }
 
@@ -60,15 +60,6 @@ impl TestApp {
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
             .get(format!("{}/api/v1/players/{}", &self.address, uuid))
-            .header("Cookie", cookies)
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
-    pub async fn get_all_players(&self, cookies: &str) -> reqwest::Response {
-        self.client
-            .get(format!("{}/api/v1/players", &self.address))
             .header("Cookie", cookies)
             .send()
             .await
