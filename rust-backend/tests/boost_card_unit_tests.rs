@@ -1,6 +1,6 @@
 //! Unit tests for boost card system without database dependencies
 //! These tests verify the boost card hand management, validation, and business logic
-//! using mocked data and in-memory structures instead of requiring MongoDB.
+//! using mocked data and in-memory structures instead of requiring `MongoDB`.
 
 use rust_backend::domain::{
     boost_hand_manager::{BoostAvailability, BoostImpactOption, BoostUsageResult},
@@ -206,7 +206,7 @@ fn test_boost_usage_history_tracks_all_usages() {
     let player_uuid = player_uuids[0];
 
     // Act - Use several boost cards and track history manually
-    let boost_sequence = vec![2, 0, 4];
+    let boost_sequence = [2, 0, 4];
     let participant = race
         .participants
         .iter_mut()
@@ -233,7 +233,10 @@ fn test_boost_usage_history_tracks_all_usages() {
     for (i, &boost_value) in boost_sequence.iter().enumerate() {
         assert_eq!(participant.boost_usage_history[i].boost_value, boost_value);
         assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
-        assert_eq!(participant.boost_usage_history[i].lap_number, (i + 1) as u32);
+        assert_eq!(
+            participant.boost_usage_history[i].lap_number,
+            (i + 1) as u32
+        );
     }
 }
 
@@ -284,7 +287,7 @@ fn test_boost_availability_response_structure() {
             .map(|boost_value| BoostImpactOption {
                 boost_value,
                 is_available: participant.boost_hand.is_card_available(boost_value),
-                predicted_final_value: boost_value as u32 * 10, // Mock calculation
+                predicted_final_value: u32::from(boost_value) * 10, // Mock calculation
                 movement_probability: MovementProbability::Stay, // Mock value
             })
             .collect(),
@@ -451,8 +454,7 @@ fn test_boost_hand_serialization_compatibility() {
 
     // Act - Verify the hand can be serialized/deserialized (important for database storage)
     let serialized = serde_json::to_string(&boost_hand).expect("Should serialize");
-    let deserialized: BoostHand =
-        serde_json::from_str(&serialized).expect("Should deserialize");
+    let deserialized: BoostHand = serde_json::from_str(&serialized).expect("Should deserialize");
 
     // Assert - Verify state is preserved
     assert_eq!(deserialized.cards_remaining, boost_hand.cards_remaining);
