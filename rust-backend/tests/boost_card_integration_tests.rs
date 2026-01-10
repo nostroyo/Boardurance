@@ -72,7 +72,7 @@ impl TestApp {
                     "name": "Sector 1",
                     "min_value": 10,
                     "max_value": 20,
-                    "slot_capacity": 5,
+                    "slot_capacity": null,
                     "sector_type": "Straight"
                 },
                 {
@@ -80,8 +80,8 @@ impl TestApp {
                     "name": "Sector 2",
                     "min_value": 15,
                     "max_value": 25,
-                    "slot_capacity": 5,
-                    "sector_type": "Corner"
+                    "slot_capacity": null,
+                    "sector_type": "Curve"
                 }
             ],
             "total_laps": 3
