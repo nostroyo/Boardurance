@@ -29,16 +29,6 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
-    pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
-        self.client
-            .post(format!("{}/api/v1/auth/login", &self.address))
-            .header("Content-Type", "application/json")
-            .json(body)
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
     // Player endpoint helpers
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
@@ -61,18 +51,6 @@ impl TestApp {
     pub async fn get_all_players(&self, cookies: &str) -> reqwest::Response {
         self.client
             .get(format!("{}/api/v1/players", &self.address))
-            .header("Cookie", cookies)
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
-    pub async fn get_player_by_email(&self, email: &str, cookies: &str) -> reqwest::Response {
-        self.client
-            .get(format!(
-                "{}/api/v1/players/by-email/{}",
-                &self.address, email
-            ))
             .header("Cookie", cookies)
             .send()
             .await
@@ -344,17 +322,4 @@ async fn invalid_token_access_blocked() {
     assert_eq!(response_body["error"], "Invalid token");
 }
 
-// Helper function to extract specific token from cookie string
-fn extract_token_from_cookies(cookies: &str, token_name: &str) -> String {
-    for cookie in cookies.split(';') {
-        let cookie = cookie.trim();
-        if cookie.starts_with(&format!("{token_name}=")) {
-            return cookie[token_name.len() + 1..]
-                .split(';')
-                .next()
-                .unwrap()
-                .to_string();
-        }
-    }
-    panic!("Token {token_name} not found in cookies");
-}
+
