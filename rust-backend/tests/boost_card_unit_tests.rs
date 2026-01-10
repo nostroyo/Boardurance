@@ -288,7 +288,7 @@ fn test_boost_availability_response_structure() {
                 boost_value,
                 is_available: participant.boost_hand.is_card_available(boost_value),
                 predicted_final_value: u32::from(boost_value) * 10, // Mock calculation
-                movement_probability: MovementProbability::Stay, // Mock value
+                movement_probability: MovementProbability::Stay,    // Mock value
             })
             .collect(),
     };
