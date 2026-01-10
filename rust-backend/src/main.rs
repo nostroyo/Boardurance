@@ -2,6 +2,7 @@ use rust_backend::configuration::get_configuration;
 use rust_backend::startup::Application;
 use rust_backend::telemetry::{get_subscriber, init_subscriber};
 
+// Feature #18: CI pipeline fixes applied
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let subscriber = get_subscriber("rust-backend".into(), "info".into(), std::io::stdout);
