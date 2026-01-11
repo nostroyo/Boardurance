@@ -474,7 +474,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_incomplete_car_configuration_error() {
         let engine = create_test_engine();
         let body = create_test_body();
