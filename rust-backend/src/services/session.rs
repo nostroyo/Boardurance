@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use mongodb::{bson::oid::ObjectId, Database};
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -7,6 +7,8 @@ use std::{
     time::Duration as StdDuration,
 };
 use uuid::Uuid;
+
+use crate::repositories::SessionRepository;
 
 /// Session configuration
 #[derive(Debug, Clone)]
@@ -34,13 +36,14 @@ pub struct Session {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub user_uuid: Uuid,
-    pub token_id: String,
+    pub token: String,
     pub created_at: DateTime<Utc>,
     pub last_activity: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
     pub is_active: bool,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Blacklisted token data structure
@@ -83,9 +86,9 @@ impl SessionCache {
     }
 }
 
-/// Session manager with `MongoDB` and in-memory caching
-pub struct SessionManager {
-    database: Arc<Database>,
+/// Session manager with repository abstraction and in-memory caching
+pub struct SessionManager<R: SessionRepository> {
+    repository: Arc<R>,
     cache: Arc<RwLock<SessionCache>>,
     config: SessionConfig,
 }
@@ -107,12 +110,12 @@ pub enum SessionError {
     Cache(String),
 }
 
-impl SessionManager {
+impl<R: SessionRepository> SessionManager<R> {
     /// Create a new session manager
     #[must_use]
-    pub fn new(database: Arc<Database>, config: SessionConfig) -> Self {
+    pub fn new(repository: Arc<R>, config: SessionConfig) -> Self {
         Self {
-            database,
+            repository,
             cache: Arc::new(RwLock::new(SessionCache::new())),
             config,
         }
@@ -131,7 +134,8 @@ impl SessionManager {
                 .map_err(|e| SessionError::Cache(e.to_string()))?;
 
         // Check if user has too many sessions
-        let user_session_count = self.get_user_session_count(user_uuid).await?;
+        let user_session_count = self.repository.count_active_for_user(user_uuid).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
         if user_session_count >= self.config.max_sessions_per_user {
             return Err(SessionError::TooManySessions);
         }
@@ -139,18 +143,19 @@ impl SessionManager {
         let session = Session {
             id: None,
             user_uuid,
-            token_id: token_id.clone(),
+            token: token_id.clone(),
             created_at: now,
             last_activity: now,
             expires_at,
             ip_address: metadata.ip_address,
             user_agent: metadata.user_agent,
             is_active: true,
+            updated_at: now,
         };
 
-        // Store in database
-        let collection = self.database.collection::<Session>("sessions");
-        collection.insert_one(&session, None).await?;
+        // Store in repository
+        self.repository.create(&session).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Cache the session
         self.cache_session(session)?;
@@ -160,11 +165,6 @@ impl SessionManager {
 
     /// Validate a session by token ID
     pub async fn validate_session(&self, token_id: &str) -> Result<bool, SessionError> {
-        // Check blacklist first (cache)
-        if self.is_token_blacklisted_cached(token_id) {
-            return Err(SessionError::TokenBlacklisted);
-        }
-
         // Check cache first
         if let Some(session) = self.get_session_from_cache(token_id) {
             if session.expires_at < Utc::now() {
@@ -176,17 +176,9 @@ impl SessionManager {
             return Ok(true);
         }
 
-        // Check database
-        let collection = self.database.collection::<Session>("sessions");
-        let session = collection
-            .find_one(
-                mongodb::bson::doc! {
-                    "token_id": token_id,
-                    "is_active": true
-                },
-                None,
-            )
-            .await?;
+        // Check repository
+        let session = self.repository.find_by_token(token_id).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         match session {
             Some(session) => {
@@ -206,41 +198,13 @@ impl SessionManager {
     pub async fn invalidate_session(
         &self,
         token_id: &str,
-        reason: &str,
+        _reason: &str,
     ) -> Result<(), SessionError> {
-        // Add to blacklist
-        let now = Utc::now();
-        let expires_at = now + Duration::days(30); // Keep blacklist for 30 days
-
-        let blacklisted_token = BlacklistedToken {
-            id: None,
-            token_id: token_id.to_string(),
-            user_uuid: Uuid::new_v4(), // We'll need to get this from the session
-            blacklisted_at: now,
-            expires_at,
-            reason: reason.to_string(),
-        };
-
-        // Store in database
-        let blacklist_collection = self
-            .database
-            .collection::<BlacklistedToken>("blacklisted_tokens");
-        blacklist_collection
-            .insert_one(&blacklisted_token, None)
-            .await?;
-
-        // Deactivate session in database
-        let session_collection = self.database.collection::<Session>("sessions");
-        session_collection
-            .update_one(
-                mongodb::bson::doc! { "token_id": token_id },
-                mongodb::bson::doc! { "$set": { "is_active": false } },
-                None,
-            )
-            .await?;
+        // Deactivate session in repository
+        self.repository.deactivate(token_id).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Update cache
-        self.blacklist_token_in_cache(token_id.to_string());
         self.remove_session_from_cache(token_id);
 
         Ok(())
@@ -250,88 +214,34 @@ impl SessionManager {
     pub async fn invalidate_all_user_sessions(
         &self,
         user_uuid: Uuid,
-        reason: &str,
+        _reason: &str,
     ) -> Result<(), SessionError> {
-        // Get all active sessions for the user
-        let collection = self.database.collection::<Session>("sessions");
-        let mut cursor = collection
-            .find(
-                mongodb::bson::doc! {
-                    "user_uuid": user_uuid.to_string(),
-                    "is_active": true
-                },
-                None,
-            )
-            .await?;
+        // Deactivate all sessions for the user
+        self.repository.deactivate_all_for_user(user_uuid).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
-        let mut token_ids = Vec::new();
-        while cursor.advance().await? {
-            let session: Session = cursor.deserialize_current()?;
-            token_ids.push(session.token_id);
-        }
-
-        // Invalidate each session
-        for token_id in token_ids {
-            self.invalidate_session(&token_id, reason).await?;
+        // Clear user sessions from cache
+        if let Ok(mut cache) = self.cache.write() {
+            if let Some(token_ids) = cache.user_sessions.remove(&user_uuid) {
+                for token_id in token_ids {
+                    cache.sessions.remove(&token_id);
+                }
+            }
         }
 
         Ok(())
     }
 
-    /// Check if a token is blacklisted
-    pub async fn is_token_blacklisted(&self, token_id: &str) -> Result<bool, SessionError> {
-        // Check cache first
-        if self.is_token_blacklisted_cached(token_id) {
-            return Ok(true);
-        }
-
-        // Check database
-        let collection = self
-            .database
-            .collection::<BlacklistedToken>("blacklisted_tokens");
-        let blacklisted = collection
-            .find_one(
-                mongodb::bson::doc! {
-                    "token_id": token_id,
-                    "expires_at": { "$gt": mongodb::bson::DateTime::now() }
-                },
-                None,
-            )
-            .await?;
-
-        let is_blacklisted = blacklisted.is_some();
-
-        // Cache the result
-        if is_blacklisted {
-            self.blacklist_token_in_cache(token_id.to_string());
-        }
-
-        Ok(is_blacklisted)
-    }
-
-    /// Cleanup expired sessions and blacklisted tokens
+    /// Cleanup expired sessions
     pub async fn cleanup_expired_sessions(&self) -> Result<usize, SessionError> {
-        let now = mongodb::bson::DateTime::now();
-
-        // Cleanup expired sessions
-        let session_collection = self.database.collection::<Session>("sessions");
-        let session_result = session_collection
-            .delete_many(mongodb::bson::doc! { "expires_at": { "$lt": now } }, None)
-            .await?;
-
-        // Cleanup expired blacklisted tokens
-        let blacklist_collection = self
-            .database
-            .collection::<BlacklistedToken>("blacklisted_tokens");
-        let blacklist_result = blacklist_collection
-            .delete_many(mongodb::bson::doc! { "expires_at": { "$lt": now } }, None)
-            .await?;
+        let now = Utc::now();
+        let deleted_count = self.repository.cleanup_expired(now).await
+            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Clear cache to force refresh
         self.clear_cache();
 
-        #[allow(clippy::cast_possible_truncation)]
-        Ok((session_result.deleted_count + blacklist_result.deleted_count) as usize)
+        Ok(deleted_count as usize)
     }
 
     // Private helper methods
@@ -353,14 +263,14 @@ impl SessionManager {
         // Add to session cache
         cache
             .sessions
-            .insert(session.token_id.clone(), session.clone());
+            .insert(session.token.clone(), session.clone());
 
         // Add to user sessions tracking
         cache
             .user_sessions
             .entry(session.user_uuid)
             .or_insert_with(Vec::new)
-            .push(session.token_id);
+            .push(session.token);
 
         Ok(())
     }
@@ -403,23 +313,6 @@ impl SessionManager {
             cache.blacklisted_tokens.clear();
             cache.user_sessions.clear();
         }
-    }
-
-    async fn get_user_session_count(&self, user_uuid: Uuid) -> Result<usize, SessionError> {
-        let collection = self.database.collection::<Session>("sessions");
-        let count = collection
-            .count_documents(
-                mongodb::bson::doc! {
-                    "user_uuid": user_uuid.to_string(),
-                    "is_active": true,
-                    "expires_at": { "$gt": mongodb::bson::DateTime::now() }
-                },
-                None,
-            )
-            .await?;
-
-        #[allow(clippy::cast_possible_truncation)]
-        Ok(count as usize)
     }
 }
 
