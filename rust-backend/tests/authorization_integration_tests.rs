@@ -145,6 +145,7 @@ async fn spawn_app() -> TestApp {
     let server = run(listener, database, base_url)
         .await
         .expect("Failed to build application.");
+    #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(async move { server.await.expect("Server failed to start") });
 
     // Give the server a moment to start
@@ -321,5 +322,3 @@ async fn invalid_token_access_blocked() {
     let response_body: Value = response.json().await.expect("Failed to parse response");
     assert_eq!(response_body["error"], "Invalid token");
 }
-
-

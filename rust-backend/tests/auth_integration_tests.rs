@@ -140,13 +140,14 @@ async fn spawn_app() -> TestApp {
     let server = run(listener, database, configuration.application.base_url)
         .await
         .expect("Failed to build application.");
+    #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(async move { server.await.expect("Server failed to start") });
 
     let client = reqwest::Client::new();
 
     TestApp {
         address,
-        db_name: configuration.database.database_name,
+        _db_name: configuration.database.database_name,
         client,
     }
 }
