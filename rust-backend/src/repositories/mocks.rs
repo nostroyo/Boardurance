@@ -82,7 +82,9 @@ impl PlayerRepository for MockPlayerRepository {
         let players = self.players.lock().unwrap();
         Ok(players
             .values()
-            .find(|p| p.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address))
+            .find(|p| {
+                p.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address)
+            })
             .cloned())
     }
 
@@ -105,7 +107,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 player.team_name = team_name;
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -159,7 +166,12 @@ impl PlayerRepository for MockPlayerRepository {
 
         let mut found_player = None;
         for (email, player) in players.iter() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 found_player = Some((email.clone(), player.uuid));
                 break;
             }
@@ -196,7 +208,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 player.cars.push(car);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -234,7 +251,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 player.cars.retain(|car| car.uuid != car_uuid);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -272,7 +294,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 player.pilots.push(pilot);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -310,7 +337,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
+            if player
+                .wallet_address
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+                == Some(wallet_address)
+            {
                 player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
