@@ -4,15 +4,15 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use crate::domain::{Car, LapAction, LapResult, Pilot, Player, Race, RaceStatus, TeamName, WalletAddress};
-use crate::services::car_validation::ValidatedCarData;
+use crate::domain::{Player, Race, RaceStatus, LapAction, LapResult, TeamName, WalletAddress, Car, Pilot};
 use crate::services::session::Session;
+use crate::services::car_validation::ValidatedCarData;
 use super::{PlayerRepository, RaceRepository, SessionRepository, RepositoryError, RepositoryResult};
 
 /// Mock implementation of PlayerRepository for testing
 #[derive(Clone)]
 pub struct MockPlayerRepository {
-    players: Arc<Mutex<HashMap<String, Player>>>, // Using wallet_address as key
+    players: Arc<Mutex<HashMap<String, Player>>>, // Using email as key for simplicity
     players_by_uuid: Arc<Mutex<HashMap<Uuid, Player>>>,
 }
 
@@ -25,16 +25,16 @@ impl MockPlayerRepository {
     }
 
     pub fn with_players(players: Vec<Player>) -> Self {
-        let mut wallet_map = HashMap::new();
+        let mut email_map = HashMap::new();
         let mut uuid_map = HashMap::new();
         
         for player in players {
-            wallet_map.insert(player.wallet_address.to_string(), player.clone());
+            email_map.insert(player.email.as_ref().to_string(), player.clone());
             uuid_map.insert(player.uuid, player);
         }
         
         Self {
-            players: Arc::new(Mutex::new(wallet_map)),
+            players: Arc::new(Mutex::new(email_map)),
             players_by_uuid: Arc::new(Mutex::new(uuid_map)),
         }
     }
@@ -52,11 +52,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if players.contains_key(&player.wallet_address.to_string()) {
-            return Err(RepositoryError::Conflict("Player with this wallet address already exists".to_string()));
+        let email_key = player.email.as_ref().to_string();
+        if players.contains_key(&email_key) {
+            return Err(RepositoryError::Conflict("Player with this email already exists".to_string()));
         }
         
-        players.insert(player.wallet_address.to_string(), player.clone());
+        players.insert(email_key, player.clone());
         players_by_uuid.insert(player.uuid, player.clone());
         Ok(player.clone())
     }
@@ -68,12 +69,14 @@ impl PlayerRepository for MockPlayerRepository {
 
     async fn find_by_wallet_address(&self, wallet_address: &str) -> RepositoryResult<Option<Player>> {
         let players = self.players.lock().unwrap();
-        Ok(players.get(wallet_address).cloned())
+        Ok(players.values().find(|p| {
+            p.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address)
+        }).cloned())
     }
 
     async fn find_by_email(&self, email: &str) -> RepositoryResult<Option<Player>> {
         let players = self.players.lock().unwrap();
-        Ok(players.values().find(|p| p.email == email).cloned())
+        Ok(players.get(email).cloned())
     }
 
     async fn find_by_uuid(&self, player_uuid: Uuid) -> RepositoryResult<Option<Player>> {
@@ -85,13 +88,15 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.get_mut(wallet_address) {
-            player.team_name = team_name;
-            players_by_uuid.insert(player.uuid, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
+        for player in players.values_mut() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                player.team_name = team_name;
+                player.updated_at = Utc::now();
+                players_by_uuid.insert(player.uuid, player.clone());
+                return Ok(Some(player.clone()));
+            }
         }
+        Ok(None)
     }
 
     async fn update_team_name_by_uuid(&self, player_uuid: Uuid, team_name: TeamName) -> RepositoryResult<Option<Player>> {
@@ -100,7 +105,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.team_name = team_name;
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -111,18 +118,12 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(mut player) = players_by_uuid.get(&player_uuid).cloned() {
-            // Remove old wallet address entry
-            players.remove(&player.wallet_address.to_string());
-            
-            // Update wallet address
-            player.wallet_address = wallet_address;
-            
-            // Insert with new wallet address
-            players.insert(player.wallet_address.to_string(), player.clone());
-            players_by_uuid.insert(player_uuid, player.clone());
-            
-            Ok(Some(player))
+        if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
+            player.wallet_address = Some(wallet_address);
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
+            Ok(Some(player.clone()))
         } else {
             Ok(None)
         }
@@ -132,8 +133,17 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.remove(wallet_address) {
-            players_by_uuid.remove(&player.uuid);
+        let mut found_player = None;
+        for (email, player) in players.iter() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                found_player = Some((email.clone(), player.uuid));
+                break;
+            }
+        }
+        
+        if let Some((email, uuid)) = found_player {
+            players.remove(&email);
+            players_by_uuid.remove(&uuid);
             Ok(true)
         } else {
             Ok(false)
@@ -145,7 +155,8 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
         if let Some(player) = players_by_uuid.remove(&player_uuid) {
-            players.remove(&player.wallet_address.to_string());
+            let email_key = player.email.as_ref().to_string();
+            players.remove(&email_key);
             Ok(true)
         } else {
             Ok(false)
@@ -156,13 +167,15 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.get_mut(wallet_address) {
-            player.cars.push(car);
-            players_by_uuid.insert(player.uuid, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
+        for player in players.values_mut() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                player.cars.push(car);
+                player.updated_at = Utc::now();
+                players_by_uuid.insert(player.uuid, player.clone());
+                return Ok(Some(player.clone()));
+            }
         }
+        Ok(None)
     }
 
     async fn add_car_by_uuid(&self, player_uuid: Uuid, car: Car) -> RepositoryResult<Option<Player>> {
@@ -171,7 +184,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.cars.push(car);
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -182,13 +197,15 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.get_mut(wallet_address) {
-            player.cars.retain(|car| car.uuid != car_uuid);
-            players_by_uuid.insert(player.uuid, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
+        for player in players.values_mut() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                player.cars.retain(|car| car.uuid != car_uuid);
+                player.updated_at = Utc::now();
+                players_by_uuid.insert(player.uuid, player.clone());
+                return Ok(Some(player.clone()));
+            }
         }
+        Ok(None)
     }
 
     async fn remove_car_by_uuid(&self, player_uuid: Uuid, car_uuid: Uuid) -> RepositoryResult<Option<Player>> {
@@ -197,7 +214,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.cars.retain(|car| car.uuid != car_uuid);
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -208,13 +227,15 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.get_mut(wallet_address) {
-            player.pilots.push(pilot);
-            players_by_uuid.insert(player.uuid, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
+        for player in players.values_mut() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                player.pilots.push(pilot);
+                player.updated_at = Utc::now();
+                players_by_uuid.insert(player.uuid, player.clone());
+                return Ok(Some(player.clone()));
+            }
         }
+        Ok(None)
     }
 
     async fn add_pilot_by_uuid(&self, player_uuid: Uuid, pilot: Pilot) -> RepositoryResult<Option<Player>> {
@@ -223,7 +244,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.pilots.push(pilot);
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -234,13 +257,15 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
         
-        if let Some(player) = players.get_mut(wallet_address) {
-            player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
-            players_by_uuid.insert(player.uuid, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
+        for player in players.values_mut() {
+            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+                player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
+                player.updated_at = Utc::now();
+                players_by_uuid.insert(player.uuid, player.clone());
+                return Ok(Some(player.clone()));
+            }
         }
+        Ok(None)
     }
 
     async fn remove_pilot_by_uuid(&self, player_uuid: Uuid, pilot_uuid: Uuid) -> RepositoryResult<Option<Player>> {
@@ -249,7 +274,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -262,7 +289,9 @@ impl PlayerRepository for MockPlayerRepository {
         
         if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
             player.cars = cars;
-            players.insert(player.wallet_address.to_string(), player.clone());
+            player.updated_at = Utc::now();
+            let email_key = player.email.as_ref().to_string();
+            players.insert(email_key, player.clone());
             Ok(Some(player.clone()))
         } else {
             Ok(None)
@@ -322,15 +351,15 @@ impl RaceRepository for MockRaceRepository {
     async fn find_by_pilot_uuid(&self, pilot_uuid: Uuid) -> RepositoryResult<Option<Race>> {
         let races = self.races.lock().unwrap();
         Ok(races.values().find(|race| {
-            race.pilots.iter().any(|pilot| pilot.uuid == pilot_uuid)
+            race.participants.iter().any(|participant| participant.pilot_uuid == pilot_uuid)
         }).cloned())
     }
 
     async fn find_active_race_for_pilot(&self, pilot_uuid: Uuid) -> RepositoryResult<Option<Race>> {
         let races = self.races.lock().unwrap();
         Ok(races.values().find(|race| {
-            matches!(race.status, RaceStatus::WaitingForPlayers | RaceStatus::InProgress) &&
-            race.pilots.iter().any(|pilot| pilot.uuid == pilot_uuid)
+            matches!(race.status, RaceStatus::Waiting | RaceStatus::InProgress) &&
+            race.participants.iter().any(|participant| participant.pilot_uuid == pilot_uuid)
         }).cloned())
     }
 
@@ -338,28 +367,19 @@ impl RaceRepository for MockRaceRepository {
         let mut races = self.races.lock().unwrap();
         
         if let Some(race) = races.get_mut(&race_uuid) {
-            if !matches!(race.status, RaceStatus::WaitingForPlayers) {
+            if !matches!(race.status, RaceStatus::Waiting) {
                 return Err(RepositoryError::Validation("Race is not accepting new players".to_string()));
             }
             
-            if race.pilots.iter().any(|p| p.uuid == pilot_uuid) {
+            if race.participants.iter().any(|p| p.pilot_uuid == pilot_uuid) {
                 return Err(RepositoryError::Conflict("Pilot already in race".to_string()));
             }
             
-            let pilot_with_car = crate::domain::PilotWithCar {
-                uuid: pilot_uuid,
-                car: car_data.car.clone(),
-                current_lap: 0,
-                current_sector: 0,
-                total_time: 0,
-                sector_times: Vec::new(),
-                lap_times: Vec::new(),
-                position: race.pilots.len() as u32 + 1,
-                boost_hand: car_data.boost_hand.clone(),
-                actions_submitted: false,
-            };
+            // Add participant using the race's add_participant method
+            // For mock implementation, we'll use the pilot's UUID as player UUID for simplicity
+            race.add_participant(car_data.pilot.uuid, car_data.car.uuid, pilot_uuid)
+                .map_err(|e| RepositoryError::Validation(e))?;
             
-            race.pilots.push(pilot_with_car);
             Ok(Some(race.clone()))
         } else {
             Err(RepositoryError::NotFound)
@@ -370,31 +390,13 @@ impl RaceRepository for MockRaceRepository {
         let mut races = self.races.lock().unwrap();
         
         if let Some(race) = races.get_mut(&race_uuid) {
-            if let Some(pilot_index) = race.pilots.iter().position(|p| p.uuid == pilot_uuid) {
-                let lap_result = LapResult {
-                    lap_number: race.pilots[pilot_index].current_lap + 1,
-                    sector_times: vec![30000, 32000, 28000],
-                    total_lap_time: 90000,
-                    position: race.pilots[pilot_index].position,
-                    actions_used: actions,
-                };
-                
-                race.pilots[pilot_index].current_lap += 1;
-                race.pilots[pilot_index].lap_times.push(lap_result.total_lap_time);
-                race.pilots[pilot_index].total_time += lap_result.total_lap_time;
-                
-                let race_status = if race.pilots[pilot_index].current_lap >= race.total_laps {
-                    RaceStatus::Finished
-                } else {
-                    race.status
-                };
-                
-                race.status = race_status;
-                
-                Ok(Some((lap_result, race_status)))
-            } else {
-                Err(RepositoryError::NotFound)
-            }
+            // For mock implementation, just process the actions with simple logic
+            let lap_result = race.process_lap(&actions)
+                .map_err(|e| RepositoryError::Validation(e))?;
+            
+            let race_status = race.status.clone();
+            
+            Ok(Some((lap_result, race_status)))
         } else {
             Err(RepositoryError::NotFound)
         }
@@ -404,8 +406,9 @@ impl RaceRepository for MockRaceRepository {
         let mut races = self.races.lock().unwrap();
         
         if let Some(race) = races.get_mut(&race_uuid) {
-            if let Some(pilot) = race.pilots.iter_mut().find(|p| p.uuid == pilot_uuid) {
-                pilot.actions_submitted = true;
+            // For mock implementation, just mark that an action was submitted
+            // In a real implementation, this would store the action for batch processing
+            if race.participants.iter().any(|p| p.pilot_uuid == pilot_uuid) {
                 Ok(Some(race.clone()))
             } else {
                 Err(RepositoryError::NotFound)
