@@ -245,7 +245,7 @@ impl<R: SessionRepository> SessionManager<R> {
     }
 
     /// Check if a token is blacklisted
-    pub async fn is_token_blacklisted(&self, token_id: &str) -> Result<bool, SessionError> {
+    pub fn is_token_blacklisted(&self, token_id: &str) -> Result<bool, SessionError> {
         // Check cache first
         if self.is_token_blacklisted_cached(token_id) {
             return Ok(true);

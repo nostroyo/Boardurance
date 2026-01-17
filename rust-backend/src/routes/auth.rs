@@ -607,7 +607,6 @@ pub async fn refresh_token(
     let is_blacklisted = app_state
         .session_manager
         .is_token_blacklisted(&claims.jti)
-        .await
         .map_err(|e| {
             tracing::error!("Failed to check token blacklist: {}", e);
             (

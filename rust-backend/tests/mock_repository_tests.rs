@@ -1,5 +1,5 @@
 //! Mock Repository Integration Tests
-//! These tests demonstrate how to use mock repositories instead of real MongoDB
+//! These tests demonstrate how to use mock repositories instead of real `MongoDB`
 //! for fast, isolated testing without external dependencies.
 
 use rust_backend::domain::{Email, HashedPassword, Player, TeamName};

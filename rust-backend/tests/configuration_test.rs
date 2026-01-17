@@ -21,10 +21,10 @@ async fn test_integration_test_environment_setup() {
 
     // Verify connection string is built without authentication
     let connection_string = config.database.connection_string_without_auth();
-    assert!(!connection_string.contains("@")); // No authentication in connection string
+    assert!(!connection_string.contains('@')); // No authentication in connection string
     assert!(connection_string.starts_with("mongodb://localhost:27017/"));
 
     println!("✅ Integration test environment setup works correctly");
     println!("   Database: {}", config.database.database_name);
-    println!("   Connection: {}", connection_string);
+    println!("   Connection: {connection_string}");
 }

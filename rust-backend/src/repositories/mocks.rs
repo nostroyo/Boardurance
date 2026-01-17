@@ -13,7 +13,7 @@ use crate::domain::{
 use crate::services::car_validation::ValidatedCarData;
 use crate::services::session::Session;
 
-/// Mock implementation of PlayerRepository for testing
+/// Mock implementation of `PlayerRepository` for testing
 #[derive(Clone)]
 pub struct MockPlayerRepository {
     players: Arc<Mutex<HashMap<String, Player>>>, // Using email as key for simplicity
@@ -21,6 +21,7 @@ pub struct MockPlayerRepository {
 }
 
 impl MockPlayerRepository {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             players: Arc::new(Mutex::new(HashMap::new())),
@@ -28,6 +29,7 @@ impl MockPlayerRepository {
         }
     }
 
+    #[must_use]
     pub fn with_players(players: Vec<Player>) -> Self {
         let mut email_map = HashMap::new();
         let mut uuid_map = HashMap::new();
@@ -80,7 +82,7 @@ impl PlayerRepository for MockPlayerRepository {
         let players = self.players.lock().unwrap();
         Ok(players
             .values()
-            .find(|p| p.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address))
+            .find(|p| p.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address))
             .cloned())
     }
 
@@ -103,7 +105,7 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 player.team_name = team_name;
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -157,7 +159,7 @@ impl PlayerRepository for MockPlayerRepository {
 
         let mut found_player = None;
         for (email, player) in players.iter() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 found_player = Some((email.clone(), player.uuid));
                 break;
             }
@@ -194,7 +196,7 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 player.cars.push(car);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -232,7 +234,7 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 player.cars.retain(|car| car.uuid != car_uuid);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -270,7 +272,7 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 player.pilots.push(pilot);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -308,7 +310,7 @@ impl PlayerRepository for MockPlayerRepository {
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
 
         for player in players.values_mut() {
-            if player.wallet_address.as_ref().map(|w| w.as_ref()) == Some(wallet_address) {
+            if player.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address) {
                 player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
                 player.updated_at = Utc::now();
                 players_by_uuid.insert(player.uuid, player.clone());
@@ -357,19 +359,21 @@ impl PlayerRepository for MockPlayerRepository {
     }
 }
 
-/// Mock implementation of RaceRepository for testing
+/// Mock implementation of `RaceRepository` for testing
 #[derive(Clone)]
 pub struct MockRaceRepository {
     races: Arc<Mutex<HashMap<Uuid, Race>>>,
 }
 
 impl MockRaceRepository {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             races: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
+    #[must_use]
     pub fn with_races(races: Vec<Race>) -> Self {
         let mut race_map = HashMap::new();
         for race in races {
@@ -456,7 +460,7 @@ impl RaceRepository for MockRaceRepository {
             // Add participant using the race's add_participant method
             // For mock implementation, we'll use the pilot's UUID as player UUID for simplicity
             race.add_participant(car_data.pilot.uuid, car_data.car.uuid, pilot_uuid)
-                .map_err(|e| RepositoryError::Validation(e))?;
+                .map_err(RepositoryError::Validation)?;
 
             Ok(Some(race.clone()))
         } else {
@@ -476,7 +480,7 @@ impl RaceRepository for MockRaceRepository {
             // For mock implementation, just process the actions with simple logic
             let lap_result = race
                 .process_lap(&actions)
-                .map_err(|e| RepositoryError::Validation(e))?;
+                .map_err(RepositoryError::Validation)?;
 
             let race_status = race.status.clone();
 
@@ -532,19 +536,21 @@ impl RaceRepository for MockRaceRepository {
     }
 }
 
-/// Mock implementation of SessionRepository for testing
+/// Mock implementation of `SessionRepository` for testing
 #[derive(Clone)]
 pub struct MockSessionRepository {
     sessions: Arc<Mutex<HashMap<String, Session>>>, // Using token as key
 }
 
 impl MockSessionRepository {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
+    #[must_use]
     pub fn with_sessions(sessions: Vec<Session>) -> Self {
         let mut session_map = HashMap::new();
         for session in sessions {

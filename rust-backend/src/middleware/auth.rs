@@ -113,7 +113,6 @@ impl AuthMiddleware {
         let is_blacklisted = self
             .session_manager
             .is_token_blacklisted(&claims.jti)
-            .await
             .map_err(|e| AuthError::InternalError(e.to_string()))?;
 
         if is_blacklisted {
@@ -302,7 +301,7 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_mock_database() -> MockSessionRepository {
+    fn create_mock_database() -> MockSessionRepository {
         MockSessionRepository::new()
     }
 

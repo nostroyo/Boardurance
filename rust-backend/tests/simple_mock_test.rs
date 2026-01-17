@@ -120,9 +120,9 @@ async fn test_mock_player_repository_performance() {
     // Act - Perform many operations
     for i in 0..100 {
         let player = Player::new(
-            Email::parse(&format!("user{}@example.com", i)).unwrap(),
+            Email::parse(&format!("user{i}@example.com")).unwrap(),
             HashedPassword::from_hash("$argon2id$v=19$m=15000,t=2,p=1$test$test".to_string()),
-            TeamName::parse(&format!("Team {}", i)).unwrap(),
+            TeamName::parse(&format!("Team {i}")).unwrap(),
             Vec::new(),
             Vec::new(),
         )
@@ -131,7 +131,7 @@ async fn test_mock_player_repository_performance() {
         repo.create(&player).await.unwrap();
 
         let found = repo
-            .find_by_email(&format!("user{}@example.com", i))
+            .find_by_email(&format!("user{i}@example.com"))
             .await
             .unwrap();
         assert!(found.is_some());
@@ -142,8 +142,7 @@ async fn test_mock_player_repository_performance() {
     // Assert - Operations should complete very quickly (under 50ms for 100 operations)
     assert!(
         elapsed.as_millis() < 50,
-        "Mock operations took too long: {:?}",
-        elapsed
+        "Mock operations took too long: {elapsed:?}"
     );
 }
 

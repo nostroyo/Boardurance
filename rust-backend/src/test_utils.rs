@@ -1,5 +1,5 @@
 //! Test utilities for creating mock-based test applications
-//! This module provides infrastructure for testing without requiring a real MongoDB instance
+//! This module provides infrastructure for testing without requiring a real `MongoDB` instance
 
 use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionRepository};
 use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
@@ -18,6 +18,7 @@ pub struct TestAppState {
 }
 
 impl TestAppState {
+    #[must_use]
     pub fn new() -> Self {
         let player_repo = Arc::new(MockPlayerRepository::new());
         let race_repo = Arc::new(MockRaceRepository::new());
@@ -47,6 +48,7 @@ impl TestAppState {
     }
 
     /// Create test app state with pre-populated data
+    #[must_use]
     pub fn with_test_data(
         players: Vec<crate::domain::Player>,
         races: Vec<crate::domain::Race>,
@@ -95,7 +97,7 @@ impl TestApp {
     /// Create a new test application with mock repositories
     pub async fn new() -> Self {
         let state = TestAppState::new();
-        let app = create_test_router(&state).await;
+        let app = create_test_router(&state);
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -126,7 +128,7 @@ impl TestApp {
         sessions: Vec<crate::services::session::Session>,
     ) -> Self {
         let state = TestAppState::with_test_data(players, races, sessions);
-        let app = create_test_router(&state).await;
+        let app = create_test_router(&state);
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -189,7 +191,7 @@ impl TestApp {
 }
 
 /// Create a test router using mock repositories instead of real database
-async fn create_test_router(_state: &TestAppState) -> Router<()> {
+fn create_test_router(_state: &TestAppState) -> Router<()> {
     use axum::http::Method;
     use axum::{http::StatusCode, routing::get, Json, Router};
     use serde_json::json;
