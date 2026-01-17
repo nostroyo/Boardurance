@@ -3,6 +3,7 @@
 use crate::app_state::AppState;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::middleware::{AuthMiddleware, RequireRole};
+use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionRepository};
 use crate::routes::{auth, health_check, players, races};
 use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
 use axum::{routing::get, Router};
@@ -233,15 +234,26 @@ pub async fn run(
     };
     let jwt_service = Arc::new(JwtService::new(jwt_config));
 
+    // Initialize repository implementations (using mocks for now)
+    let player_repository = Arc::new(MockPlayerRepository::new());
+    let race_repository = Arc::new(MockRaceRepository::new());
+    let session_repository = Arc::new(MockSessionRepository::new());
+
     // Initialize session manager
     let session_config = SessionConfig::default();
     let session_manager = Arc::new(SessionManager::new(
-        Arc::new(db_pool.clone()),
+        session_repository.clone(),
         session_config,
     ));
 
-    // Create application state for auth routes
-    let app_state = AppState::new(db_pool.clone(), jwt_service, session_manager);
+    // Create application state
+    let app_state = AppState::new(
+        player_repository,
+        race_repository,
+        session_repository,
+        jwt_service,
+        session_manager.clone(),
+    );
 
     // Create auth routes with AppState
     let auth_routes = auth::routes().with_state(app_state.clone());
@@ -251,7 +263,7 @@ pub async fn run(
         .layer(RequireRole::admin())
         .layer(AuthMiddleware::new(
             app_state.jwt_service.clone(),
-            app_state.session_manager.clone(),
+            session_manager.clone(),
         ))
         .with_state(app_state.clone());
 

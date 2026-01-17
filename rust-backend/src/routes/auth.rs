@@ -17,9 +17,10 @@ use crate::domain::{
     PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName, UserCredentials,
     UserRegistration,
 };
+use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository};
 use crate::services::session::SessionMetadata;
 
-pub fn routes() -> Router<AppState> {
+pub fn routes() -> Router<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>> {
     Router::new()
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))
@@ -166,15 +167,13 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
 )]
 #[allow(clippy::cast_possible_wrap)]
 pub async fn register_user(
-    State(app_state): State<AppState>,
+    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
     headers: HeaderMap,
     Json(registration): Json<UserRegistration>,
 ) -> Result<
     (StatusCode, [(String, String); 2], ResponseJson<Value>),
     (StatusCode, ResponseJson<Value>),
 > {
-    let collection = app_state.database.collection::<Player>("players");
-
     // Validate email format
     let email = Email::parse(&registration.email)
         .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
@@ -187,6 +186,12 @@ pub async fn register_user(
     let password = Password::new(registration.password)
         .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
+    // Check if user already exists
+    let existing_player = app_state
+        .player_repository
+        .find_by_email(email.as_ref())
+        .await;
+
     let password_hash = password.hash().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -195,22 +200,23 @@ pub async fn register_user(
     })?;
 
     // Check if user already exists
-    let existing_user = collection
-        .find_one(doc! {"email": email.as_ref()}, None)
-        .await
-        .map_err(|e| {
-            tracing::error!("Database error checking existing user: {}", e);
-            (
+    match existing_player {
+        Ok(Some(_)) => {
+            return Err((
+                StatusCode::CONFLICT,
+                ResponseJson(json!({"error": "User with this email already exists"})),
+            ));
+        }
+        Ok(None) => {
+            // User doesn't exist, continue with registration
+        }
+        Err(e) => {
+            tracing::error!("Database error checking existing user: {:?}", e);
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseJson(json!({"error": "Database error"})),
-            )
-        })?;
-
-    if existing_user.is_some() {
-        return Err((
-            StatusCode::CONFLICT,
-            ResponseJson(json!({"error": "User with this email already exists"})),
-        ));
+            ));
+        }
     }
 
     // Create starter assets for new player (2 cars with 3 pilots each, engines, and bodies)
@@ -235,18 +241,22 @@ pub async fn register_user(
     .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Insert into database
-    let _result = collection.insert_one(&player, None).await.map_err(|e| {
-        tracing::error!("Database error inserting user: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ResponseJson(json!({"error": "Failed to create user"})),
-        )
-    })?;
+    let created_player = app_state
+        .player_repository
+        .create(&player)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error inserting user: {:?}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseJson(json!({"error": "Failed to create user"})),
+            )
+        })?;
 
     // Generate JWT tokens
     let token_pair = app_state
         .jwt_service
-        .generate_token_pair(&player)
+        .generate_token_pair(&created_player)
         .map_err(|e| {
             tracing::error!("Failed to generate tokens: {}", e);
             (
@@ -345,15 +355,13 @@ pub async fn register_user(
 )]
 #[allow(clippy::cast_possible_wrap)]
 pub async fn login_user(
-    State(app_state): State<AppState>,
+    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
     headers: HeaderMap,
     Json(credentials): Json<UserCredentials>,
 ) -> Result<
     (StatusCode, [(String, String); 2], ResponseJson<Value>),
     (StatusCode, ResponseJson<Value>),
 > {
-    let collection = app_state.database.collection::<Player>("players");
-
     // Validate email format
     let email = Email::parse(&credentials.email)
         .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
@@ -363,11 +371,12 @@ pub async fn login_user(
         .map_err(|e| (StatusCode::BAD_REQUEST, ResponseJson(json!({"error": e}))))?;
 
     // Find user by email
-    let user = collection
-        .find_one(doc! {"email": email.as_ref()}, None)
+    let user = app_state
+        .player_repository
+        .find_by_email(email.as_ref())
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!("Database error finding user: {:?}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseJson(json!({"error": "Database error"})),
@@ -496,7 +505,7 @@ pub async fn login_user(
     tag = "Authentication"
 )]
 pub async fn logout_user(
-    State(app_state): State<AppState>,
+    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
     headers: HeaderMap,
 ) -> Result<
     (StatusCode, [(String, String); 2], ResponseJson<Value>),
@@ -558,7 +567,7 @@ pub async fn logout_user(
     tag = "Authentication"
 )]
 pub async fn refresh_token(
-    State(app_state): State<AppState>,
+    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
     headers: HeaderMap,
 ) -> Result<
     (StatusCode, [(String, String); 1], ResponseJson<Value>),
@@ -604,7 +613,6 @@ pub async fn refresh_token(
     }
 
     // Get user from database to generate new token
-    let collection = app_state.database.collection::<Player>("players");
     let user_uuid = uuid::Uuid::parse_str(&claims.sub).map_err(|_| {
         (
             StatusCode::UNAUTHORIZED,
@@ -612,8 +620,9 @@ pub async fn refresh_token(
         )
     })?;
 
-    let user = collection
-        .find_one(doc! {"uuid": user_uuid.to_string()}, None)
+    let user = app_state
+        .player_repository
+        .find_by_uuid(user_uuid)
         .await
         .map_err(|e| {
             tracing::error!("Database error finding user: {}", e);

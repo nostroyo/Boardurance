@@ -2,14 +2,12 @@ pub mod player_repository;
 pub mod race_repository;
 pub mod session_repository;
 
-#[cfg(test)]
 pub mod mocks;
 
 pub use player_repository::PlayerRepository;
 pub use race_repository::RaceRepository;
 pub use session_repository::SessionRepository;
 
-#[cfg(test)]
 pub use mocks::{MockPlayerRepository, MockRaceRepository, MockSessionRepository};
 
 /// Common database error type

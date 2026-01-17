@@ -386,7 +386,7 @@ impl RaceRepository for MockRaceRepository {
         }
     }
 
-    async fn process_turn_actions(&self, race_uuid: Uuid, pilot_uuid: Uuid, actions: Vec<LapAction>) -> RepositoryResult<Option<(LapResult, RaceStatus)>> {
+    async fn process_turn_actions(&self, race_uuid: Uuid, _pilot_uuid: Uuid, actions: Vec<LapAction>) -> RepositoryResult<Option<(LapResult, RaceStatus)>> {
         let mut races = self.races.lock().unwrap();
         
         if let Some(race) = races.get_mut(&race_uuid) {

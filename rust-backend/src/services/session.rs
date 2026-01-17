@@ -87,6 +87,7 @@ impl SessionCache {
 }
 
 /// Session manager with repository abstraction and in-memory caching
+#[derive(Clone)]
 pub struct SessionManager<R: SessionRepository> {
     repository: Arc<R>,
     cache: Arc<RwLock<SessionCache>>,
@@ -230,6 +231,18 @@ impl<R: SessionRepository> SessionManager<R> {
         }
 
         Ok(())
+    }
+
+    /// Check if a token is blacklisted
+    pub async fn is_token_blacklisted(&self, token_id: &str) -> Result<bool, SessionError> {
+        // Check cache first
+        if self.is_token_blacklisted_cached(token_id) {
+            return Ok(true);
+        }
+
+        // For now, return false as we don't have blacklist implementation in repository
+        // TODO: Implement blacklist checking in repository
+        Ok(false)
     }
 
     /// Cleanup expired sessions
