@@ -92,7 +92,13 @@ pub fn routes() -> Router<Database> {
 }
 
 /// Admin-only routes that require authentication and admin role
-pub fn admin_routes() -> Router<crate::app_state::AppState<crate::repositories::MockPlayerRepository, crate::repositories::MockRaceRepository, crate::repositories::MockSessionRepository>> {
+pub fn admin_routes() -> Router<
+    crate::app_state::AppState<
+        crate::repositories::MockPlayerRepository,
+        crate::repositories::MockRaceRepository,
+        crate::repositories::MockSessionRepository,
+    >,
+> {
     // Temporarily disabled due to tracing format issues in admin functions
     Router::new()
     // TODO: Re-enable admin routes after fixing tracing format issues

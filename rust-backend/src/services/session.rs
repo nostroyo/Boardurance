@@ -135,7 +135,10 @@ impl<R: SessionRepository> SessionManager<R> {
                 .map_err(|e| SessionError::Cache(e.to_string()))?;
 
         // Check if user has too many sessions
-        let user_session_count = self.repository.count_active_for_user(user_uuid).await
+        let user_session_count = self
+            .repository
+            .count_active_for_user(user_uuid)
+            .await
             .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
         if user_session_count >= self.config.max_sessions_per_user {
             return Err(SessionError::TooManySessions);
@@ -155,7 +158,9 @@ impl<R: SessionRepository> SessionManager<R> {
         };
 
         // Store in repository
-        self.repository.create(&session).await
+        self.repository
+            .create(&session)
+            .await
             .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Cache the session
@@ -178,8 +183,10 @@ impl<R: SessionRepository> SessionManager<R> {
         }
 
         // Check repository
-        let session = self.repository.find_by_token(token_id).await
-            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
+        let session =
+            self.repository.find_by_token(token_id).await.map_err(|e| {
+                SessionError::Database(mongodb::error::Error::custom(e.to_string()))
+            })?;
 
         match session {
             Some(session) => {
@@ -202,7 +209,9 @@ impl<R: SessionRepository> SessionManager<R> {
         _reason: &str,
     ) -> Result<(), SessionError> {
         // Deactivate session in repository
-        self.repository.deactivate(token_id).await
+        self.repository
+            .deactivate(token_id)
+            .await
             .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Update cache
@@ -218,7 +227,9 @@ impl<R: SessionRepository> SessionManager<R> {
         _reason: &str,
     ) -> Result<(), SessionError> {
         // Deactivate all sessions for the user
-        self.repository.deactivate_all_for_user(user_uuid).await
+        self.repository
+            .deactivate_all_for_user(user_uuid)
+            .await
             .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
 
         // Clear user sessions from cache
@@ -248,8 +259,10 @@ impl<R: SessionRepository> SessionManager<R> {
     /// Cleanup expired sessions
     pub async fn cleanup_expired_sessions(&self) -> Result<usize, SessionError> {
         let now = Utc::now();
-        let deleted_count = self.repository.cleanup_expired(now).await
-            .map_err(|e| SessionError::Database(mongodb::error::Error::custom(e.to_string())))?;
+        let deleted_count =
+            self.repository.cleanup_expired(now).await.map_err(|e| {
+                SessionError::Database(mongodb::error::Error::custom(e.to_string()))
+            })?;
 
         // Clear cache to force refresh
         self.clear_cache();
@@ -332,15 +345,7 @@ impl<R: SessionRepository> SessionManager<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mongodb::Client;
-
-    // Mock database for testing without requiring MongoDB connection
-    async fn create_mock_database() -> Database {
-        // Create a mock database that won't actually connect
-        // For unit tests, we'll focus on testing the logic that doesn't require DB
-        let client = Client::with_uri_str("mongodb://mock:27017").await.unwrap();
-        client.database("mock_test")
-    }
+    use crate::repositories::MockSessionRepository;
 
     #[test]
     fn session_config_default_works() {
@@ -363,17 +368,18 @@ mod tests {
         let session = Session {
             id: None,
             user_uuid,
-            token_id: token_id.clone(),
+            token: token_id.clone(),
             created_at: now,
             last_activity: now,
             expires_at: now + Duration::hours(24),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
             is_active: true,
+            updated_at: now,
         };
 
         assert_eq!(session.user_uuid, user_uuid);
-        assert_eq!(session.token_id, token_id);
+        assert_eq!(session.token, token_id);
         assert!(session.is_active);
         assert!(session.expires_at > now);
     }
@@ -412,9 +418,9 @@ mod tests {
 
     #[tokio::test]
     async fn session_manager_creation_works() {
-        let db = Arc::new(create_mock_database().await);
+        let mock_repo = Arc::new(MockSessionRepository::new());
         let config = SessionConfig::default();
-        let session_manager = SessionManager::new(db, config);
+        let session_manager = SessionManager::new(mock_repo, config);
 
         // Should not panic and should be created successfully
         assert_eq!(session_manager.config.max_sessions_per_user, 5);
@@ -422,9 +428,9 @@ mod tests {
 
     #[tokio::test]
     async fn session_cache_operations_work() {
-        let db = Arc::new(create_mock_database().await);
+        let mock_repo = Arc::new(MockSessionRepository::new());
         let config = SessionConfig::default();
-        let session_manager = SessionManager::new(db, config);
+        let session_manager = SessionManager::new(mock_repo, config);
 
         let user_uuid = Uuid::new_v4();
         let token_id = "cache_test_token".to_string();
@@ -433,13 +439,14 @@ mod tests {
         let session = Session {
             id: None,
             user_uuid,
-            token_id: token_id.clone(),
+            token: token_id.clone(),
             created_at: now,
             last_activity: now,
             expires_at: now + Duration::hours(24),
             ip_address: Some("127.0.0.1".to_string()),
             user_agent: Some("test-agent".to_string()),
             is_active: true,
+            updated_at: now,
         };
 
         // Test caching
@@ -448,7 +455,7 @@ mod tests {
         // Test retrieval from cache
         let cached_session = session_manager.get_session_from_cache(&token_id);
         assert!(cached_session.is_some());
-        assert_eq!(cached_session.unwrap().token_id, token_id);
+        assert_eq!(cached_session.unwrap().token, token_id);
 
         // Test blacklisting in cache
         session_manager.blacklist_token_in_cache(token_id.clone());

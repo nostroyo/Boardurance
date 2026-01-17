@@ -61,7 +61,10 @@ pub struct AuthMiddleware {
 impl AuthMiddleware {
     /// Create a new authentication middleware
     #[must_use]
-    pub fn new(jwt_service: Arc<JwtService>, session_manager: Arc<SessionManager<MockSessionRepository>>) -> Self {
+    pub fn new(
+        jwt_service: Arc<JwtService>,
+        session_manager: Arc<SessionManager<MockSessionRepository>>,
+    ) -> Self {
         Self {
             jwt_service,
             session_manager,
@@ -280,10 +283,10 @@ pub async fn auth_middleware(request: Request, next: Next) -> Result<Response, S
 mod tests {
     use super::*;
     use crate::domain::{Email, HashedPassword, Player, TeamName};
+    use crate::repositories::MockSessionRepository;
     use crate::services::{JwtConfig, SessionConfig};
     use axum::body::Body;
     use axum::http::{HeaderValue, Method};
-    use mongodb::Database;
     use std::sync::Arc;
 
     fn create_test_player() -> Player {
@@ -299,11 +302,8 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_mock_database() -> Database {
-        let client = mongodb::Client::with_uri_str("mongodb://mock:27017")
-            .await
-            .unwrap();
-        client.database("mock_test")
+    async fn create_mock_database() -> MockSessionRepository {
+        MockSessionRepository::new()
     }
 
     #[test]
@@ -352,8 +352,8 @@ mod tests {
         let jwt_service = Arc::new(JwtService::new(jwt_config));
 
         let session_config = SessionConfig::default();
-        let db = Arc::new(create_mock_database().await);
-        let session_manager = Arc::new(SessionManager::new(db, session_config));
+        let mock_repo = Arc::new(MockSessionRepository::new());
+        let session_manager = Arc::new(SessionManager::new(mock_repo, session_config));
 
         let auth_middleware = AuthMiddleware::new(jwt_service, session_manager);
 

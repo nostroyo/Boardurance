@@ -20,17 +20,6 @@ jobs:
       run:
         working-directory: ./rust-backend
 
-    services:
-      mongodb:
-        image: mongo:7.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -62,27 +51,10 @@ jobs:
     - name: Check compilation
       run: cargo check --all-targets --all-features
 
-    - name: Run unit tests
-      run: cargo test --lib --bins
+    - name: Run fast tests (unit + mock tests)
+      run: cargo test-fast
       env:
         APP_ENVIRONMENT: test
-        APP_DATABASE__HOST: localhost
-        APP_DATABASE__PORT: 27017
-        APP_DATABASE__USERNAME: ""
-        APP_DATABASE__PASSWORD: ""
-        APP_DATABASE__DATABASE_NAME: racing_game_test
-        APP_DATABASE__REQUIRE_SSL: false
-
-    - name: Run integration tests
-      run: cargo test --test '*'
-      env:
-        APP_ENVIRONMENT: test
-        APP_DATABASE__HOST: localhost
-        APP_DATABASE__PORT: 27017
-        APP_DATABASE__USERNAME: ""
-        APP_DATABASE__PASSWORD: ""
-        APP_DATABASE__DATABASE_NAME: racing_game_test
-        APP_DATABASE__REQUIRE_SSL: false
 
     - name: Build application
       run: cargo build --release

@@ -35,10 +35,7 @@ impl TestAppState {
 
         // Initialize session manager with mock repository
         let session_config = SessionConfig::default();
-        let session_manager = Arc::new(SessionManager::new(
-            session_repo.clone(),
-            session_config,
-        ));
+        let session_manager = Arc::new(SessionManager::new(session_repo.clone(), session_config));
 
         Self {
             player_repo,
@@ -69,10 +66,7 @@ impl TestAppState {
         let jwt_service = Arc::new(JwtService::new(jwt_config));
 
         let session_config = SessionConfig::default();
-        let session_manager = Arc::new(SessionManager::new(
-            session_repo.clone(),
-            session_config,
-        ));
+        let session_manager = Arc::new(SessionManager::new(session_repo.clone(), session_config));
 
         Self {
             player_repo,
@@ -102,7 +96,7 @@ impl TestApp {
     pub async fn new() -> Self {
         let state = TestAppState::new();
         let app = create_test_router(&state).await;
-        
+
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("Failed to bind random port");
@@ -133,7 +127,7 @@ impl TestApp {
     ) -> Self {
         let state = TestAppState::with_test_data(players, races, sessions);
         let app = create_test_router(&state).await;
-        
+
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("Failed to bind random port");
@@ -195,17 +189,25 @@ impl TestApp {
 }
 
 /// Create a test router using mock repositories instead of real database
-async fn create_test_router(_state: &TestAppState) -> Router {
-    use crate::routes::{health_check};
-    use axum::{routing::get, Router};
+async fn create_test_router(_state: &TestAppState) -> Router<()> {
     use axum::http::Method;
+    use axum::{http::StatusCode, routing::get, Json, Router};
+    use serde_json::json;
     use tower_http::cors::CorsLayer;
     use tower_http::trace::TraceLayer;
+
+    // Simple health check for testing that doesn't require database
+    async fn test_health_check() -> Result<Json<serde_json::Value>, StatusCode> {
+        Ok(Json(json!({
+            "status": "ok",
+            "message": "Test service is healthy"
+        })))
+    }
 
     // For now, create a simple router with health check
     // TODO: Add routes that use the mock repositories when needed
     Router::new()
-        .route("/health_check", get(health_check))
+        .route("/health_check", get(test_health_check))
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

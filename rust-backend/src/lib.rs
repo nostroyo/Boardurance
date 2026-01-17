@@ -8,5 +8,6 @@ pub mod services;
 pub mod startup;
 pub mod telemetry;
 
-#[cfg(test)]
+// Make test_utils available for integration tests
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;

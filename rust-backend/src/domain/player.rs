@@ -53,7 +53,7 @@ mod uuid_as_string {
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct WalletAddress(String);
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
 pub struct Email(String);
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
