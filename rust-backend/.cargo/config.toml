@@ -1,0 +1,9 @@
+[alias]
+# Run only fast tests (unit tests + mock tests) - perfect for CI
+test-fast = "test --lib --bins --test mock_repository_tests --test simple_mock_test --test mock_repository_basic_test"
+
+# Run all tests including integration tests (requires MongoDB)
+test-all = "test"
+
+# Run only integration tests (requires MongoDB)
+test-integration = "test --test auth_integration_tests --test authorization_integration_tests --test boost_card_integration_tests --test protected_routes_integration_tests --test security_edge_cases_tests"

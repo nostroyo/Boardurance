@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use super::RepositoryResult;
 use crate::services::session::Session;
-use super::{RepositoryResult};
 
 #[async_trait]
 pub trait SessionRepository: Send + Sync {

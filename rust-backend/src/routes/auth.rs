@@ -17,10 +17,13 @@ use crate::domain::{
     PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName, UserCredentials,
     UserRegistration,
 };
-use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository};
+use crate::repositories::{
+    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
+};
 use crate::services::session::SessionMetadata;
 
-pub fn routes() -> Router<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>> {
+pub fn routes() -> Router<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>
+{
     Router::new()
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))
@@ -167,7 +170,9 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
 )]
 #[allow(clippy::cast_possible_wrap)]
 pub async fn register_user(
-    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
+    State(app_state): State<
+        AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>,
+    >,
     headers: HeaderMap,
     Json(registration): Json<UserRegistration>,
 ) -> Result<
@@ -355,7 +360,9 @@ pub async fn register_user(
 )]
 #[allow(clippy::cast_possible_wrap)]
 pub async fn login_user(
-    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
+    State(app_state): State<
+        AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>,
+    >,
     headers: HeaderMap,
     Json(credentials): Json<UserCredentials>,
 ) -> Result<
@@ -505,7 +512,9 @@ pub async fn login_user(
     tag = "Authentication"
 )]
 pub async fn logout_user(
-    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
+    State(app_state): State<
+        AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>,
+    >,
     headers: HeaderMap,
 ) -> Result<
     (StatusCode, [(String, String); 2], ResponseJson<Value>),
@@ -567,7 +576,9 @@ pub async fn logout_user(
     tag = "Authentication"
 )]
 pub async fn refresh_token(
-    State(app_state): State<AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>>,
+    State(app_state): State<
+        AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>,
+    >,
     headers: HeaderMap,
 ) -> Result<
     (StatusCode, [(String, String); 1], ResponseJson<Value>),
@@ -596,7 +607,6 @@ pub async fn refresh_token(
     let is_blacklisted = app_state
         .session_manager
         .is_token_blacklisted(&claims.jti)
-        .await
         .map_err(|e| {
             tracing::error!("Failed to check token blacklist: {}", e);
             (

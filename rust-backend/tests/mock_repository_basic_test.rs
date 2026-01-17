@@ -2,26 +2,28 @@
 //! This test demonstrates the basic mock repository functionality
 //! without requiring complex domain models or external dependencies.
 
+use rust_backend::domain::{Email, HashedPassword, Player, TeamName};
 use rust_backend::repositories::{MockPlayerRepository, PlayerRepository};
-use rust_backend::domain::{Player, TeamName, Email, HashedPassword};
 
 #[tokio::test]
 async fn test_mock_player_repository_basic_operations() {
     // Arrange
     let repo = MockPlayerRepository::new();
-    
+
     // Create a simple test player using the actual domain constructor
     let email = Email::parse("test@example.com").unwrap();
     let team_name = TeamName::parse("Test Team").unwrap();
-    let password_hash = HashedPassword::parse("$argon2id$v=19$m=15000,t=2,p=1$test$test").unwrap();
-    
+    let password_hash =
+        HashedPassword::from_hash("$argon2id$v=19$m=15000,t=2,p=1$test$test".to_string());
+
     let player = Player::new(
         email,
         password_hash,
         team_name,
         Vec::new(), // cars
         Vec::new(), // pilots
-    ).unwrap();
+    )
+    .unwrap();
 
     // Act & Assert - Create player
     let created_player = repo.create(&player).await.unwrap();
