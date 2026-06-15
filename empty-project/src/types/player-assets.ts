@@ -3,7 +3,6 @@
 export interface Car {
   uuid: string;
   name: string;
-  nft_mint_address?: string;
   pilot_uuid?: string;
   engine_uuid?: string;
   body_uuid?: string;
@@ -24,7 +23,6 @@ export interface Pilot {
     straight_value: number;
     curve_value: number;
   };
-  nft_mint_address?: string;
 }
 
 export interface Engine {
@@ -33,7 +31,6 @@ export interface Engine {
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
   straight_value: number;
   curve_value: number;
-  nft_mint_address?: string;
 }
 
 export interface Body {
@@ -42,7 +39,6 @@ export interface Body {
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
   straight_value: number;
   curve_value: number;
-  nft_mint_address?: string;
 }
 
 // Performance display models (data comes from backend)
@@ -80,7 +76,6 @@ export const validateCar = (car: any): car is Car => {
     car !== null &&
     typeof car.uuid === 'string' &&
     typeof car.name === 'string' &&
-    (car.nft_mint_address === undefined || typeof car.nft_mint_address === 'string') &&
     (car.pilot_uuid === undefined || typeof car.pilot_uuid === 'string') &&
     (car.engine_uuid === undefined || typeof car.engine_uuid === 'string') &&
     (car.body_uuid === undefined || typeof car.body_uuid === 'string')
@@ -96,8 +91,7 @@ export const validatePilot = (pilot: any): pilot is Pilot => {
     ['Rookie', 'Veteran', 'Elite', 'Champion'].includes(pilot.pilot_class) &&
     ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].includes(pilot.rarity) &&
     validatePilotSkills(pilot.skills) &&
-    validatePilotPerformance(pilot.performance) &&
-    (pilot.nft_mint_address === undefined || typeof pilot.nft_mint_address === 'string')
+    validatePilotPerformance(pilot.performance)
   );
 };
 
@@ -137,8 +131,7 @@ export const validateEngine = (engine: any): engine is Engine => {
     typeof engine.straight_value === 'number' &&
     engine.straight_value >= 0 &&
     typeof engine.curve_value === 'number' &&
-    engine.curve_value >= 0 &&
-    (engine.nft_mint_address === undefined || typeof engine.nft_mint_address === 'string')
+    engine.curve_value >= 0
   );
 };
 
@@ -152,8 +145,7 @@ export const validateBody = (body: any): body is Body => {
     typeof body.straight_value === 'number' &&
     body.straight_value >= 0 &&
     typeof body.curve_value === 'number' &&
-    body.curve_value >= 0 &&
-    (body.nft_mint_address === undefined || typeof body.nft_mint_address === 'string')
+    body.curve_value >= 0
   );
 };
 

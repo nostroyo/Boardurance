@@ -79,7 +79,6 @@ let pilot = Pilot::new(
     PilotRarity::Rookie,             // Affects skill multipliers
     PilotSkills::new(7, 5, 6, 4).unwrap(), // reaction, precision, focus, stamina
     PilotPerformance::new(8, 5).unwrap(),  // straight_value, curve_value
-    None,                            // No NFT mint address initially
 )?;
 ```
 
@@ -139,7 +138,7 @@ When creating a new player, the response should include:
 - **Dynamic Pilot Generation**: Random skill distributions within class constraints
 - **Customizable Names**: Allow players to rename their pilots
 - **Experience System**: Pilots gain experience and improve over time
-- **NFT Integration**: Convert pilots to NFTs for trading
+- **Pilot Trading**: Allow players to trade pilots
 
 ### Advanced Features
 - **Pilot Breeding**: Combine pilots to create new ones

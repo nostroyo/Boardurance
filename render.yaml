@@ -1,0 +1,29 @@
+# Render Blueprint for the Boardurance backend API (free tier, no credit card).
+# Import via: Render dashboard -> New -> Blueprint -> point at this repo.
+# Secrets (APP_DATABASE__URI, ALLOWED_ORIGINS) are set in the dashboard, not here.
+services:
+  - type: web
+    name: boardurance-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: rust-backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health_check
+    # Deploys are triggered from GitHub Actions (deploy hook) to keep the
+    # frontend/backend release ordered, so disable Render's own auto-deploy.
+    autoDeploy: false
+    envVars:
+      - key: APP_ENVIRONMENT
+        value: production
+      # OVH managed MongoDB connection string — set in the dashboard (secret).
+      - key: APP_DATABASE__URI
+        sync: false
+      # Comma-separated frontend origin(s) allowed through CORS — set in the
+      # dashboard once the Cloudflare Pages URL is known.
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # JWT signing key — generated once by Render and kept stable.
+      - key: JWT_SECRET
+        generateValue: true

@@ -8,11 +8,12 @@ use crate::routes::{auth, health_check, players, races};
 use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
 use axum::{routing::get, Router};
 use mongodb::{Client, Database};
+use secrecy::ExposeSecret;
 use std::sync::Arc;
 
-use axum::http::Method;
+use axum::http::{HeaderValue, Method};
 use tokio::net::TcpListener as TokioTcpListener;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -73,10 +74,7 @@ impl Application {
         crate::routes::health_check,
         crate::routes::players::get_all_players,
         crate::routes::players::get_player_by_uuid,
-        crate::routes::players::get_player_by_wallet,
         crate::routes::players::get_player_by_email,
-        crate::routes::players::connect_wallet,
-        crate::routes::players::disconnect_wallet,
         crate::routes::players::update_player_team_name,
         crate::routes::players::delete_player,
         crate::routes::players::add_car_to_player,
@@ -128,14 +126,12 @@ impl Application {
             // Domain value objects
             crate::domain::Email,
             crate::domain::TeamName,
-            crate::domain::WalletAddress,
             crate::domain::CarName,
             crate::domain::PilotName,
             crate::domain::EngineName,
             crate::domain::BodyName,
             crate::domain::PilotPerformance,
             // Route DTOs
-            crate::routes::players::ConnectWalletRequest,
             crate::routes::players::UpdateTeamNameRequest,
             crate::routes::players::AddCarRequest,
             crate::routes::players::AddPilotRequest,
@@ -278,11 +274,7 @@ pub async fn run(
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()
-                .allow_origin([
-                    "http://localhost:5173".parse().unwrap(),
-                    "http://localhost:5174".parse().unwrap(),
-                    "http://localhost:5175".parse().unwrap(),
-                ])
+                .allow_origin(AllowOrigin::list(allowed_origins()))
                 .allow_methods([
                     Method::GET,
                     Method::POST,
@@ -310,11 +302,37 @@ pub async fn run(
     Ok(server)
 }
 
+/// CORS origins allowed to call the API: the local dev servers, plus any
+/// comma-separated origins from the `ALLOWED_ORIGINS` environment variable
+/// (e.g. the deployed frontend URL).
+fn allowed_origins() -> Vec<HeaderValue> {
+    let mut origins: Vec<HeaderValue> = vec![
+        "http://localhost:5173".parse().unwrap(),
+        "http://localhost:5174".parse().unwrap(),
+        "http://localhost:5175".parse().unwrap(),
+    ];
+
+    if let Ok(extra) = std::env::var("ALLOWED_ORIGINS") {
+        for origin in extra.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            match origin.parse::<HeaderValue>() {
+                Ok(value) => origins.push(value),
+                Err(_) => tracing::warn!("Ignoring invalid origin in ALLOWED_ORIGINS: {origin}"),
+            }
+        }
+    }
+
+    origins
+}
+
 pub async fn get_connection_pool(
     configuration: &DatabaseSettings,
 ) -> Result<Database, mongodb::error::Error> {
-    // Try with authentication first, fallback to no auth for local development
-    let connection_string = if configuration.username.is_empty() {
+    // A full URI override (e.g. MongoDB Atlas) takes precedence; otherwise the
+    // connection string is built from the individual settings, falling back to
+    // unauthenticated access for local development.
+    let connection_string = if let Some(uri) = &configuration.uri {
+        uri.expose_secret().clone()
+    } else if configuration.username.is_empty() {
         configuration.connection_string_without_auth()
     } else {
         configuration.with_db()

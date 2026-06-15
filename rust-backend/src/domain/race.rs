@@ -2718,7 +2718,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -2727,7 +2726,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -2739,11 +2737,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -2838,7 +2835,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -2847,7 +2843,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -2859,11 +2854,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -2923,7 +2917,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -2932,7 +2925,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -2944,11 +2936,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3017,7 +3008,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3026,7 +3016,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3038,11 +3027,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3156,7 +3144,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3165,7 +3152,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3177,11 +3163,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3258,7 +3243,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3267,7 +3251,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3279,11 +3262,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3341,7 +3323,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3350,7 +3331,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3362,11 +3342,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3441,7 +3420,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3450,7 +3428,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3462,11 +3439,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3534,7 +3510,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3543,7 +3518,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3555,11 +3529,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3648,7 +3621,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3657,7 +3629,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3669,11 +3640,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,
@@ -3746,7 +3716,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap();
 
@@ -3755,7 +3724,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap();
 
@@ -3767,11 +3735,10 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap();
 
-        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap(), None).unwrap();
+        let car = Car::new(crate::domain::CarName::parse("Test Car").unwrap()).unwrap();
 
         let car_data = ValidatedCarData {
             car,

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This feature establishes GitHub integration with comprehensive CI/CD pipelines for the Web3 motorsport racing game project. The system will automate testing, building, and deployment processes while ensuring no secrets are exposed in the repository.
+This feature establishes GitHub integration with comprehensive CI/CD pipelines for the motorsport racing game project. The system will automate testing, building, and deployment processes while ensuring no secrets are exposed in the repository.
 
 ## Glossary
 

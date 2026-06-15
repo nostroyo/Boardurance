@@ -1,6 +1,6 @@
 # GitHub CI/CD Configuration
 
-This directory contains the GitHub Actions workflows and branch protection configuration for the Web3 motorsport racing game project.
+This directory contains the GitHub Actions workflows and branch protection configuration for the motorsport racing game project.
 
 ## 🚀 Quick Start
 

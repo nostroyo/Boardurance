@@ -1,6 +1,6 @@
-# Web3 Game Project Documentation
+# Racing Game Project Documentation
 
-This folder contains all documentation for the Web3 Game project with NFT integration on Solana blockchain.
+This folder contains all documentation for the racing management game project.
 
 ## 📁 Feature-Based Documentation Structure
 
@@ -36,14 +36,6 @@ User authentication, authorization, and session management.
 - Protected routes
 - Session handling
 - Auth middleware
-
-### ⛓️ [05 - NFT & Blockchain](features/05-nft-blockchain/)
-Solana blockchain integration and NFT smart contracts.
-- Solana smart contract documentation
-- Deployment guides
-- Candy Machine setup
-- 100 unique car NFTs
-- Metaplex integration
 
 ### 🚗 [06 - Player & Car Management](features/06-player-car-management/)
 Player management, car systems, and pilot mechanics.
@@ -82,23 +74,20 @@ React frontend application documentation.
 - UI improvements
 - React + TypeScript
 - Component architecture
-- Wallet integration
 
 ## 🚀 Quick Start
 
 1. **Frontend**: React + TypeScript + Vite web application (port 5173)
 2. **Backend**: Rust + Axum + MongoDB API server (port 3000)
-3. **Blockchain**: Solana + Anchor smart contracts for NFTs
 
 See [Quick Start Guide](features/01-core-project/QUICK_START.md) for detailed setup instructions.
 
 ## 🏗️ Architecture Overview
 
 ```
-Web3 Game Project
-├── Frontend (React)     # Game UI and wallet integration
-├── Backend (Rust)       # API server with MongoDB
-└── Blockchain (Solana)  # NFT smart contracts
+Racing Game Project
+├── Frontend (React)     # Game UI
+└── Backend (Rust)       # API server with MongoDB
 ```
 
 See [Architecture Documentation](features/08-architecture/) for detailed architecture information.
@@ -121,11 +110,6 @@ See [Architecture Documentation](features/08-architecture/) for detailed archite
 - Start with [Frontend](features/10-frontend/) for UI documentation
 - Review [Architecture](features/08-architecture/) for component structure
 - Check [Racing System](features/02-racing-system/) for game UI requirements
-
-**Blockchain Developers:**
-- Start with [NFT & Blockchain](features/05-nft-blockchain/) for Solana integration
-- Review [Player & Car Management](features/06-player-car-management/) for NFT attributes
-- Check [Racing System](features/02-racing-system/) for gameplay integration
 
 **QA/Testing:**
 - Start with [Testing](features/07-testing/) for test strategies
@@ -187,8 +171,6 @@ features/XX-feature-name/
 
 - **Rust Backend**: Based on "Zero to Production in Rust" by Luca Palmieri
 - **React Frontend**: Modern React development practices
-- **Solana Blockchain**: Solana and Anchor development guides
-- **Web3 Gaming**: Decentralized application best practices
 
 ## 📋 Migration Notes
 
@@ -196,4 +178,4 @@ This documentation structure was reorganized from a flat structure to a feature-
 
 ---
 
-**Navigate by feature, find what you need quickly, and build amazing Web3 racing experiences! 🏁🚗💨**
+**Navigate by feature, find what you need quickly, and build amazing racing experiences! 🏁🚗💨**

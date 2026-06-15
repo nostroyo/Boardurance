@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create basic car and pilot for the admin user
     let car_name = rust_backend::domain::CarName::parse("Admin Car")?;
-    let car = Car::new(car_name, None)?;
+    let car = Car::new(car_name)?;
 
     let pilot_name = rust_backend::domain::PilotName::parse("Admin Pilot")?;
     let pilot_skills = rust_backend::domain::PilotSkills {
@@ -40,7 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rust_backend::domain::PilotRarity::Professional,
         pilot_skills,
         pilot_performance,
-        None,
     )?;
 
     // Create admin player

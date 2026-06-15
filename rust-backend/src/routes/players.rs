@@ -15,13 +15,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     Car, CarName, Pilot, PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName,
-    WalletAddress,
 };
-
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct ConnectWalletRequest {
-    pub wallet_address: String,
-}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTeamNameRequest {
@@ -37,7 +31,6 @@ pub struct UpdatePlayerConfigurationRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddCarRequest {
     pub name: String,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -46,7 +39,6 @@ pub struct AddPilotRequest {
     pub pilot_class: PilotClass,
     pub rarity: PilotRarity,
     pub skills: PilotSkillsRequest,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -77,8 +69,6 @@ pub fn routes() -> Router<Database> {
             put(update_player_configuration),
         )
         .route("/players/:player_uuid", delete(delete_player))
-        .route("/players/:player_uuid/wallet", post(connect_wallet))
-        .route("/players/:player_uuid/wallet", delete(disconnect_wallet))
         .route("/players/:player_uuid/cars", post(add_car_to_player))
         .route(
             "/players/:player_uuid/cars/:car_uuid",
@@ -103,7 +93,6 @@ pub fn admin_routes() -> Router<
     Router::new()
     // TODO: Re-enable admin routes after fixing tracing format issues
     // .route("/players", get(get_all_players_admin))
-    // .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet_admin))
     // .route("/players/by-email/:email", get(get_player_by_email_admin))
 }
 
@@ -176,41 +165,6 @@ pub async fn get_player_by_uuid(
     }
 }
 
-/// Get player by wallet address
-#[utoipa::path(
-    get,
-    path = "/api/v1/players/by-wallet/{wallet_address}",
-    params(
-        ("wallet_address" = String, Path, description = "Player's wallet address")
-    ),
-    responses(
-        (status = 200, description = "Player found", body = Player),
-        (status = 404, description = "Player not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Fetching player by wallet address", skip(database))]
-pub async fn get_player_by_wallet(
-    State(database): State<Database>,
-    Path(wallet_address): Path<String>,
-) -> Result<Json<Player>, StatusCode> {
-    match get_player_by_wallet_address(&database, &wallet_address).await {
-        Ok(Some(player)) => {
-            tracing::info!("Player found for wallet address: {}", wallet_address);
-            Ok(Json(player))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for wallet address: {}", wallet_address);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to fetch player: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
 /// Get player by email address
 #[utoipa::path(
     get,
@@ -241,124 +195,6 @@ pub async fn get_player_by_email(
         }
         Err(e) => {
             tracing::error!("Failed to fetch player: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-/// Connect wallet to player
-#[utoipa::path(
-    post,
-    path = "/api/v1/players/{player_uuid}/wallet",
-    params(
-        ("player_uuid" = String, Path, description = "Player's UUID")
-    ),
-    request_body = ConnectWalletRequest,
-    responses(
-        (status = 200, description = "Wallet connected successfully", body = PlayerResponse),
-        (status = 400, description = "Bad request"),
-        (status = 404, description = "Player not found"),
-        (status = 409, description = "Wallet already connected"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Connecting wallet to player", skip(database, payload))]
-pub async fn connect_wallet(
-    State(database): State<Database>,
-    Path(player_uuid_str): Path<String>,
-    Json(payload): Json<ConnectWalletRequest>,
-) -> Result<Json<PlayerResponse>, StatusCode> {
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    let wallet_address = match WalletAddress::parse(&payload.wallet_address) {
-        Ok(addr) => addr,
-        Err(e) => {
-            tracing::warn!("Invalid wallet address: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    // Check if wallet is already connected to another player
-    if let Ok(existing) = get_player_by_wallet_address(&database, wallet_address.as_ref()).await {
-        if existing.is_some() {
-            tracing::warn!(
-                "Wallet address {} is already connected to another player",
-                wallet_address.as_ref()
-            );
-            return Err(StatusCode::CONFLICT);
-        }
-    }
-
-    match connect_wallet_to_player(&database, player_uuid, wallet_address).await {
-        Ok(Some(updated_player)) => {
-            tracing::info!("Wallet connected successfully to player: {}", player_uuid);
-            Ok(Json(PlayerResponse {
-                player: updated_player,
-                message: "Wallet connected successfully".to_string(),
-            }))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for UUID: {}", player_uuid);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to connect wallet: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-/// Disconnect wallet from player
-#[utoipa::path(
-    delete,
-    path = "/api/v1/players/{player_uuid}/wallet",
-    params(
-        ("player_uuid" = String, Path, description = "Player's UUID")
-    ),
-    responses(
-        (status = 200, description = "Wallet disconnected successfully", body = PlayerResponse),
-        (status = 404, description = "Player not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Disconnecting wallet from player", skip(database))]
-pub async fn disconnect_wallet(
-    State(database): State<Database>,
-    Path(player_uuid_str): Path<String>,
-) -> Result<Json<PlayerResponse>, StatusCode> {
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    match disconnect_wallet_from_player(&database, player_uuid).await {
-        Ok(Some(updated_player)) => {
-            tracing::info!(
-                "Wallet disconnected successfully from player: {}",
-                player_uuid
-            );
-            Ok(Json(PlayerResponse {
-                player: updated_player,
-                message: "Wallet disconnected successfully".to_string(),
-            }))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for UUID: {}", player_uuid);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to disconnect wallet: {:?}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -563,7 +399,7 @@ pub async fn add_car_to_player(
         }
     };
 
-    let car = match Car::new(car_name, payload.nft_mint_address) {
+    let car = match Car::new(car_name) {
         Ok(car) => car,
         Err(e) => {
             tracing::warn!("Failed to create car: {}", e);
@@ -714,7 +550,6 @@ pub async fn add_pilot_to_player(
         payload.rarity,
         pilot_skills,
         pilot_performance,
-        payload.nft_mint_address,
     ) {
         Ok(pilot) => pilot,
         Err(e) => {
@@ -829,19 +664,6 @@ pub async fn get_all_players_from_db(
 }
 
 #[tracing::instrument(
-    name = "Getting player by wallet address from the database",
-    skip(database)
-)]
-pub async fn get_player_by_wallet_address(
-    database: &Database,
-    wallet_address: &str,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    collection.find_one(filter, None).await
-}
-
-#[tracing::instrument(
     name = "Getting player by email address from the database",
     skip(database)
 )]
@@ -854,101 +676,6 @@ pub async fn get_player_by_email_address(
     collection.find_one(filter, None).await
 }
 
-#[tracing::instrument(
-    name = "Updating player team name in the database",
-    skip(database, new_team_name)
-)]
-pub async fn update_player_team_name_in_db(
-    database: &Database,
-    wallet_address: &str,
-    new_team_name: TeamName,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$set": {
-            "team_name": new_team_name.as_ref(),
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Deleting player from the database", skip(database))]
-pub async fn delete_player_from_db(
-    database: &Database,
-    wallet_address: &str,
-) -> Result<bool, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let result = collection.delete_one(filter, None).await?;
-    Ok(result.deleted_count > 0)
-}
-
-#[tracing::instrument(name = "Adding car to player in the database", skip(database, car))]
-pub async fn add_car_to_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    car: Car,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Removing car from player in the database", skip(database))]
-pub async fn remove_car_from_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    car_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$pull": { "cars": { "uuid": car_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Adding pilot to player in the database", skip(database, pilot))]
-pub async fn add_pilot_to_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    pilot: Pilot,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Removing pilot from player in the database", skip(database))]
-pub async fn remove_pilot_from_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    pilot_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
 #[tracing::instrument(name = "Getting player by UUID from the database", skip(database))]
 pub async fn get_player_by_uuid_from_db(
     database: &Database,
@@ -957,45 +684,6 @@ pub async fn get_player_by_uuid_from_db(
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
     collection.find_one(filter, None).await
-}
-
-#[tracing::instrument(
-    name = "Connecting wallet to player in the database",
-    skip(database, wallet_address)
-)]
-pub async fn connect_wallet_to_player(
-    database: &Database,
-    player_uuid: Uuid,
-    wallet_address: WalletAddress,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "wallet_address": wallet_address.as_ref(),
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Disconnecting wallet from player in the database",
-    skip(database)
-)]
-pub async fn disconnect_wallet_from_player(
-    database: &Database,
-    player_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$unset": { "wallet_address": "" },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
 }
 
 #[tracing::instrument(
@@ -1156,29 +844,6 @@ pub async fn get_all_players_admin(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/admin/players/by-wallet/{wallet_address}",
-    responses(
-        (status = 200, description = "Player found", body = PlayerResponse),
-        (status = 404, description = "Player not found")
-    ),
-    params(
-        ("wallet_address" = String, Path, description = "Wallet address to search for")
-    ),
-    security(
-        ("bearer_auth" = [])
-    ),
-    tag = "admin"
-)]
-pub async fn get_player_by_wallet_admin(
-    Path(wallet_address): Path<String>,
-    State(app_state): State<crate::app_state::AppState>,
-) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let db = &app_state.database;
-    get_player_by_wallet_impl(db, wallet_address).await
-}
-
-#[utoipa::path(
-    get,
     path = "/api/v1/admin/players/by-email/{email}",
     responses(
         (status = 200, description = "Player found", body = PlayerResponse),
@@ -1232,55 +897,6 @@ async fn get_all_players_impl(
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": "Failed to fetch players"})),
-            ))
-        }
-    }
-}
-
-async fn get_player_by_wallet_impl(
-    db: &mongodb::Database,
-    wallet_address: String,
-) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
-    tracing::info!("[FETCHING PLAYER BY WALLET - START] wallet_address={}", wallet_address);
-    let start_time = std::time::Instant::now();
-
-    match get_player_by_wallet_address(db, &wallet_address).await {
-        Ok(Some(player)) => {
-            let response = PlayerResponse {
-                player,
-                message: "Player retrieved successfully".to_string(),
-            };
-
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Ok(Json(response))
-        }
-        Ok(None) => {
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Player not found wallet_address={}",\n                wallet_address
-            );
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Err((
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": "Player not found"})),
-            ))
-        }
-        Err(e) => {
-            tracing::error!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Failed to fetch player: {} wallet_address={}",\n                e,\n                wallet_address
-            );
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to fetch player"})),
             ))
         }
     }

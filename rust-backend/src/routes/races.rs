@@ -319,7 +319,6 @@ pub struct CarDataResponse {
 pub struct CarInfo {
     pub uuid: String,
     pub name: String,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -330,7 +329,6 @@ pub struct PilotInfo {
     pub rarity: String,
     pub skills: PilotSkills,
     pub performance: PilotPerformance,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -354,7 +352,6 @@ pub struct EngineInfo {
     pub rarity: String,
     pub straight_value: u8,
     pub curve_value: u8,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -364,7 +361,6 @@ pub struct BodyInfo {
     pub rarity: String,
     pub straight_value: u8,
     pub curve_value: u8,
-    pub nft_mint_address: Option<String>,
 }
 
 // Turn Phase Endpoint Response Models
@@ -1611,7 +1607,7 @@ pub async fn apply_lap_action(
 /// Get complete car data for a player in a race
 ///
 /// This endpoint returns comprehensive car information including:
-/// - Car details (name, UUID, NFT address)
+/// - Car details (name, UUID)
 /// - Pilot information (skills, performance, class, rarity)
 /// - Engine specifications (straight/curve values, rarity)
 /// - Body specifications (straight/curve values, rarity)
@@ -1633,8 +1629,7 @@ pub async fn apply_lap_action(
             example = json!({
                 "car": {
                     "uuid": "550e8400-e29b-41d4-a716-446655440001",
-                    "name": "Lightning Bolt",
-                    "nft_mint_address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+                    "name": "Lightning Bolt"
                 },
                 "pilot": {
                     "uuid": "550e8400-e29b-41d4-a716-446655440002",
@@ -1650,24 +1645,21 @@ pub async fn apply_lap_action(
                     "performance": {
                         "straight_value": 5,
                         "curve_value": 4
-                    },
-                    "nft_mint_address": null
+                    }
                 },
                 "engine": {
                     "uuid": "550e8400-e29b-41d4-a716-446655440003",
                     "name": "V8 Turbo",
                     "rarity": "Rare",
                     "straight_value": 8,
-                    "curve_value": 6,
-                    "nft_mint_address": null
+                    "curve_value": 6
                 },
                 "body": {
                     "uuid": "550e8400-e29b-41d4-a716-446655440004",
                     "name": "Aerodynamic Frame",
                     "rarity": "Rare",
                     "straight_value": 7,
-                    "curve_value": 8,
-                    "nft_mint_address": null
+                    "curve_value": 8
                 }
             })
         ),
@@ -1816,7 +1808,6 @@ pub async fn get_car_data(
         car: CarInfo {
             uuid: car_data.car.uuid.to_string(),
             name: car_data.car.name.as_ref().to_string(),
-            nft_mint_address: car_data.car.nft_mint_address.clone(),
         },
         pilot: PilotInfo {
             uuid: car_data.pilot.uuid.to_string(),
@@ -1833,7 +1824,6 @@ pub async fn get_car_data(
                 straight_value: car_data.pilot.performance.straight_value,
                 curve_value: car_data.pilot.performance.curve_value,
             },
-            nft_mint_address: car_data.pilot.nft_mint_address.clone(),
         },
         engine: EngineInfo {
             uuid: car_data.engine.uuid.to_string(),
@@ -1841,7 +1831,6 @@ pub async fn get_car_data(
             rarity: format!("{:?}", car_data.engine.rarity),
             straight_value: car_data.engine.straight_value,
             curve_value: car_data.engine.curve_value,
-            nft_mint_address: car_data.engine.nft_mint_address.clone(),
         },
         body: BodyInfo {
             uuid: car_data.body.uuid.to_string(),
@@ -1849,7 +1838,6 @@ pub async fn get_car_data(
             rarity: format!("{:?}", car_data.body.rarity),
             straight_value: car_data.body.straight_value,
             curve_value: car_data.body.curve_value,
-            nft_mint_address: car_data.body.nft_mint_address.clone(),
         },
     };
 

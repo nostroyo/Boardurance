@@ -41,7 +41,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Rookie,
         PilotSkills::new(7, 5, 6, 4).unwrap(),
         crate::domain::PilotPerformance::new(8, 5).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 1: {e}"))?;
 
@@ -51,7 +50,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Rookie,
         PilotSkills::new(5, 8, 7, 5).unwrap(),
         crate::domain::PilotPerformance::new(5, 8).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 2: {e}"))?;
 
@@ -61,7 +59,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Rookie,
         PilotSkills::new(4, 6, 8, 9).unwrap(),
         crate::domain::PilotPerformance::new(6, 7).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 3: {e}"))?;
 
@@ -71,7 +68,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Rookie,
         PilotSkills::new(6, 6, 6, 6).unwrap(),
         crate::domain::PilotPerformance::new(6, 6).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 4: {e}"))?;
 
@@ -81,7 +77,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Professional,
         PilotSkills::new(8, 4, 5, 3).unwrap(),
         crate::domain::PilotPerformance::new(9, 4).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 5: {e}"))?;
 
@@ -91,15 +86,14 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         PilotRarity::Professional,
         PilotSkills::new(4, 9, 8, 6).unwrap(),
         crate::domain::PilotPerformance::new(4, 9).unwrap(),
-        None,
     )
     .map_err(|e| format!("Failed to create pilot 6: {e}"))?;
 
     // Create 2 starter cars
-    let mut car1 = Car::new(CarName::parse("Car 1").unwrap(), None)
+    let mut car1 = Car::new(CarName::parse("Car 1").unwrap())
         .map_err(|e| format!("Failed to create starter car 1: {e}"))?;
 
-    let mut car2 = Car::new(CarName::parse("Car 2").unwrap(), None)
+    let mut car2 = Car::new(CarName::parse("Car 2").unwrap())
         .map_err(|e| format!("Failed to create starter car 2: {e}"))?;
 
     // Assign pilots to cars (3 pilots per car)
@@ -115,7 +109,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         ComponentRarity::Common,
         7, // straight_value - good for straights (0-10 range)
         5, // curve_value
-        None,
     )
     .map_err(|e| format!("Failed to create starter engine 1: {e}"))?;
 
@@ -124,7 +117,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         ComponentRarity::Common,
         5, // straight_value
         7, // curve_value - good for curves
-        None,
     )
     .map_err(|e| format!("Failed to create starter engine 2: {e}"))?;
 
@@ -134,7 +126,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         ComponentRarity::Common,
         5, // straight_value (0-10 range)
         7, // curve_value - good for curves
-        None,
     )
     .map_err(|e| format!("Failed to create starter body 1: {e}"))?;
 
@@ -143,7 +134,6 @@ fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Bod
         ComponentRarity::Common,
         7, // straight_value - good for straights
         5, // curve_value
-        None,
     )
     .map_err(|e| format!("Failed to create starter body 2: {e}"))?;
 

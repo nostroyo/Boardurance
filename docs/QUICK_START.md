@@ -1,4 +1,4 @@
-# 🚀 Quick Start Guide - Web3 Racing Game
+# 🚀 Quick Start Guide - Racing Game
 
 ## Prerequisites
 

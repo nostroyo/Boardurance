@@ -59,7 +59,7 @@ inclusion: always
 - Write integration tests for all API endpoints
 - Implement unit tests for domain logic and utility functions
 - Use descriptive test names that explain the scenario being tested
-- Mock external dependencies in tests (database, blockchain calls)
+- Mock external dependencies in tests (database, external services)
 - Maintain test coverage above 80% for critical business logic
 
 ## Architecture Patterns

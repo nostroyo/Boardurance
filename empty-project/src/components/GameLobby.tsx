@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
+import { API_V1_URL } from '../config/api';
 
 interface Race {
   uuid: string;
@@ -39,7 +40,7 @@ function GameLobby() {
     // Fetch available races
     const fetchRaces = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/v1/races');
+        const response = await fetch(`${API_V1_URL}/races`);
         if (response.ok) {
           const racesData = await response.json();
           setRaces(racesData || []);
@@ -66,7 +67,7 @@ function GameLobby() {
       console.log('Fetching player data for:', user.uuid);
 
       // Get player's cars to select one for the race
-      const playerResponse = await fetch(`http://localhost:3000/api/v1/players/${user.uuid}`, {
+      const playerResponse = await fetch(`${API_V1_URL}/players/${user.uuid}`, {
         credentials: 'include',
       });
 
@@ -104,7 +105,7 @@ function GameLobby() {
 
       console.log('Joining race with data:', joinData);
 
-      const response = await fetch(`http://localhost:3000/api/v1/races/${raceUuid}/join`, {
+      const response = await fetch(`${API_V1_URL}/races/${raceUuid}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -188,7 +189,7 @@ function GameLobby() {
       };
 
       // Step 1: Create the race (auto-starts due to Feature #9)
-      const createResponse = await fetch('http://localhost:3000/api/v1/races', {
+      const createResponse = await fetch(`${API_V1_URL}/races`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -206,7 +207,7 @@ function GameLobby() {
       const raceUuid = createResult.race.uuid;
 
       // Step 2: Get player's cars and pilots from API
-      const playerResponse = await fetch(`http://localhost:3000/api/v1/players/${user?.uuid}`, {
+      const playerResponse = await fetch(`${API_V1_URL}/players/${user?.uuid}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -239,7 +240,7 @@ function GameLobby() {
         pilot_uuid: playerData.pilots[0].uuid, // Use first available pilot
       };
 
-      const joinResponse = await fetch(`http://localhost:3000/api/v1/races/${raceUuid}/join`, {
+      const joinResponse = await fetch(`${API_V1_URL}/races/${raceUuid}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

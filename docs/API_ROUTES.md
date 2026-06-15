@@ -72,12 +72,6 @@ Get player by UUID.
 **Parameters:**
 - `player_uuid`: Player's unique identifier
 
-### GET /api/v1/players/by-wallet/{wallet_address}
-Get player by wallet address.
-
-**Parameters:**
-- `wallet_address`: Player's Solana wallet address
-
 ### GET /api/v1/players/by-email/{email}
 Get player by email address.
 
@@ -100,27 +94,13 @@ Delete a player.
 **Parameters:**
 - `player_uuid`: Player's unique identifier
 
-### POST /api/v1/players/{player_uuid}/wallet
-Connect wallet to player.
-
-**Request Body:**
-```json
-{
-  "wallet_address": "string"
-}
-```
-
-### DELETE /api/v1/players/{player_uuid}/wallet
-Disconnect wallet from player.
-
 ### POST /api/v1/players/{player_uuid}/cars
 Add a car to player.
 
 **Request Body:**
 ```json
 {
-  "name": "string",
-  "nft_mint_address": "string (optional)"
+  "name": "string"
 }
 ```
 
@@ -145,8 +125,7 @@ Add a pilot to player.
     "precision": "number (0-100)",
     "focus": "number (0-100)",
     "stamina": "number (0-100)"
-  },
-  "nft_mint_address": "string (optional)"
+  }
 }
 ```
 
@@ -256,7 +235,6 @@ Get current race status.
   "uuid": "string",
   "email": "string",
   "team_name": "string",
-  "wallet_address": "string (optional)",
   "cars": ["Car objects"],
   "pilots": ["Pilot objects"],
   "engines": ["Engine objects"],
@@ -271,7 +249,6 @@ Get current race status.
 {
   "uuid": "string",
   "name": "string",
-  "nft_mint_address": "string (optional)",
   "pilot_uuid": "string (optional)",
   "engine_uuid": "string (optional)",
   "body_uuid": "string (optional)"
@@ -294,8 +271,7 @@ Get current race status.
   "performance": {
     "straight_value": "number",
     "curve_value": "number"
-  },
-  "nft_mint_address": "string (optional)"
+  }
 }
 ```
 
@@ -306,8 +282,7 @@ Get current race status.
   "name": "string",
   "rarity": "Common|Uncommon|Rare|Epic|Legendary",
   "straight_value": "number",
-  "curve_value": "number",
-  "nft_mint_address": "string (optional)"
+  "curve_value": "number"
 }
 ```
 
@@ -318,8 +293,7 @@ Get current race status.
   "name": "string",
   "rarity": "Common|Uncommon|Rare|Epic|Legendary",
   "straight_value": "number",
-  "curve_value": "number",
-  "nft_mint_address": "string (optional)"
+  "curve_value": "number"
 }
 ```
 

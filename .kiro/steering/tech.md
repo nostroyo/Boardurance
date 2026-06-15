@@ -2,10 +2,9 @@
 
 ## Architecture Overview
 
-Three-tier Web3 gaming architecture:
+Two-tier gaming architecture:
 - **Frontend**: React + TypeScript + Vite (port 5173)
 - **Backend**: Rust + Axum + MongoDB (port 3000)
-- **Blockchain**: Solana + Anchor smart contracts
 
 ## Frontend Stack
 
@@ -14,11 +13,6 @@ Three-tier Web3 gaming architecture:
 - **Vite 7.1.2** for fast builds and HMR
 - **Tailwind CSS 3.4.17** for utility-first styling
 - **React Router DOM** for client-side routing
-
-### Web3 Integration
-- **@solana/wallet-adapter** for Solana wallet connection
-- **@solana/web3.js** for blockchain interaction
-- **@metaplex-foundation/js** for NFT metadata handling
 
 ### Development Tools
 - **ESLint 9.33.0** with TypeScript rules
@@ -43,18 +37,6 @@ Three-tier Web3 gaming architecture:
 - **config 0.14** for layered configuration management
 - **secrecy** for secure configuration handling
 - **jsonwebtoken** for JWT authentication
-
-## Blockchain Stack
-
-### Solana Development
-- **Anchor Framework** for smart contract development
-- **Sugar CLI** for Candy Machine deployment
-- **Metaplex** for NFT standards and tooling
-
-### NFT Infrastructure
-- **Candy Machine** for minting 100 unique car NFTs
-- **Token Metadata Program** for NFT metadata
-- **Metaplex compatibility** for marketplace integration
 
 ## Common Build Commands
 
@@ -88,16 +70,6 @@ cargo clippy            # Rust linting
 cargo fmt               # Rust formatting
 ```
 
-### Blockchain Development
-```bash
-cd solana-smart-contract
-anchor build            # Build smart contracts
-anchor test             # Run contract tests
-anchor deploy           # Deploy to configured cluster
-node generate-metadata.js  # Generate NFT metadata
-sugar upload && sugar deploy  # Deploy Candy Machine
-```
-
 ### Testing Commands
 ```powershell
 # Backend comprehensive testing
@@ -119,8 +91,6 @@ cd empty-project
 - **Docker Desktop** for MongoDB containers
 - **Rust** (latest stable) with Cargo
 - **Node.js** (v18+) with npm
-- **Solana CLI** for blockchain development
-- **Anchor CLI** for smart contract framework
 
 ### Port Configuration
 - **Frontend**: http://localhost:5173

@@ -36,11 +36,6 @@ docs/
 │   │       └── BOOST_CALCULATION_SIMPLIFICATION.md
 │   ├── 04-authentication/
 │   │   └── README.md
-│   ├── 05-nft-blockchain/
-│   │   ├── README.md
-│   │   ├── SOLANA_README.md
-│   │   ├── SOLANA_DEPLOYMENT.md
-│   │   └── SOLANA_SIMPLE_DEPLOYMENT.md
 │   ├── 06-player-car-management/
 │   │   ├── README.md
 │   │   └── implementation/
@@ -119,11 +114,6 @@ Execute the PowerShell migration script to move files to new locations.
 - openapi-boost-cards.yaml
 - implementation/BOOST_AVAILABILITY_ENDPOINT_IMPLEMENTATION.md
 - implementation/BOOST_CALCULATION_SIMPLIFICATION.md
-
-### NFT & Blockchain (05-nft-blockchain/)
-- SOLANA_README.md
-- SOLANA_DEPLOYMENT.md
-- SOLANA_SIMPLE_DEPLOYMENT.md
 
 ### Player & Car Management (06-player-car-management/)
 - implementation/CAR_PILOTS_UPDATE_SUMMARY.md

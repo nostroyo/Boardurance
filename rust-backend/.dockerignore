@@ -1,0 +1,7 @@
+target/
+docker/
+tests/
+scripts/
+*.md
+.git/
+docker-compose*.yml

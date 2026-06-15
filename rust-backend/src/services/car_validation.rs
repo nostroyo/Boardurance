@@ -340,7 +340,6 @@ mod tests {
             ComponentRarity::Common,
             5,
             4,
-            None,
         )
         .unwrap()
     }
@@ -351,7 +350,6 @@ mod tests {
             ComponentRarity::Common,
             4,
             5,
-            None,
         )
         .unwrap()
     }
@@ -366,13 +364,12 @@ mod tests {
             PilotRarity::Professional,
             skills,
             performance,
-            None,
         )
         .unwrap()
     }
 
     fn create_test_car_with_components(engine: &Engine, body: &Body, pilots: &[Pilot; 3]) -> Car {
-        let mut car = Car::new(CarName::parse("Test Car").unwrap(), None).unwrap();
+        let mut car = Car::new(CarName::parse("Test Car").unwrap()).unwrap();
 
         car.assign_engine(engine.uuid);
         car.assign_body(body.uuid);
@@ -457,7 +454,7 @@ mod tests {
         ];
 
         // Create car without components
-        let car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
+        let car = Car::new(CarName::parse("Incomplete Car").unwrap()).unwrap();
         let _player = create_test_player_with_assets(car.clone(), engine, body, pilots);
 
         // Test missing engine
@@ -482,10 +479,10 @@ mod tests {
         let pilot3 = create_test_pilot();
 
         // Create a complete car first (required by new_with_assets)
-        let complete_car = Car::new(CarName::parse("Complete Car").unwrap(), None).unwrap();
+        let complete_car = Car::new(CarName::parse("Complete Car").unwrap()).unwrap();
 
         // Create an incomplete second car
-        let incomplete_car = Car::new(CarName::parse("Incomplete Car").unwrap(), None).unwrap();
+        let incomplete_car = Car::new(CarName::parse("Incomplete Car").unwrap()).unwrap();
 
         // Create a player with both cars - new_with_assets will complete the first car
         let email = Email::parse("test@example.com").unwrap();

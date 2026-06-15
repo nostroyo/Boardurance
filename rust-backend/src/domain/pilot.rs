@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
@@ -9,7 +9,6 @@ pub struct Pilot {
     #[serde(with = "uuid_as_string")]
     #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
-    pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: PilotName,
     pub pilot_class: PilotClass,
     pub rarity: PilotRarity,
@@ -64,7 +63,6 @@ impl Pilot {
         rarity: PilotRarity,
         skills: PilotSkills,
         performance: PilotPerformance,
-        nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
         skills.validate()?;
         performance.validate()?;
@@ -72,7 +70,6 @@ impl Pilot {
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
-            nft_mint_address,
             name,
             pilot_class,
             rarity,

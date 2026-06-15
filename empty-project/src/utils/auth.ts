@@ -1,5 +1,7 @@
 // Authentication utility functions
 
+import { API_BASE_URL } from '../config/api';
+
 export interface User {
   uuid: string;
   email: string;
@@ -139,7 +141,7 @@ export const authUtils = {
 // API utility functions with cookie-based authentication
 export const apiUtils = {
   // Base API URL
-  baseUrl: 'http://localhost:3000',
+  baseUrl: API_BASE_URL,
 
   // Default fetch options for authenticated requests
   getAuthenticatedFetchOptions(options: RequestInit = {}): RequestInit {

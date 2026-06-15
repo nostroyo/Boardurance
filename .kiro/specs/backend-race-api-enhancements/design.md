@@ -86,7 +86,6 @@ pub struct CarDataResponse {
 pub struct CarInfo {
     pub uuid: String,
     pub name: String,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -97,7 +96,6 @@ pub struct PilotInfo {
     pub rarity: String,
     pub skills: PilotSkills,
     pub performance: PilotPerformance,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -121,7 +119,6 @@ pub struct EngineInfo {
     pub rarity: String,
     pub straight_value: u8,
     pub curve_value: u8,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -131,7 +128,6 @@ pub struct BodyInfo {
     pub rarity: String,
     pub straight_value: u8,
     pub curve_value: u8,
-    pub nft_mint_address: Option<String>,
 }
 ```
 

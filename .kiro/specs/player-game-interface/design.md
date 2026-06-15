@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Player Game Interface is a React-based component system that provides an immersive, focused racing experience for the Web3 Racing Game. This interface implements a local view approach, showing only the player's immediate racing environment (current sector ±2 sectors) to create strategic decision-making without information overload. The design emphasizes real-time turn-based gameplay where all players submit boost actions simultaneously before lap resolution.
+The Player Game Interface is a React-based component system that provides an immersive, focused racing experience for the Racing Game. This interface implements a local view approach, showing only the player's immediate racing environment (current sector ±2 sectors) to create strategic decision-making without information overload. The design emphasizes real-time turn-based gameplay where all players submit boost actions simultaneously before lap resolution.
 
 ## Architecture
 
@@ -163,7 +163,6 @@ PlayerCarCard
 - Pilot information and skill breakdown
 - Performance history visualization
 - Current race statistics
-- NFT metadata display (if applicable)
 
 **Interface**:
 ```typescript
@@ -371,7 +370,6 @@ Player Asset Models
 interface Car {
   uuid: string;
   name: string;
-  nft_mint_address?: string;
   pilot_uuid?: string;
   engine_uuid?: string;
   body_uuid?: string;
@@ -392,7 +390,6 @@ interface Pilot {
     straight_value: number;
     curve_value: number;
   };
-  nft_mint_address?: string;
 }
 
 interface Engine {
@@ -401,7 +398,6 @@ interface Engine {
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
   straight_value: number;
   curve_value: number;
-  nft_mint_address?: string;
 }
 
 interface Body {
@@ -410,7 +406,6 @@ interface Body {
   rarity: 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
   straight_value: number;
   curve_value: number;
-  nft_mint_address?: string;
 }
 ```
 

@@ -338,7 +338,6 @@ interface CarData {
   car: {
     uuid: string;
     name: string;
-    nft_mint_address: string | null;
   };
   pilot: {
     uuid: string;
@@ -355,7 +354,6 @@ interface CarData {
       straight_value: number;
       curve_value: number;
     };
-    nft_mint_address: string | null;
   };
   engine: {
     uuid: string;
@@ -363,7 +361,6 @@ interface CarData {
     rarity: string;
     straight_value: number;
     curve_value: number;
-    nft_mint_address: string | null;
   };
   body: {
     uuid: string;
@@ -371,7 +368,6 @@ interface CarData {
     rarity: string;
     straight_value: number;
     curve_value: number;
-    nft_mint_address: string | null;
   };
 }
 

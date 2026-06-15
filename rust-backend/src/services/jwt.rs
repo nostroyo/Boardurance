@@ -188,7 +188,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills.clone(),
                 performance.clone(),
-                None,
             )
             .unwrap();
 
@@ -198,7 +197,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills.clone(),
                 performance.clone(),
-                None,
             )
             .unwrap();
 
@@ -208,7 +206,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills,
                 performance,
-                None,
             )
             .unwrap();
 
@@ -217,7 +214,6 @@ mod tests {
                 ComponentRarity::Common,
                 5,
                 4,
-                None,
             )
             .unwrap();
 
@@ -226,11 +222,10 @@ mod tests {
                 ComponentRarity::Common,
                 4,
                 5,
-                None,
             )
             .unwrap();
 
-            let mut car = Car::new(CarName::parse("Test Car").unwrap(), None).unwrap();
+            let mut car = Car::new(CarName::parse("Test Car").unwrap()).unwrap();
             car.assign_pilots(vec![pilot1.uuid, pilot2.uuid, pilot3.uuid])
                 .unwrap();
             car.assign_engine(engine.uuid);

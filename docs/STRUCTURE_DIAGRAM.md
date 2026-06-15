@@ -19,9 +19,6 @@ docs/
 ├── BACKEND_DOCKER_SETUP.md
 ├── FRONTEND_README.md
 ├── UI_IMPROVEMENTS.md
-├── SOLANA_README.md
-├── SOLANA_DEPLOYMENT.md
-├── SOLANA_SIMPLE_DEPLOYMENT.md
 ├── TESTING_GUIDE.md
 ├── Main team.png
 ├── Main team.pdn
@@ -83,12 +80,6 @@ docs/
     ├── 04-authentication/
     │   └── README.md ⭐
     │
-    ├── 05-nft-blockchain/
-    │   ├── README.md ⭐
-    │   ├── SOLANA_README.md
-    │   ├── SOLANA_DEPLOYMENT.md
-    │   └── SOLANA_SIMPLE_DEPLOYMENT.md
-    │
     ├── 06-player-car-management/
     │   ├── README.md ⭐
     │   └── implementation/
@@ -127,13 +118,10 @@ docs/
 ```mermaid
 graph TD
     A[01-core-project] --> B[02-racing-system]
-    A --> C[05-nft-blockchain]
     A --> D[08-architecture]
     
     B --> E[03-boost-card-system]
     B --> F[06-player-car-management]
-    
-    C --> F
     
     D --> G[09-backend]
     D --> H[10-frontend]
@@ -149,7 +137,6 @@ graph TD
     
     style A fill:#e1f5ff
     style B fill:#fff4e1
-    style C fill:#f0e1ff
     style D fill:#e1ffe1
     style E fill:#ffe1e1
     style F fill:#ffe1f5
@@ -192,17 +179,6 @@ graph TD
 10-frontend (implementation)
     ↓
 02-racing-system (game UI)
-```
-
-### For Blockchain Developers
-```
-01-core-project (overview)
-    ↓
-05-nft-blockchain (Solana)
-    ↓
-06-player-car-management (NFT attributes)
-    ↓
-02-racing-system (gameplay integration)
 ```
 
 ## Key Improvements

@@ -13,6 +13,7 @@ import type {
   SubmitActionRequest,
   SubmitActionResponse,
 } from '../types/race-api';
+import { API_V1_URL } from '../config/api';
 
 /**
  * RaceAPIService class for interacting with backend race endpoints
@@ -20,7 +21,7 @@ import type {
 export class RaceAPIService {
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:3000/api/v1') {
+  constructor(baseUrl: string = API_V1_URL) {
     this.baseUrl = baseUrl;
   }
 

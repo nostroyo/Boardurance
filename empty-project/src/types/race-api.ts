@@ -11,7 +11,6 @@ export interface CarData {
   car: {
     uuid: string;
     name: string;
-    nft_mint_address: string | null;
   };
   pilot: {
     uuid: string;
@@ -28,7 +27,6 @@ export interface CarData {
       straight_value: number;
       curve_value: number;
     };
-    nft_mint_address: string | null;
   };
   engine: {
     uuid: string;
@@ -36,7 +34,6 @@ export interface CarData {
     rarity: string;
     straight_value: number;
     curve_value: number;
-    nft_mint_address: string | null;
   };
   body: {
     uuid: string;
@@ -44,7 +41,6 @@ export interface CarData {
     rarity: string;
     straight_value: number;
     curve_value: number;
-    nft_mint_address: string | null;
   };
 }
 

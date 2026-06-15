@@ -7,9 +7,7 @@ use uuid::Uuid;
 use super::{
     PlayerRepository, RaceRepository, RepositoryError, RepositoryResult, SessionRepository,
 };
-use crate::domain::{
-    Car, LapAction, LapResult, Pilot, Player, Race, RaceStatus, TeamName, WalletAddress,
-};
+use crate::domain::{Car, LapAction, LapResult, Pilot, Player, Race, RaceStatus, TeamName};
 use crate::services::car_validation::ValidatedCarData;
 use crate::services::session::Session;
 
@@ -75,19 +73,6 @@ impl PlayerRepository for MockPlayerRepository {
         Ok(players.values().cloned().collect())
     }
 
-    async fn find_by_wallet_address(
-        &self,
-        wallet_address: &str,
-    ) -> RepositoryResult<Option<Player>> {
-        let players = self.players.lock().unwrap();
-        Ok(players
-            .values()
-            .find(|p| {
-                p.wallet_address.as_ref().map(std::convert::AsRef::as_ref) == Some(wallet_address)
-            })
-            .cloned())
-    }
-
     async fn find_by_email(&self, email: &str) -> RepositoryResult<Option<Player>> {
         let players = self.players.lock().unwrap();
         Ok(players.get(email).cloned())
@@ -96,30 +81,6 @@ impl PlayerRepository for MockPlayerRepository {
     async fn find_by_uuid(&self, player_uuid: Uuid) -> RepositoryResult<Option<Player>> {
         let players_by_uuid = self.players_by_uuid.lock().unwrap();
         Ok(players_by_uuid.get(&player_uuid).cloned())
-    }
-
-    async fn update_team_name_by_wallet(
-        &self,
-        wallet_address: &str,
-        team_name: TeamName,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        for player in players.values_mut() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                player.team_name = team_name;
-                player.updated_at = Utc::now();
-                players_by_uuid.insert(player.uuid, player.clone());
-                return Ok(Some(player.clone()));
-            }
-        }
-        Ok(None)
     }
 
     async fn update_team_name_by_uuid(
@@ -141,51 +102,6 @@ impl PlayerRepository for MockPlayerRepository {
         }
     }
 
-    async fn update_wallet_address(
-        &self,
-        player_uuid: Uuid,
-        wallet_address: WalletAddress,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        if let Some(player) = players_by_uuid.get_mut(&player_uuid) {
-            player.wallet_address = Some(wallet_address);
-            player.updated_at = Utc::now();
-            let email_key = player.email.as_ref().to_string();
-            players.insert(email_key, player.clone());
-            Ok(Some(player.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn delete_by_wallet_address(&self, wallet_address: &str) -> RepositoryResult<bool> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        let mut found_player = None;
-        for (email, player) in players.iter() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                found_player = Some((email.clone(), player.uuid));
-                break;
-            }
-        }
-
-        if let Some((email, uuid)) = found_player {
-            players.remove(&email);
-            players_by_uuid.remove(&uuid);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     async fn delete_by_uuid(&self, player_uuid: Uuid) -> RepositoryResult<bool> {
         let mut players = self.players.lock().unwrap();
         let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
@@ -197,30 +113,6 @@ impl PlayerRepository for MockPlayerRepository {
         } else {
             Ok(false)
         }
-    }
-
-    async fn add_car_by_wallet(
-        &self,
-        wallet_address: &str,
-        car: Car,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        for player in players.values_mut() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                player.cars.push(car);
-                player.updated_at = Utc::now();
-                players_by_uuid.insert(player.uuid, player.clone());
-                return Ok(Some(player.clone()));
-            }
-        }
-        Ok(None)
     }
 
     async fn add_car_by_uuid(
@@ -242,30 +134,6 @@ impl PlayerRepository for MockPlayerRepository {
         }
     }
 
-    async fn remove_car_by_wallet(
-        &self,
-        wallet_address: &str,
-        car_uuid: Uuid,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        for player in players.values_mut() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                player.cars.retain(|car| car.uuid != car_uuid);
-                player.updated_at = Utc::now();
-                players_by_uuid.insert(player.uuid, player.clone());
-                return Ok(Some(player.clone()));
-            }
-        }
-        Ok(None)
-    }
-
     async fn remove_car_by_uuid(
         &self,
         player_uuid: Uuid,
@@ -285,30 +153,6 @@ impl PlayerRepository for MockPlayerRepository {
         }
     }
 
-    async fn add_pilot_by_wallet(
-        &self,
-        wallet_address: &str,
-        pilot: Pilot,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        for player in players.values_mut() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                player.pilots.push(pilot);
-                player.updated_at = Utc::now();
-                players_by_uuid.insert(player.uuid, player.clone());
-                return Ok(Some(player.clone()));
-            }
-        }
-        Ok(None)
-    }
-
     async fn add_pilot_by_uuid(
         &self,
         player_uuid: Uuid,
@@ -326,30 +170,6 @@ impl PlayerRepository for MockPlayerRepository {
         } else {
             Ok(None)
         }
-    }
-
-    async fn remove_pilot_by_wallet(
-        &self,
-        wallet_address: &str,
-        pilot_uuid: Uuid,
-    ) -> RepositoryResult<Option<Player>> {
-        let mut players = self.players.lock().unwrap();
-        let mut players_by_uuid = self.players_by_uuid.lock().unwrap();
-
-        for player in players.values_mut() {
-            if player
-                .wallet_address
-                .as_ref()
-                .map(std::convert::AsRef::as_ref)
-                == Some(wallet_address)
-            {
-                player.pilots.retain(|pilot| pilot.uuid != pilot_uuid);
-                player.updated_at = Utc::now();
-                players_by_uuid.insert(player.uuid, player.clone());
-                return Ok(Some(player.clone()));
-            }
-        }
-        Ok(None)
     }
 
     async fn remove_pilot_by_uuid(

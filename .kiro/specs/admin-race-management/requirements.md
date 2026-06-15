@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies the requirements for implementing an admin race management interface in the React frontend. The system will provide administrators with comprehensive tools to create, configure, monitor, and manage races in the Web3 Racing Game, including real-time race status updates and participant management.
+This document specifies the requirements for implementing an admin race management interface in the React frontend. The system will provide administrators with comprehensive tools to create, configure, monitor, and manage races in the Racing Game, including real-time race status updates and participant management.
 
 ## Glossary
 

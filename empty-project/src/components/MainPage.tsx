@@ -28,9 +28,9 @@ function MainPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Web3 Racing Game</h1>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">Racing Game</h1>
           <p className="text-gray-600 mb-8">
-            Welcome to the ultimate motorsport management experience on the blockchain
+            Welcome to the ultimate online motorsport management experience
           </p>
 
           <div className="space-y-4">
@@ -50,7 +50,7 @@ function MainPage() {
           </div>
 
           <div className="mt-8 text-sm text-gray-500">
-            <p>Join the race. Own your assets. Win on the blockchain.</p>
+            <p>Join the race. Build your team. Win on the track.</p>
           </div>
         </div>
       </div>

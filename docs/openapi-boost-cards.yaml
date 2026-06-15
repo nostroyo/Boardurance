@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: Web3 Racing Game - Boost Card System API
+  title: Racing Game - Boost Card System API
   description: |
-    Strategic boost card management system for the Web3 Racing Game.
+    Strategic boost card management system for the Racing Game.
     
     ## Boost Card System Overview
     
@@ -29,8 +29,8 @@ info:
     | 4           | 1.32x      | +32%                |
   version: 1.0.0
   contact:
-    name: Web3 Racing Game API
-    url: https://github.com/your-repo/web3-racing-game
+    name: Racing Game API
+    url: https://github.com/your-repo/racing-game
 
 servers:
   - url: http://localhost:3000/api/v1

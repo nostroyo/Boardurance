@@ -1,8 +1,8 @@
-# Web3 Racing Game - Game Mechanics Documentation
+# Racing Game - Game Mechanics Documentation
 
 ## 🎯 Overview
 
-This document describes the complete game mechanics for the Web3 Racing Game, a turn-based racing system where players compete using NFT cars and pilots in a dynamic positioning-based race format.
+This document describes the complete game mechanics for the Racing Game, a turn-based racing system where players compete using their cars and pilots in a dynamic positioning-based race format.
 
 ## 🏁 Core Racing Concepts
 
@@ -412,9 +412,9 @@ pub enum MovementType {
 - **Experience affects** future performance calculations
 - **Rarity multipliers** affect experience gain rates
 
-### NFT Integration
-- **Car NFTs** determine base stats and rarity
-- **Pilot NFTs** provide skills and class bonuses
+### Asset Integration
+- **Cars** determine base stats and rarity
+- **Pilots** provide skills and class bonuses
 - **Marketplace integration** for trading assets
 
 ---

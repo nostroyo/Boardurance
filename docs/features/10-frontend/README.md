@@ -12,13 +12,11 @@ This folder contains documentation specific to the React frontend application.
 - **React 19.1.1** with TypeScript
 - **Vite 7.1.2** for fast builds
 - **Tailwind CSS 3.4.17** for styling
-- **Solana Wallet Adapter** for Web3
 
 ## Key Features
 
 - Game interface components
-- Wallet integration
-- NFT management UI
+- Car and asset management UI
 - Real-time race updates
 - Player dashboard
 
