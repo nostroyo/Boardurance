@@ -13,9 +13,16 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::app_state::AppState;
 use crate::domain::{
     Car, CarName, Pilot, PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName,
 };
+use crate::repositories::{
+    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
+};
+
+/// Concrete in-memory application state used by the mock-backed player routes.
+type MockAppState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTeamNameRequest {
@@ -62,13 +69,13 @@ pub fn routes() -> Router<Database> {
         // 1. AuthMiddleware to validate JWT tokens and extract UserContext
         // 2. RequireOwnership::player("player_uuid") to validate ownership
         // Routes that require player ownership or admin role:
-        .route("/players/:player_uuid", get(get_player_by_uuid))
-        .route("/players/:player_uuid", put(update_player_team_name))
+        // Note: GET/PUT/DELETE on /players/:player_uuid are served by
+        // `team_routes()` (in-memory MockPlayerRepository), since that is where
+        // registration stores players. See `team_routes` below.
         .route(
             "/players/:player_uuid/configuration",
             put(update_player_configuration),
         )
-        .route("/players/:player_uuid", delete(delete_player))
         .route("/players/:player_uuid/cars", post(add_car_to_player))
         .route(
             "/players/:player_uuid/cars/:car_uuid",
@@ -79,6 +86,94 @@ pub fn routes() -> Router<Database> {
             "/players/:player_uuid/pilots/:pilot_uuid",
             delete(remove_pilot_from_player),
         )
+}
+
+/// Player routes backed by the in-memory `MockPlayerRepository` from `AppState`.
+///
+/// Registration (in `auth.rs`) stores new players in this same repository, so
+/// these routes serve real registered players without needing a database —
+/// which is what the frontend Team page relies on.
+pub fn team_routes() -> Router<MockAppState> {
+    Router::new()
+        .route("/players/:player_uuid", get(get_player_by_uuid_mock))
+        .route("/players/:player_uuid", put(update_team_name_mock))
+        .route("/players/:player_uuid", delete(delete_player_mock))
+}
+
+/// Get a player by UUID from the in-memory repository.
+#[tracing::instrument(name = "Fetching player by UUID (mock)", skip(state))]
+pub async fn get_player_by_uuid_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+) -> Result<Json<Player>, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state.player_repository.find_by_uuid(player_uuid).await {
+        Ok(Some(player)) => Ok(Json(player)),
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to fetch player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Update a player's team name in the in-memory repository.
+#[tracing::instrument(name = "Updating team name (mock)", skip(state, payload))]
+pub async fn update_team_name_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+    Json(payload): Json<UpdateTeamNameRequest>,
+) -> Result<Json<PlayerResponse>, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    let new_team_name = TeamName::parse(&payload.team_name).map_err(|e| {
+        tracing::warn!("Invalid team name: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state
+        .player_repository
+        .update_team_name_by_uuid(player_uuid, new_team_name)
+        .await
+    {
+        Ok(Some(player)) => Ok(Json(PlayerResponse {
+            player,
+            message: "Team name updated successfully".to_string(),
+        })),
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to update team name: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Delete a player from the in-memory repository.
+#[tracing::instrument(name = "Deleting player (mock)", skip(state))]
+pub async fn delete_player_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state.player_repository.delete_by_uuid(player_uuid).await {
+        Ok(true) => Ok(StatusCode::OK),
+        Ok(false) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to delete player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// Admin-only routes that require authentication and admin role

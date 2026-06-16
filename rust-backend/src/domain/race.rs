@@ -156,6 +156,10 @@ pub struct Race {
     pub current_lap: u32,
     pub total_laps: u32,
     pub status: RaceStatus,
+    /// Number of processing turns taken so far. Used only as a safety bound to
+    /// guarantee a race terminates even on an unwinnable track.
+    #[serde(default)]
+    pub turns_taken: u32,
     #[schema(value_type = String, format = "date-time")]
     pub created_at: BsonDateTime,
     #[schema(value_type = String, format = "date-time")]
@@ -316,6 +320,7 @@ impl Race {
             current_lap: 1,
             total_laps,
             status: RaceStatus::Waiting,
+            turns_taken: 0,
             created_at: now,
             updated_at: now,
             pending_actions: Vec::new(),
@@ -569,18 +574,28 @@ impl Race {
         // Sort participants in each sector by their total value (descending = better position)
         self.sort_participants_in_sectors();
 
-        // Check for race completion
+        // Count this processing turn (used only as a safety bound).
+        self.turns_taken += 1;
+
+        // The displayed lap reflects the leader's progress around the track,
+        // clamped to the configured number of laps.
+        let leader_lap = self
+            .participants
+            .iter()
+            .map(|p| p.current_lap)
+            .max()
+            .unwrap_or(1);
+        self.current_lap = leader_lap.min(self.total_laps).max(1);
+
+        // Finish the race once every participant has completed all their laps
+        // (or the safety bound is hit).
         self.check_race_completion();
 
-        // Store current lap for result before advancing
         let processed_lap = self.current_lap;
 
-        // Advance to next lap if not finished
+        // Pick a fresh lap characteristic for the next turn while still racing.
         if self.status == RaceStatus::InProgress {
-            self.current_lap += 1;
-            if self.current_lap <= self.total_laps {
-                self.lap_characteristic = Self::generate_lap_characteristic();
-            }
+            self.lap_characteristic = Self::generate_lap_characteristic();
         }
 
         self.updated_at = BsonDateTime::now();
@@ -649,9 +664,11 @@ impl Race {
         )
         .map_err(|e| e.to_string())?;
 
-        // Record boost usage in history
+        // Record boost usage in history. `lap_number` here is the processing
+        // turn/round in which the boost was used (turns_taken counts completed
+        // rounds; +1 = the round currently being submitted).
         let usage_record = BoostUsageRecord {
-            lap_number: self.current_lap,
+            lap_number: self.turns_taken + 1,
             boost_value: boost_value_u8,
             cycle_number: cycle_before_use,
             cards_remaining_after: boost_usage_result.cards_remaining,
@@ -1107,12 +1124,25 @@ impl Race {
     }
 
     fn check_race_completion(&mut self) {
-        // Check if all laps are completed or all participants finished
+        // The race ends when every participant has completed all their laps
+        // around the track (each crossing of the finish line increments a
+        // participant's lap in `move_participant_up`).
         let finished_count = self.participants.iter().filter(|p| p.is_finished).count();
-        let all_finished = finished_count == self.participants.len();
-        let all_laps_completed = self.current_lap > self.total_laps;
+        let all_finished = !self.participants.is_empty() && finished_count == self.participants.len();
 
-        if all_finished || all_laps_completed {
+        // Safety bound: guarantee termination even if a track is unwinnable
+        // (e.g. cars can never clear a sector). Generous so it never ends a
+        // real race early.
+        #[allow(clippy::cast_possible_truncation)]
+        let sector_count = self.track.sectors.len() as u32;
+        let safety_cap = self
+            .total_laps
+            .saturating_mul(sector_count)
+            .saturating_mul(8)
+            .saturating_add(50);
+        let exceeded_safety = self.turns_taken > safety_cap;
+
+        if all_finished || exceeded_safety {
             self.status = RaceStatus::Finished;
 
             // Assign finish positions based on final sector and position
@@ -2059,14 +2089,16 @@ mod tests {
         }];
 
         let result1 = race.process_lap(&actions).unwrap();
+        // `lap` now reflects the leader's lap around the track; no full lap has
+        // been completed yet on this track, so it stays at 1.
         assert_eq!(result1.lap, 1);
 
         // Lap characteristic might change for next lap
         let second_characteristic = race.lap_characteristic.clone();
 
-        // Process second lap
+        // Process another turn
         let result2 = race.process_lap(&actions).unwrap();
-        assert_eq!(result2.lap, 2);
+        assert_eq!(result2.lap, 1);
 
         // Verify lap characteristics are being tracked
         assert!(matches!(
@@ -2081,17 +2113,33 @@ mod tests {
 
     #[test]
     fn test_race_completion_by_laps() {
-        let track = create_test_track();
-        let mut race = Race::new("Test Race".to_string(), track, 2); // Only 2 laps
+        // A small, easily-clearable track so the car can actually lap it.
+        let sectors = vec![
+            Sector {
+                id: 0,
+                name: "Start".to_string(),
+                min_value: 0,
+                max_value: 3,
+                slot_capacity: None,
+                sector_type: SectorType::Start,
+            },
+            Sector {
+                id: 1,
+                name: "Finish".to_string(),
+                min_value: 0,
+                max_value: 5,
+                slot_capacity: None,
+                sector_type: SectorType::Finish,
+            },
+        ];
+        let track = Track::new("Mini Track".to_string(), sectors).unwrap();
+        // total_laps now means laps AROUND THE TRACK, not number of turns.
+        let mut race = Race::new("Test Race".to_string(), track, 2);
 
         let player_uuid = Uuid::new_v4();
-        let car_uuid = Uuid::new_v4();
-        let pilot_uuid = Uuid::new_v4();
-
-        race.add_participant(player_uuid, car_uuid, pilot_uuid)
+        race.add_participant(player_uuid, Uuid::new_v4(), Uuid::new_v4())
             .unwrap();
         race.participants[0].current_sector = 0;
-
         race.start_race().unwrap();
 
         let actions = vec![LapAction {
@@ -2099,22 +2147,21 @@ mod tests {
             boost_value: 2,
         }];
 
-        // Process lap 1
-        let result1 = race.process_lap(&actions).unwrap();
-        assert_eq!(result1.lap, 1);
-        assert_eq!(race.status, RaceStatus::InProgress);
+        // The race must NOT end on a turn counter; drive turns until the
+        // participant completes its laps and the race finishes.
+        let mut finished = false;
+        for _ in 0..50 {
+            race.process_lap(&actions).unwrap();
+            if race.status == RaceStatus::Finished {
+                finished = true;
+                break;
+            }
+        }
 
-        // Process lap 2
-        let result2 = race.process_lap(&actions).unwrap();
-        assert_eq!(result2.lap, 2);
-        assert_eq!(race.status, RaceStatus::InProgress);
-
-        // Process lap 3 (should complete the race)
-        let result3 = race.process_lap(&actions).unwrap();
-        assert_eq!(result3.lap, 3);
-        assert_eq!(race.status, RaceStatus::Finished);
-
-        // Check finish positions are assigned
+        assert!(finished, "race should finish once all laps are completed");
+        assert!(race.participants[0].is_finished);
+        // Completed more than total_laps crossings of the finish line.
+        assert!(race.participants[0].current_lap > race.total_laps);
         assert!(race.participants[0].finish_position.is_some());
     }
 

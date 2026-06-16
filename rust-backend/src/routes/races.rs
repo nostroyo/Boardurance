@@ -6,14 +6,32 @@ use axum::{
     Router,
 };
 use chrono::{DateTime, Utc};
-use mongodb::{
-    bson::{doc, DateTime as BsonDateTime},
-    Database,
-};
+use mongodb::Database;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+// Process-global in-memory race store (keyed by Race.uuid).
+// Replaces MongoDB storage so race endpoints work without a database.
+static RACE_STORE: LazyLock<Mutex<HashMap<Uuid, Race>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Clone a race out of the in-memory store by UUID.
+fn store_get(uuid: Uuid) -> Option<Race> {
+    RACE_STORE.lock().unwrap().get(&uuid).cloned()
+}
+
+/// Clone all races out of the in-memory store.
+fn store_all() -> Vec<Race> {
+    RACE_STORE.lock().unwrap().values().cloned().collect()
+}
+
+/// Insert or overwrite a race in the in-memory store by its UUID.
+fn store_save(race: Race) {
+    RACE_STORE.lock().unwrap().insert(race.uuid, race);
+}
 
 use crate::domain::boost_hand_manager::{
     BoostAvailability, BoostCardErrorResponse, BoostHandManager,
@@ -24,14 +42,60 @@ use crate::domain::{
 };
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
-// Helper function to convert to BSON with proper error handling
-fn to_bson_safe<T: serde::Serialize>(
-    value: &T,
-    field_name: &str,
-) -> Result<mongodb::bson::Bson, mongodb::error::Error> {
-    mongodb::bson::to_bson(value).map_err(|e| {
-        mongodb::error::Error::custom(format!("Failed to serialize {field_name}: {e}"))
+use crate::app_state::AppState;
+use crate::repositories::{
+    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
+};
+
+/// Concrete AppState used by the turn-processing handlers (in-memory repos).
+type RaceTurnState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
+
+/// Resolve a participant's full car data (car + engine + body + pilot) from the
+/// in-memory player aggregate. Returns `None` if any component cannot be found.
+fn resolve_car_data(
+    player: &crate::domain::Player,
+    participant: &crate::domain::RaceParticipant,
+) -> Option<ValidatedCarData> {
+    let car = player
+        .cars
+        .iter()
+        .find(|c| c.uuid == participant.car_uuid)?;
+    let engine_uuid = car.engine_uuid?;
+    let body_uuid = car.body_uuid?;
+    let engine = player.engines.iter().find(|e| e.uuid == engine_uuid)?;
+    let body = player.bodies.iter().find(|b| b.uuid == body_uuid)?;
+    let pilot = player
+        .pilots
+        .iter()
+        .find(|p| p.uuid == participant.pilot_uuid)?;
+
+    Some(ValidatedCarData {
+        car: car.clone(),
+        engine: engine.clone(),
+        body: body.clone(),
+        pilot: pilot.clone(),
     })
+}
+
+/// Build a map of player_uuid -> resolved car data for all non-finished
+/// participants, reading from the in-memory player repository. Failures to
+/// resolve an individual participant are silently skipped.
+async fn build_car_data_map(
+    repo: &MockPlayerRepository,
+    race: &Race,
+) -> HashMap<Uuid, ValidatedCarData> {
+    let mut map = HashMap::new();
+    for participant in &race.participants {
+        if participant.is_finished {
+            continue;
+        }
+        if let Ok(Some(player)) = repo.find_by_uuid(participant.player_uuid).await {
+            if let Some(car_data) = resolve_car_data(&player, participant) {
+                map.insert(participant.player_uuid, car_data);
+            }
+        }
+    }
+    map
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -588,7 +652,6 @@ pub fn routes() -> Router<Database> {
         )
         // Race-level endpoint
         .route("/races/:race_uuid/turn-phase", get(get_turn_phase))
-        .route("/races/:race_uuid/submit-action", post(submit_turn_action))
         // Protected routes - These should be protected with AuthMiddleware
         // TODO: Apply middleware layers in startup.rs:
         // 1. AuthMiddleware to validate JWT tokens and extract UserContext
@@ -598,7 +661,14 @@ pub fn routes() -> Router<Database> {
         .route("/races/:race_uuid/join", post(join_race)) // Any authenticated user can join
         // Routes that require race ownership or admin role:
         .route("/races/:race_uuid/start", post(start_race)) // Race creator or admin
-        .route("/races/:race_uuid/turn", post(process_turn)) // Race participants or admin
+}
+
+/// Turn-processing routes that need access to the in-memory player repository
+/// (via AppState) to compute real movement from each car's stats.
+pub fn turn_routes() -> Router<RaceTurnState> {
+    Router::new()
+        .route("/races/:race_uuid/submit-action", post(submit_turn_action))
+        .route("/races/:race_uuid/turn", post(process_turn))
 }
 
 // Helper Functions for Enhanced API
@@ -610,8 +680,6 @@ async fn register_player_in_race(
     car_uuid: Uuid,
     pilot_uuid: Uuid,
 ) -> Result<Option<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // Get the race first
     let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
         return Ok(None);
@@ -622,19 +690,9 @@ async fn register_player_in_race(
         return Err(mongodb::error::Error::custom(e));
     }
 
-    // Update the race in database
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "participants": to_bson_safe(&race.participants, "participants")?,
-            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
-            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
+    // Persist the mutated race to the in-memory store and return it.
+    store_save(race.clone());
+    Ok(Some(race))
 }
 
 fn get_player_race_position(race: &Race, player_uuid: Uuid) -> Result<PlayerRacePosition, String> {
@@ -908,8 +966,6 @@ async fn process_individual_lap_action(
     boost_value: u32,
     car_data: &ValidatedCarData,
 ) -> Result<Option<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // Get the race first
     let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
         return Ok(None);
@@ -918,22 +974,9 @@ async fn process_individual_lap_action(
     // Process individual lap action using the new method
     match race.process_individual_lap_action(player_uuid, boost_value, car_data) {
         Ok(_individual_result) => {
-            // Update the race in database with new fields
-            let filter = doc! { "uuid": race_uuid.to_string() };
-            let update = doc! {
-                "$set": {
-                    "participants": to_bson_safe(&race.participants, "participants")?,
-                    "current_lap": race.current_lap,
-                    "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
-                    "status": to_bson_safe(&race.status, "status")?,
-                    "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-                    "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
-                    "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
-                    "updated_at": BsonDateTime::now()
-                }
-            };
-
-            collection.find_one_and_update(filter, update, None).await
+            // Persist the mutated race to the in-memory store and return it.
+            store_save(race.clone());
+            Ok(Some(race))
         }
         Err(e) => Err(mongodb::error::Error::custom(e)),
     }
@@ -3427,9 +3470,9 @@ pub async fn start_race(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Processing race turn", skip(database, payload))]
+#[tracing::instrument(name = "Processing race turn", skip(state, payload))]
 pub async fn process_turn(
-    State(database): State<Database>,
+    State(state): State<RaceTurnState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<ProcessLapRequest>,
 ) -> Result<Json<LapResultResponse>, StatusCode> {
@@ -3458,7 +3501,16 @@ pub async fn process_turn(
         });
     }
 
-    match process_lap_in_db(&database, race_uuid, actions).await {
+    // Build the real car-data map from the in-memory player repository.
+    let car_data_map = match store_get(race_uuid) {
+        Some(race) => build_car_data_map(&state.player_repository, &race).await,
+        None => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    match process_lap_in_db(race_uuid, actions, &car_data_map).await {
         Ok(Some((lap_result, race_status))) => {
             tracing::info!("Turn processed successfully for race {}", race_uuid);
             Ok(Json(LapResultResponse {
@@ -3526,40 +3578,26 @@ pub async fn get_race_status(
 }
 
 // Database operations
-#[tracing::instrument(name = "Saving new race in the database", skip(database, race))]
-pub async fn insert_race(database: &Database, race: &Race) -> Result<Race, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-    let result = collection.insert_one(race, None).await?;
-
-    let mut created_race = race.clone();
-    created_race.id = result.inserted_id.as_object_id();
+#[tracing::instrument(name = "Saving new race in the database", skip(_database, race))]
+pub async fn insert_race(_database: &Database, race: &Race) -> Result<Race, mongodb::error::Error> {
+    let created_race = race.clone();
+    store_save(created_race.clone());
     Ok(created_race)
 }
 
-#[tracing::instrument(name = "Getting all races from the database", skip(database))]
+#[tracing::instrument(name = "Getting all races from the database", skip(_database))]
 pub async fn get_all_races_from_db(
-    database: &Database,
+    _database: &Database,
 ) -> Result<Vec<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-    let mut cursor = collection.find(None, None).await?;
-
-    let mut races = Vec::new();
-    while cursor.advance().await? {
-        let race = cursor.deserialize_current()?;
-        races.push(race);
-    }
-
-    Ok(races)
+    Ok(store_all())
 }
 
-#[tracing::instrument(name = "Getting race by UUID from the database", skip(database))]
+#[tracing::instrument(name = "Getting race by UUID from the database", skip(_database))]
 pub async fn get_race_by_uuid(
-    database: &Database,
+    _database: &Database,
     race_uuid: Uuid,
 ) -> Result<Option<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    collection.find_one(filter, None).await
+    Ok(store_get(race_uuid))
 }
 
 #[tracing::instrument(name = "Joining race in the database", skip(database))]
@@ -3570,8 +3608,6 @@ pub async fn join_race_in_db(
     car_uuid: Uuid,
     pilot_uuid: Uuid,
 ) -> Result<Option<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // Get the race first
     let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
         return Ok(None);
@@ -3582,19 +3618,9 @@ pub async fn join_race_in_db(
         return Err(mongodb::error::Error::custom(e));
     }
 
-    // Update the race in database
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "participants": to_bson_safe(&race.participants, "participants")?,
-            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
-            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
+    // Persist the mutated race to the in-memory store and return it.
+    store_save(race.clone());
+    Ok(Some(race))
 }
 
 #[tracing::instrument(name = "Starting race in the database", skip(database))]
@@ -3602,8 +3628,6 @@ pub async fn start_race_in_db(
     database: &Database,
     race_uuid: Uuid,
 ) -> Result<Option<Race>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // Get the race first
     let mut race = if let Some(race) = get_race_by_uuid(database, race_uuid).await? {
         race
@@ -3650,59 +3674,52 @@ pub async fn start_race_in_db(
         );
     }
 
-    // Update the race in database - only update essential fields
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "status": "InProgress",
-            "current_lap": race.current_lap,
-            "lap_characteristic": "Straight",
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    tracing::info!("Updating race {} in database", race_uuid);
-    match collection.find_one_and_update(filter, update, None).await {
-        Ok(result) => {
-            tracing::info!("Successfully started race {}", race_uuid);
-            Ok(result)
-        }
-        Err(e) => {
-            tracing::error!("Failed to update race {} in database: {:?}", race_uuid, e);
-            Err(e)
-        }
-    }
+    // Persist the mutated race to the in-memory store and return it.
+    tracing::info!("Updating race {} in store", race_uuid);
+    store_save(race.clone());
+    tracing::info!("Successfully started race {}", race_uuid);
+    Ok(Some(race))
 }
 
-#[tracing::instrument(name = "Processing turn in the database", skip(database, actions))]
+#[tracing::instrument(name = "Processing turn in the database", skip(actions, car_data_map))]
 pub async fn process_lap_in_db(
-    database: &Database,
     race_uuid: Uuid,
     actions: Vec<LapAction>,
+    car_data_map: &HashMap<Uuid, ValidatedCarData>,
 ) -> Result<Option<(LapResult, RaceStatus)>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // Get the race first
-    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+    let Some(mut race) = store_get(race_uuid) else {
         return Ok(None);
     };
 
-    // Create placeholder performance calculations for manual processing
-    let mut performance_calculations = HashMap::new();
-    for action in &actions {
-        // Use placeholder performance calculation with base value 10
-        let performance = PerformanceCalculation {
-            engine_contribution: 5,
-            body_contribution: 3,
-            pilot_contribution: 2,
-            base_value: 10,
-            sector_ceiling: 30, // Default ceiling
-            capped_base_value: 10,
-            boost_value: action.boost_value,
-            final_value: 10 + action.boost_value,
-        };
-        performance_calculations.insert(action.player_uuid, performance);
-    }
+    // Compute REAL performances from each car's stats. If resolution failed for
+    // any participant (Err), fall back to the placeholder map so nothing 500s.
+    let performance_calculations = match race.calculate_all_performances(&actions, car_data_map) {
+        Ok(perf) => perf,
+        Err(e) => {
+            tracing::warn!(
+                "Real performance calculation failed for race {} ({}); falling back to placeholder",
+                race_uuid,
+                e
+            );
+            let mut placeholder = HashMap::new();
+            for action in &actions {
+                // Placeholder performance calculation with base value 10
+                let performance = PerformanceCalculation {
+                    engine_contribution: 5,
+                    body_contribution: 3,
+                    pilot_contribution: 2,
+                    base_value: 10,
+                    sector_ceiling: 30, // Default ceiling
+                    capped_base_value: 10,
+                    boost_value: action.boost_value,
+                    final_value: 10 + action.boost_value,
+                };
+                placeholder.insert(action.player_uuid, performance);
+            }
+            placeholder
+        }
+    };
 
     // Process the lap using the new method with car data
     let lap_result = match race.process_lap_with_car_data(&actions, &performance_calculations) {
@@ -3715,29 +3732,16 @@ pub async fn process_lap_in_db(
     race.action_submissions.clear();
     race.pending_performance_calculations.clear();
 
-    // Update the race in database
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "participants": to_bson_safe(&race.participants, "participants")?,
-            "current_lap": race.current_lap,
-            "lap_characteristic": to_bson_safe(&race.lap_characteristic, "lap_characteristic")?,
-            "status": to_bson_safe(&race.status, "status")?,
-            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-            "action_submissions": to_bson_safe(&race.action_submissions, "action_submissions")?,
-            "pending_performance_calculations": to_bson_safe(&race.pending_performance_calculations, "pending_performance_calculations")?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await?;
+    // Persist the mutated race to the in-memory store.
+    let race_status = race.status.clone();
+    store_save(race);
 
     tracing::info!(
         "Turn processing completed for race {}. Ready for next turn.",
         race_uuid
     );
 
-    Ok(Some((lap_result, race.status)))
+    Ok(Some((lap_result, race_status)))
 }
 
 /// Submit a single player's turn action (boost selection)
@@ -3759,9 +3763,9 @@ pub async fn process_lap_in_db(
         ("race_uuid" = String, Path, description = "Race UUID")
     )
 )]
-#[tracing::instrument(name = "Submitting turn action", skip(database, payload))]
+#[tracing::instrument(name = "Submitting turn action", skip(state, payload))]
 pub async fn submit_turn_action(
-    State(database): State<Database>,
+    State(state): State<RaceTurnState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<SubmitTurnActionRequest>,
 ) -> Result<Json<SubmitTurnActionResponse>, StatusCode> {
@@ -3787,7 +3791,23 @@ pub async fn submit_turn_action(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    match submit_player_action_in_db(&database, race_uuid, player_uuid, payload.boost_value).await {
+    // Build the real car-data map from the in-memory player repository.
+    let car_data_map = match store_get(race_uuid) {
+        Some(race) => build_car_data_map(&state.player_repository, &race).await,
+        None => {
+            tracing::warn!("Race not found for UUID: {}", race_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+    };
+
+    match submit_player_action_in_db(
+        race_uuid,
+        player_uuid,
+        payload.boost_value,
+        &car_data_map,
+    )
+    .await
+    {
         Ok(Some(response)) => {
             tracing::info!(
                 "Action submitted successfully for player {} in race {}",
@@ -3817,18 +3837,13 @@ pub async fn submit_turn_action(
 
 /// Submit a player's action to the database
 async fn submit_player_action_in_db(
-    database: &Database,
     race_uuid: Uuid,
     player_uuid: Uuid,
     boost_value: u32,
+    car_data_map: &HashMap<Uuid, ValidatedCarData>,
 ) -> Result<Option<SubmitTurnActionResponse>, mongodb::error::Error> {
-    let collection = database.collection::<Race>("races");
-
     // First, find the race and validate it exists and is in progress
-    let mut race = match collection
-        .find_one(doc! { "uuid": race_uuid.to_string() }, None)
-        .await?
-    {
+    let mut race = match store_get(race_uuid) {
         Some(race) => race,
         None => return Ok(None),
     };
@@ -3882,16 +3897,8 @@ async fn submit_player_action_in_db(
     // Add the action to pending_actions in memory
     race.pending_actions.push(lap_action);
 
-    // Update the race in database
-    let filter = doc! { "uuid": race_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "pending_actions": to_bson_safe(&race.pending_actions, "pending_actions")?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.update_one(filter, update, None).await?;
+    // Persist the mutated race to the in-memory store.
+    store_save(race.clone());
 
     // Calculate response data
     let players_submitted = race.pending_actions.len() as u32;
@@ -3925,7 +3932,7 @@ async fn submit_player_action_in_db(
         let actions = race.pending_actions.clone();
 
         // Process the turn using the existing game logic
-        match process_lap_in_db(database, race_uuid, actions).await {
+        match process_lap_in_db(race_uuid, actions, car_data_map).await {
             Ok(Some((_lap_result, _race_status))) => {
                 tracing::info!(
                     "Turn auto-processed successfully for race {}. Ready for next turn.",

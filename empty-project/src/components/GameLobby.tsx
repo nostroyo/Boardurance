@@ -140,48 +140,50 @@ function GameLobby() {
 
   const createTestRace = async () => {
     try {
+      // Sector max_values are kept below a starter car's base performance
+      // (~17-20) so cars can clear each sector and actually complete laps.
       const testRaceData = {
         name: `Test Race ${Date.now()}`,
         track_name: 'Test Track',
-        total_laps: 3,
+        total_laps: 2,
         sectors: [
           {
             id: 0,
             name: 'Start',
             min_value: 0,
-            max_value: 10,
+            max_value: 5,
             slot_capacity: null,
             sector_type: 'Start',
           },
           {
             id: 1,
             name: 'Sector 1',
-            min_value: 5,
-            max_value: 15,
+            min_value: 0,
+            max_value: 7,
             slot_capacity: 5,
             sector_type: 'Straight',
           },
           {
             id: 2,
             name: 'Sector 2',
-            min_value: 10,
-            max_value: 20,
+            min_value: 0,
+            max_value: 9,
             slot_capacity: 5,
             sector_type: 'Curve',
           },
           {
             id: 3,
             name: 'Sector 3',
-            min_value: 15,
-            max_value: 25,
+            min_value: 0,
+            max_value: 11,
             slot_capacity: 5,
             sector_type: 'Straight',
           },
           {
             id: 4,
             name: 'Finish',
-            min_value: 20,
-            max_value: 30,
+            min_value: 0,
+            max_value: 13,
             slot_capacity: null,
             sector_type: 'Finish',
           },

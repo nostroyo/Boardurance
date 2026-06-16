@@ -254,6 +254,14 @@ pub async fn run(
     // Create auth routes with AppState
     let auth_routes = auth::routes().with_state(app_state.clone());
 
+    // Player routes served from the in-memory repository (same store auth uses),
+    // so registered players' team data is available without a database.
+    let team_routes = players::team_routes().with_state(app_state.clone());
+
+    // Turn-processing routes backed by AppState so they can resolve car stats
+    // from the in-memory player repository and compute real movement.
+    let race_turn_routes = races::turn_routes().with_state(app_state.clone());
+
     // Create admin-protected routes with AppState and middleware
     let admin_routes = players::admin_routes()
         .layer(RequireRole::admin())
@@ -266,7 +274,9 @@ pub async fn run(
     // Create main app with Database state for other routes
     let app = Router::new()
         .route("/health_check", get(health_check))
+        .nest("/api/v1", team_routes) // Player GET/PUT/DELETE backed by in-memory repo
         .nest("/api/v1", players::routes())
+        .nest("/api/v1", race_turn_routes) // Turn processing backed by in-memory repo
         .nest("/api/v1", races::routes())
         .nest("/api/v1", auth_routes) // Nest auth routes under /api/v1
         .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
