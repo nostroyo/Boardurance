@@ -27,9 +27,21 @@ const TrackDisplayRedesignComponent: React.FC<TrackDisplayRedesignProps> = ({
     visible_participants: visibleParticipants,
   } = localView;
 
-  // Filter and sort sectors for linear arrangement - max 2 before and after player sector (Requirements 1.1, 1.5)
+  // Total sectors on the track. The backend always provides this; fall back to
+  // the highest visible sector id + 1 when it's absent (e.g. test fixtures).
+  const totalSectors =
+    localView.total_sectors ??
+    (visibleSectors.length > 0 ? Math.max(...visibleSectors.map((s) => s.id)) + 1 : 0);
+
+  // Display numbering: the leading (highest-index) sector is "Sector 1"; the
+  // back of the field is "Sector N". Engine indices stay 0-based; this only
+  // changes how sectors are labeled and ordered on screen.
+  const displaySectorNumber = (sectorId: number): number => totalSectors - sectorId;
+
+  // Filter and sort sectors for linear arrangement - max 2 before and after
+  // player sector. Highest-index (lead) sector first so "Sector 1" is at the head.
   const sortedSectors = useMemo(() => {
-    const allSectors = [...visibleSectors].sort((a, b) => a.id - b.id);
+    const allSectors = [...visibleSectors].sort((a, b) => b.id - a.id);
 
     // Find player sector index
     const playerSectorIndex = allSectors.findIndex((sector) => sector.id === playerSector);
@@ -123,7 +135,9 @@ const TrackDisplayRedesignComponent: React.FC<TrackDisplayRedesignProps> = ({
               Showing {sortedSectors.length} sectors
             </span>
             <span className="hidden sm:inline">•</span>
-            <span className="whitespace-nowrap">Player in sector {playerSector}</span>
+            <span className="whitespace-nowrap">
+              Player in sector {displaySectorNumber(playerSector)}
+            </span>
             <span className="hidden lg:inline">•</span>
             <span className="hidden lg:inline whitespace-nowrap">Max 2 before/after</span>
           </div>
@@ -188,6 +202,7 @@ const TrackDisplayRedesignComponent: React.FC<TrackDisplayRedesignProps> = ({
                 {/* Sector grid component */}
                 <SectorGrid
                   sector={sector}
+                  displayNumber={displaySectorNumber(sector.id)}
                   participants={visibleParticipants}
                   isPlayerSector={isPlayerSector}
                   playerUuid={playerUuid}

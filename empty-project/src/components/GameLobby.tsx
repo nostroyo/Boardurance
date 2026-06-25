@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
 import { API_V1_URL } from '../config/api';
+import { raceAPIService } from '../services/raceAPI';
+import type { TyreType } from '../types/race-api';
+
+const TYRE_OPTIONS: Array<{ value: TyreType; label: string }> = [
+  { value: 'Soft', label: 'Soft — few, powerful (3)' },
+  { value: 'Medium', label: 'Medium — balanced (5)' },
+  { value: 'Hard', label: 'Hard — many, weaker (6)' },
+];
 
 interface Race {
   uuid: string;
@@ -14,12 +22,47 @@ interface Race {
 }
 
 function GameLobby() {
-  const { user } = useAuthContext();
+  const { user, logout } = useAuthContext();
   const location = useLocation();
+  const navigate = useNavigate();
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [startingSolo, setStartingSolo] = useState(false);
+  const [soloTyre, setSoloTyre] = useState<TyreType>('Medium');
+
+  const startSoloRace = async () => {
+    if (!user?.uuid) {
+      setError('User not authenticated');
+      return;
+    }
+    setStartingSolo(true);
+    setError(null);
+    try {
+      const { race } = await raceAPIService.createSoloRace(user.uuid, soloTyre);
+      navigate(`/races/${race.uuid}/play`);
+    } catch (err) {
+      // A 404 here means the backend doesn't know this player — typically a
+      // stale session after the (in-memory) backend restarted. Clear the dead
+      // session and send the user to register/log in fresh instead of
+      // dead-ending on an unstartable race.
+      const status = (err as { status?: number })?.status;
+      if (status === 404 || status === 401) {
+        await logout().catch(() => {});
+        navigate('/login', {
+          state: {
+            message: 'Your session expired (the server restarted). Please sign in again.',
+            type: 'error',
+          },
+        });
+        return;
+      }
+      setError(`Failed to start solo race: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setStartingSolo(false);
+    }
+  };
 
   // Handle navigation state messages
   useEffect(() => {
@@ -432,8 +475,34 @@ function GameLobby() {
                   Create Test Race
                 </button>
 
-                <button className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-3 rounded-lg font-medium transition-colors">
-                  Quick Match
+                <div>
+                  <label
+                    htmlFor="solo-tyre"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    Starting tyre
+                  </label>
+                  <select
+                    id="solo-tyre"
+                    value={soloTyre}
+                    onChange={(e) => setSoloTyre(e.target.value as TyreType)}
+                    disabled={startingSolo}
+                    className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 mb-2 disabled:opacity-50"
+                  >
+                    {TYRE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={startSoloRace}
+                  disabled={startingSolo}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 rounded-lg font-medium transition-colors"
+                >
+                  {startingSolo ? 'Starting…' : '🤖 Race vs AI (Solo)'}
                 </button>
 
                 <Link

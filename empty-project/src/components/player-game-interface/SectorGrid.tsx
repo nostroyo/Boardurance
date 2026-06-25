@@ -4,6 +4,8 @@ import { PositionSlot } from './PositionSlot';
 
 export interface SectorGridProps {
   sector: LocalView['visible_sectors'][0];
+  /** Sector number to display (lead = 1). Falls back to the raw id if omitted. */
+  displayNumber?: number;
   participants: LocalView['visible_participants'];
   isPlayerSector: boolean;
   playerUuid: string;
@@ -14,6 +16,7 @@ export interface SectorGridProps {
 
 const SectorGridComponent: React.FC<SectorGridProps> = ({
   sector,
+  displayNumber,
   participants,
   isPlayerSector,
   playerUuid,
@@ -21,6 +24,7 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
   onSlotClick,
   animationState = 'idle',
 }) => {
+  const sectorLabel = displayNumber ?? sector.id;
   // Get participants in this sector sorted by position
   const sectorParticipants = useMemo(() => {
     const filteredParticipants = participants
@@ -110,12 +114,12 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
       className={getSectorContainerStyle()}
       onClick={() => onSectorClick?.(sector.id)}
       role="region"
-      aria-label={`Sector ${sector.id}: ${sector.name}`}
+      aria-label={`Sector ${sectorLabel}: ${sector.name}`}
     >
       {/* Sector Header - Mobile responsive */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 sm:mb-4 gap-2">
         <div className="flex items-center space-x-2 sm:space-x-3">
-          <h3 className="font-bold text-base sm:text-lg text-white">Sector {sector.id}</h3>
+          <h3 className="font-bold text-base sm:text-lg text-white">Sector {sectorLabel}</h3>
           <span className="text-gray-300 text-sm truncate">{sector.name}</span>
           {isPlayerSector && (
             <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse whitespace-nowrap">
@@ -168,7 +172,7 @@ const SectorGridComponent: React.FC<SectorGridProps> = ({
       {/* Debug: Show sector participants count */}
       {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
         <div className="bg-yellow-600 text-black text-xs p-1 rounded mb-2">
-          DEBUG: Sector {sector.id} has {sectorParticipants.length} participants
+          DEBUG: Sector {sectorLabel} has {sectorParticipants.length} participants
         </div>
       )}
 

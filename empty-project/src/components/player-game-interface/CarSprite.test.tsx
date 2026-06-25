@@ -52,12 +52,12 @@ describe('CarSprite', () => {
     );
 
     let sprite = screen.getByRole('img');
-    expect(sprite).toHaveStyle({ width: '24px', height: '18px' });
+    expect(sprite).toHaveStyle({ width: '26px', height: '42px' });
 
     rerender(<CarSprite participant={mockParticipant} isPlayer={false} size="large" />);
 
     sprite = screen.getByRole('img');
-    expect(sprite).toHaveStyle({ width: '40px', height: '30px' });
+    expect(sprite).toHaveStyle({ width: '52px', height: '84px' });
   });
 
   it('applies correct animation state classes', () => {
@@ -101,18 +101,18 @@ describe('CarSprite', () => {
     expect(pixels2.length).toBeGreaterThan(0);
   });
 
-  it('renders 8-bit pixel pattern correctly', () => {
+  it('renders pixel pattern correctly', () => {
     render(<CarSprite participant={mockParticipant} isPlayer={false} />);
 
     const sprite = screen.getByRole('img');
 
-    // Check that pixel pattern is rendered (8x6 grid)
+    // Check that pixel pattern is rendered (13x21 grid)
     const pixelRows = sprite.querySelectorAll('div.flex');
-    expect(pixelRows).toHaveLength(6); // 6 rows in the pattern
+    expect(pixelRows).toHaveLength(21); // 21 rows in the pattern
 
-    // Check first row has 8 pixels
+    // Check first row has 13 pixels
     const firstRowPixels = pixelRows[0].children;
-    expect(firstRowPixels).toHaveLength(8);
+    expect(firstRowPixels).toHaveLength(13);
   });
 
   it('shows car name for large size sprites', () => {

@@ -159,7 +159,7 @@ describe('CarSpritePositioning', () => {
     );
 
     let carSprite = screen.getByRole('img');
-    expect(carSprite).toHaveStyle({ width: '32px' }); // Medium size (default)
+    expect(carSprite).toHaveStyle({ width: '39px' }); // Medium size (default)
 
     // Test with more participants (larger container)
     rerender(
@@ -171,7 +171,7 @@ describe('CarSpritePositioning', () => {
     );
 
     carSprite = screen.getAllByRole('img')[0];
-    expect(carSprite).toHaveStyle({ width: '32px' }); // Still medium size
+    expect(carSprite).toHaveStyle({ width: '39px' }); // Still medium size
   });
 
   it('shows position numbers for each car', () => {

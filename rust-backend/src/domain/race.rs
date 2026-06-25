@@ -7,24 +7,55 @@ use uuid::Uuid;
 
 use crate::services::car_validation::ValidatedCarData;
 
-/// Boost hand management system for tracking available boost cards
-/// Each player has 5 boost cards (0, 1, 2, 3, 4) that can be used once per cycle
-/// When all cards are used, the hand automatically replenishes
+/// Tyre type chosen at race entry (and at each pit stop). It determines the
+/// boost card pool: softer tyres give fewer but stronger cards, harder tyres
+/// give more but weaker cards.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, ToSchema, Default)]
+pub enum TyreType {
+    Soft,
+    #[default]
+    Medium,
+    Hard,
+}
+
+impl TyreType {
+    /// The boost card pool granted by this tyre, as a multiset of card values.
+    /// Boost value 0 is never a card (it is the always-free no-boost move), so
+    /// pools only contain values 1-4. These values are tentative and tuned in
+    /// one place.
+    #[must_use]
+    pub fn initial_pool(self) -> Vec<u8> {
+        match self {
+            TyreType::Soft => vec![3, 4, 4],
+            TyreType::Medium => vec![2, 2, 3, 3, 4],
+            TyreType::Hard => vec![1, 1, 1, 2, 2, 3],
+        }
+    }
+}
+
+/// Boost hand management system for tracking available boost cards.
+///
+/// Cards are a multiset of values 1-4 drawn from the chosen [`TyreType`]'s pool.
+/// Boost value 0 is NOT a card: it is the always-available free no-boost move.
+/// The hand does NOT auto-replenish; a pit stop ([`BoostHand::refill`]) is the
+/// only way to restore cards (and may swap tyre).
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct BoostHand {
-    /// Availability state for each boost card (0-4)
-    /// true = available, false = used
-    /// Using String keys for `MongoDB` compatibility
-    pub cards: HashMap<String, bool>,
+    /// The tyre currently fitted, which defined the pool.
+    #[serde(default)]
+    pub tyre_type: TyreType,
 
-    /// Current cycle number (starts at 1)
-    pub current_cycle: u32,
+    /// Remaining count for each boost card value.
+    /// Keys are values `"1".."4"` (value 0 is never a card).
+    /// Using String keys for `MongoDB` compatibility.
+    pub cards: HashMap<String, u32>,
 
-    /// Total number of cycles completed
-    pub cycles_completed: u32,
-
-    /// Number of cards remaining in current cycle
+    /// Number of cards remaining (sum of all counts).
     pub cards_remaining: u32,
+
+    /// Total number of pit stops completed (each refills the pool).
+    #[serde(default)]
+    pub pit_stops_completed: u32,
 }
 
 /// Record of a single boost card usage
@@ -65,74 +96,104 @@ pub struct BoostCycleSummary {
 }
 
 impl BoostHand {
-    /// Initialize a new boost hand with all cards available
+    /// Initialize a new boost hand with the default (Medium) tyre pool.
     #[must_use]
     pub fn new() -> Self {
-        let mut cards = HashMap::new();
-        for i in 0..=4 {
-            cards.insert(i.to_string(), true);
-        }
+        Self::with_tyre(TyreType::default())
+    }
+
+    /// Initialize a new boost hand from a specific tyre's pool.
+    #[must_use]
+    pub fn with_tyre(tyre: TyreType) -> Self {
+        let cards = Self::pool_to_counts(&tyre.initial_pool());
+        let cards_remaining = cards.values().sum();
 
         Self {
+            tyre_type: tyre,
             cards,
-            current_cycle: 1,
-            cycles_completed: 0,
-            cards_remaining: 5,
+            cards_remaining,
+            pit_stops_completed: 0,
         }
     }
 
-    /// Check if a specific boost card is available
+    /// Build a count map (value -> remaining count) from a multiset of values.
+    fn pool_to_counts(pool: &[u8]) -> HashMap<String, u32> {
+        let mut counts: HashMap<String, u32> = HashMap::new();
+        for &value in pool {
+            *counts.entry(value.to_string()).or_insert(0) += 1;
+        }
+        counts
+    }
+
+    /// Check if a specific boost card is available.
+    /// Boost value 0 is always available (the free no-boost move).
     #[must_use]
     pub fn is_card_available(&self, boost_value: u8) -> bool {
+        if boost_value == 0 {
+            return true;
+        }
         self.cards
             .get(&boost_value.to_string())
             .copied()
-            .unwrap_or(false)
+            .unwrap_or(0)
+            > 0
     }
 
-    /// Use a boost card (mark as unavailable)
-    /// Returns Ok(()) if successful, Err with message if card is not available
-    /// Automatically triggers replenishment when all cards are used
+    /// Use a boost card. Boost value 0 is a free no-op (no card consumed).
+    /// Returns Ok(()) if successful, Err with message if the card is not
+    /// available. Does NOT auto-replenish — use [`Self::refill`] (pit stop).
     pub fn use_card(&mut self, boost_value: u8) -> Result<(), String> {
+        if boost_value == 0 {
+            return Ok(());
+        }
+
         if !self.is_card_available(boost_value) {
             return Err(format!("Boost card {boost_value} is not available"));
         }
 
-        self.cards.insert(boost_value.to_string(), false);
+        let key = boost_value.to_string();
+        let count = self.cards.entry(key).or_insert(0);
+        *count -= 1;
         self.cards_remaining -= 1;
-
-        // Check if all cards are used - trigger replenishment
-        if self.cards_remaining == 0 {
-            self.replenish();
-        }
 
         Ok(())
     }
 
-    /// Replenish all boost cards (internal method)
-    /// Called automatically when all cards have been used
-    fn replenish(&mut self) {
-        for i in 0..=4 {
-            self.cards.insert(i.to_string(), true);
-        }
-        self.cards_remaining = 5;
-        self.cycles_completed += 1;
-        self.current_cycle += 1;
+    /// Refill the pool from `new_tyre`'s pool, switching the fitted tyre.
+    /// Performed during a pit stop; increments `pit_stops_completed`.
+    pub fn refill(&mut self, new_tyre: TyreType) {
+        self.tyre_type = new_tyre;
+        self.cards = Self::pool_to_counts(&new_tyre.initial_pool());
+        self.cards_remaining = self.cards.values().sum();
+        self.pit_stops_completed += 1;
     }
 
-    /// Get list of available boost card values
+    /// Get the sorted list of distinct boost card values currently available.
+    /// Boost value 0 (free no-boost move) is always included first.
     #[must_use]
     pub fn get_available_cards(&self) -> Vec<u8> {
         let mut available: Vec<u8> = self
             .cards
             .iter()
-            .filter(|(_, &is_available)| is_available)
+            .filter(|(_, &count)| count > 0)
             .filter_map(|(key, _)| key.parse::<u8>().ok())
             .collect();
 
-        // Sort for consistent ordering
+        available.push(0);
         available.sort_unstable();
+        available.dedup();
         available
+    }
+
+    /// Remaining count for each boost card value 1-4, sorted by value.
+    /// Intended for UI display of the pool.
+    #[must_use]
+    pub fn card_counts(&self) -> Vec<(u8, u32)> {
+        let mut counts: Vec<(u8, u32)> = (1..=4)
+            .map(|v| (v, self.cards.get(&v.to_string()).copied().unwrap_or(0)))
+            .collect();
+        counts.sort_unstable_by_key(|(v, _)| *v);
+        counts
     }
 }
 
@@ -215,6 +276,11 @@ pub struct RaceParticipant {
     /// History of boost card usage for this participant
     #[serde(default)]
     pub boost_usage_history: Vec<BoostUsageRecord>,
+
+    /// Whether this participant is controlled by the AI (solo mode opponents).
+    /// Defaults to `false` so existing/serialized races deserialize as human.
+    #[serde(default)]
+    pub is_ai: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -335,6 +401,58 @@ impl Race {
         car_uuid: Uuid,
         pilot_uuid: Uuid,
     ) -> Result<(), String> {
+        self.add_participant_inner(
+            player_uuid,
+            car_uuid,
+            pilot_uuid,
+            false,
+            TyreType::default(),
+        )
+    }
+
+    /// Add a participant with a chosen starting tyre, which defines their
+    /// initial boost card pool.
+    pub fn add_participant_with_tyre(
+        &mut self,
+        player_uuid: Uuid,
+        car_uuid: Uuid,
+        pilot_uuid: Uuid,
+        tyre: TyreType,
+    ) -> Result<(), String> {
+        self.add_participant_inner(player_uuid, car_uuid, pilot_uuid, false, tyre)
+    }
+
+    /// Add an AI-controlled participant (solo mode opponent). Identical to
+    /// [`Self::add_participant`] except the resulting participant is flagged
+    /// `is_ai = true` so the server drives its boost choices.
+    pub fn add_ai_participant(
+        &mut self,
+        player_uuid: Uuid,
+        car_uuid: Uuid,
+        pilot_uuid: Uuid,
+    ) -> Result<(), String> {
+        self.add_participant_inner(player_uuid, car_uuid, pilot_uuid, true, TyreType::default())
+    }
+
+    /// Add an AI-controlled participant fitted with a specific starting tyre.
+    pub fn add_ai_participant_with_tyre(
+        &mut self,
+        player_uuid: Uuid,
+        car_uuid: Uuid,
+        pilot_uuid: Uuid,
+        tyre: TyreType,
+    ) -> Result<(), String> {
+        self.add_participant_inner(player_uuid, car_uuid, pilot_uuid, true, tyre)
+    }
+
+    fn add_participant_inner(
+        &mut self,
+        player_uuid: Uuid,
+        car_uuid: Uuid,
+        pilot_uuid: Uuid,
+        is_ai: bool,
+        tyre: TyreType,
+    ) -> Result<(), String> {
         // Allow joining races that are Waiting OR InProgress (for late joins)
         if self.status != RaceStatus::Waiting && self.status != RaceStatus::InProgress {
             return Err(format!(
@@ -370,8 +488,9 @@ impl Race {
             total_value: 0,
             is_finished: false,
             finish_position: None,
-            boost_hand: BoostHand::new(),
+            boost_hand: BoostHand::with_tyre(tyre),
             boost_usage_history: Vec::new(),
+            is_ai,
         };
 
         self.participants.push(participant);
@@ -574,18 +693,16 @@ impl Race {
         // Sort participants in each sector by their total value (descending = better position)
         self.sort_participants_in_sectors();
 
-        // Count this processing turn (used only as a safety bound).
+        // One processed turn = one lap (each player plays one boost per turn).
         self.turns_taken += 1;
 
-        // The displayed lap reflects the leader's progress around the track,
-        // clamped to the configured number of laps.
-        let leader_lap = self
-            .participants
-            .iter()
-            .map(|p| p.current_lap)
-            .max()
-            .unwrap_or(1);
-        self.current_lap = leader_lap.min(self.total_laps).max(1);
+        // The displayed lap is the lap currently being raced, capped at the
+        // configured number of laps. Keep every participant's lap in sync so
+        // per-car displays match the race lap.
+        self.current_lap = (self.turns_taken + 1).min(self.total_laps).max(1);
+        for participant in &mut self.participants {
+            participant.current_lap = self.current_lap;
+        }
 
         // Finish the race once every participant has completed all their laps
         // (or the safety bound is hit).
@@ -610,12 +727,21 @@ impl Race {
 
     /// Process individual lap action for a single player
     /// Stores pending actions until all players submit, then processes simultaneous turn resolution
-    pub fn process_individual_lap_action(
+    /// Record a player's boost action for the current turn: validate, consume
+    /// the boost card, and stage the action plus its performance calculation.
+    ///
+    /// This does NOT resolve the lap — it only records the action. Callers that
+    /// want the original "auto-process once everyone has acted" behaviour should
+    /// use [`Self::process_individual_lap_action`]; orchestrators that need to
+    /// enqueue other participants (e.g. solo-mode AI) before resolving should
+    /// call this, enqueue the rest, then process explicitly. Returns the
+    /// predicted performance for the recorded action.
+    pub fn record_player_action(
         &mut self,
         player_uuid: Uuid,
         boost_value: u32,
         car_data: &ValidatedCarData,
-    ) -> Result<IndividualLapResult, String> {
+    ) -> Result<PerformanceCalculation, String> {
         use crate::domain::boost_hand_manager::BoostHandManager;
 
         if self.status != RaceStatus::InProgress {
@@ -653,10 +779,10 @@ impl Race {
         #[allow(clippy::cast_possible_truncation)]
         let boost_value_u8 = boost_value as u8;
 
-        // Record the cycle number BEFORE using the card (since replenishment increments it)
-        let cycle_before_use = self.participants[participant_index]
+        // Record the pit-segment (number of pit stops so far) for this usage.
+        let pit_segment = self.participants[participant_index]
             .boost_hand
-            .current_cycle;
+            .pit_stops_completed;
 
         let boost_usage_result = BoostHandManager::use_boost_card(
             &mut self.participants[participant_index].boost_hand,
@@ -666,13 +792,14 @@ impl Race {
 
         // Record boost usage in history. `lap_number` here is the processing
         // turn/round in which the boost was used (turns_taken counts completed
-        // rounds; +1 = the round currently being submitted).
+        // rounds; +1 = the round currently being submitted). `cycle_number` now
+        // records the pit-segment index (pit stops completed at time of use).
         let usage_record = BoostUsageRecord {
             lap_number: self.turns_taken + 1,
             boost_value: boost_value_u8,
-            cycle_number: cycle_before_use,
+            cycle_number: pit_segment,
             cards_remaining_after: boost_usage_result.cards_remaining,
-            replenishment_occurred: boost_usage_result.replenishment_occurred,
+            replenishment_occurred: false,
         };
         self.participants[participant_index]
             .boost_usage_history
@@ -697,7 +824,16 @@ impl Race {
         self.pending_performance_calculations
             .insert(player_uuid, performance.clone());
 
-        // 7. Check if all participants have submitted actions
+        Ok(performance)
+    }
+
+    /// Resolve the lap if every active participant has now submitted; otherwise
+    /// report the action as recorded along with who we are still waiting on.
+    fn process_if_ready(
+        &mut self,
+        predicted_performance: PerformanceCalculation,
+    ) -> Result<IndividualLapResult, String> {
+        // Check if all participants have submitted actions
         if self.all_actions_submitted() {
             // Clone the pending actions and performance calculations to avoid borrowing issues
             let actions_to_process = self.pending_actions.clone();
@@ -716,10 +852,77 @@ impl Race {
         } else {
             // Return current state with action recorded
             Ok(IndividualLapResult::ActionRecorded {
-                predicted_performance: performance,
+                predicted_performance,
                 waiting_for_players: self.get_pending_players(),
             })
         }
+    }
+
+    pub fn process_individual_lap_action(
+        &mut self,
+        player_uuid: Uuid,
+        boost_value: u32,
+        car_data: &ValidatedCarData,
+    ) -> Result<IndividualLapResult, String> {
+        let performance = self.record_player_action(player_uuid, boost_value, car_data)?;
+        self.process_if_ready(performance)
+    }
+
+    /// Record a pit-stop action for the current turn without resolving the lap:
+    /// refill the boost pool from `new_tyre` (or the current tyre if `None`),
+    /// then stage a free boost-0 move. See [`Self::record_player_action`] for why
+    /// recording and processing are separated. Returns the predicted performance.
+    pub fn record_pit_action(
+        &mut self,
+        player_uuid: Uuid,
+        new_tyre: Option<TyreType>,
+        car_data: &ValidatedCarData,
+    ) -> Result<PerformanceCalculation, String> {
+        if self.status != RaceStatus::InProgress {
+            return Err("Race is not in progress".to_string());
+        }
+
+        let participant_index = self
+            .participants
+            .iter()
+            .position(|p| p.player_uuid == player_uuid)
+            .ok_or("Player not found in race")?;
+
+        if self.participants[participant_index].is_finished {
+            return Err("Player has already finished the race".to_string());
+        }
+
+        if self
+            .pending_actions
+            .iter()
+            .any(|a| a.player_uuid == player_uuid)
+        {
+            return Err("Player has already submitted an action for this turn".to_string());
+        }
+
+        // Refill the pool with the chosen tyre (default: keep current tyre).
+        let tyre = new_tyre.unwrap_or(self.participants[participant_index].boost_hand.tyre_type);
+        self.participants[participant_index].boost_hand.refill(tyre);
+
+        // The pit consumes the turn as a free boost-0 lap.
+        self.record_player_action(player_uuid, 0, car_data)
+    }
+
+    /// Process a pit-stop action for a single player.
+    ///
+    /// A pit stop refills the player's boost pool from `new_tyre` (or the
+    /// current tyre if `None`) and consumes the turn as a free boost-0 lap.
+    /// The pool is refilled immediately on submission, which is equivalent to
+    /// "the pit costs this lap": the player commits boost 0 this turn and races
+    /// with a fresh pool from the next turn onward.
+    pub fn process_individual_pit_action(
+        &mut self,
+        player_uuid: Uuid,
+        new_tyre: Option<TyreType>,
+        car_data: &ValidatedCarData,
+    ) -> Result<IndividualLapResult, String> {
+        let performance = self.record_pit_action(player_uuid, new_tyre, car_data)?;
+        self.process_if_ready(performance)
     }
 
     /// Check if all active participants have submitted actions
@@ -795,6 +998,85 @@ impl Race {
         }
 
         Ok(performance_calculations)
+    }
+
+    /// Enqueue boost actions for every AI-controlled participant that is active
+    /// and has not yet acted this turn (solo mode). Mirrors a human submission:
+    /// it consumes each AI's boost card and records the usage, then pushes the
+    /// action into `pending_actions`. Participants whose car data cannot be
+    /// resolved are skipped so a missing entry never stalls the turn.
+    pub fn enqueue_ai_actions(&mut self, car_data_map: &HashMap<Uuid, ValidatedCarData>) {
+        use crate::domain::ai_player;
+        use crate::domain::boost_hand_manager::BoostHandManager;
+
+        let already_acted: HashSet<Uuid> =
+            self.pending_actions.iter().map(|a| a.player_uuid).collect();
+        let lap_characteristic = self.lap_characteristic.clone();
+        // Laps left including the current one; the AI pit logic needs a future lap
+        // to spend refilled cards on.
+        let laps_remaining = self.total_laps.saturating_sub(self.turns_taken);
+
+        // Decide first (immutable borrows), then mutate, to avoid borrow conflicts.
+        let decisions: Vec<(Uuid, ai_player::AiTurnAction)> = self
+            .participants
+            .iter()
+            .filter(|p| p.is_ai && !p.is_finished && !already_acted.contains(&p.player_uuid))
+            .filter_map(|p| {
+                let car_data = car_data_map.get(&p.player_uuid)?;
+                let sector = self.track.sectors.get(p.current_sector as usize)?;
+                let action = ai_player::decide_ai_action(
+                    car_data,
+                    &p.boost_hand,
+                    sector,
+                    &lap_characteristic,
+                    laps_remaining,
+                );
+                Some((p.player_uuid, action))
+            })
+            .collect();
+
+        for (player_uuid, action) in decisions {
+            let Some(index) = self
+                .participants
+                .iter()
+                .position(|p| p.player_uuid == player_uuid)
+            else {
+                continue;
+            };
+
+            // A pit and a boost both resolve as a card consumption for the turn; a
+            // pit refills the pool first and then plays a free boost-0 move.
+            let boost = match action {
+                ai_player::AiTurnAction::Pit => {
+                    let tyre = self.participants[index].boost_hand.tyre_type;
+                    self.participants[index].boost_hand.refill(tyre);
+                    0
+                }
+                ai_player::AiTurnAction::Boost(b) => b,
+            };
+
+            let pit_segment = self.participants[index].boost_hand.pit_stops_completed;
+            // `choose_boost`/pit only yield available cards (0 is always free), so
+            // this should not fail; if it ever did we still record the action below.
+            if let Ok(result) =
+                BoostHandManager::use_boost_card(&mut self.participants[index].boost_hand, boost)
+            {
+                self.participants[index]
+                    .boost_usage_history
+                    .push(BoostUsageRecord {
+                        lap_number: self.turns_taken + 1,
+                        boost_value: boost,
+                        cycle_number: pit_segment,
+                        cards_remaining_after: result.cards_remaining,
+                        replenishment_occurred: false,
+                    });
+            }
+
+            self.pending_actions.push(LapAction {
+                player_uuid,
+                boost_value: u32::from(boost),
+            });
+        }
     }
 
     /// Calculate performance using validated car data and boost selection
@@ -1010,31 +1292,18 @@ impl Race {
         let player_uuid = self.participants[participant_index].player_uuid;
         let next_sector = from_sector + 1;
 
-        // Check if we've reached the end (lap completion or race finish)
+        // Sectors are the live standings between cars (relative position), not a
+        // physical lap. The highest sector is the lead, so a car already there
+        // simply holds the lead — it does not wrap around or "finish" early.
+        // The race ends on the turn counter (see `check_race_completion`).
         #[allow(clippy::cast_possible_truncation)]
         if next_sector >= self.track.sectors.len() as u32 {
-            // Completed a lap
-            self.participants[participant_index].current_lap += 1;
-
-            if self.participants[participant_index].current_lap > self.total_laps {
-                // Finished the race
-                self.participants[participant_index].is_finished = true;
-                return ParticipantMovement {
-                    player_uuid,
-                    from_sector,
-                    to_sector: from_sector,
-                    final_value,
-                    movement_type: MovementType::FinishedRace,
-                };
-            }
-            // Start new lap - go back to sector 0
-            self.participants[participant_index].current_sector = 0;
             return ParticipantMovement {
                 player_uuid,
                 from_sector,
-                to_sector: 0,
+                to_sector: from_sector,
                 final_value,
-                movement_type: MovementType::FinishedLap,
+                movement_type: MovementType::StayedInSector,
             };
         }
 
@@ -1124,15 +1393,13 @@ impl Race {
     }
 
     fn check_race_completion(&mut self) {
-        // The race ends when every participant has completed all their laps
-        // around the track (each crossing of the finish line increments a
-        // participant's lap in `move_participant_up`).
-        let finished_count = self.participants.iter().filter(|p| p.is_finished).count();
-        let all_finished = !self.participants.is_empty() && finished_count == self.participants.len();
+        // One turn = one lap, so the race ends once `total_laps` turns have been
+        // played. Sectors are relative standings, so no car "finishes" early —
+        // everyone crosses the line together on the final turn.
+        let race_over = !self.participants.is_empty() && self.turns_taken >= self.total_laps;
 
-        // Safety bound: guarantee termination even if a track is unwinnable
-        // (e.g. cars can never clear a sector). Generous so it never ends a
-        // real race early.
+        // Safety backstop; with the turn-based end above this is unreachable in
+        // practice, but it guarantees termination if total_laps were ever 0.
         #[allow(clippy::cast_possible_truncation)]
         let sector_count = self.track.sectors.len() as u32;
         let safety_cap = self
@@ -1142,8 +1409,13 @@ impl Race {
             .saturating_add(50);
         let exceeded_safety = self.turns_taken > safety_cap;
 
-        if all_finished || exceeded_safety {
+        if race_over || exceeded_safety {
             self.status = RaceStatus::Finished;
+
+            // Everyone crosses the finish line together on the final turn.
+            for participant in &mut self.participants {
+                participant.is_finished = true;
+            }
 
             // Assign finish positions based on final sector and position
             let mut all_participants: Vec<&mut RaceParticipant> =
@@ -1337,226 +1609,346 @@ mod tests {
         Track::new("Test Track".to_string(), sectors).unwrap()
     }
 
+    /// Minimal complete car data for AI participants in enqueue tests.
+    fn make_ai_car_data() -> ValidatedCarData {
+        use crate::domain::{
+            Body, BodyName, Car, CarName, ComponentRarity, Engine, EngineName, Pilot, PilotClass,
+            PilotName, PilotPerformance, PilotRarity, PilotSkills,
+        };
+
+        let engine = Engine::new(
+            EngineName::parse("Bot Engine").unwrap(),
+            ComponentRarity::Common,
+            7,
+            5,
+        )
+        .unwrap();
+        let body = Body::new(
+            BodyName::parse("Bot Body").unwrap(),
+            ComponentRarity::Common,
+            5,
+            7,
+        )
+        .unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Bot Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Rookie,
+            PilotSkills::new(6, 6, 6, 6).unwrap(),
+            PilotPerformance::new(8, 5).unwrap(),
+        )
+        .unwrap();
+        let car = Car::new(CarName::parse("Bot Car").unwrap()).unwrap();
+        ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
+        }
+    }
+
+    #[test]
+    fn enqueue_ai_actions_fills_only_ai_seats() {
+        let track = create_test_track();
+        let mut race = Race::new("AI Enqueue Test".to_string(), track, 1);
+        race.status = RaceStatus::InProgress;
+
+        let human = Uuid::new_v4();
+        let ai1 = Uuid::new_v4();
+        let ai2 = Uuid::new_v4();
+        race.add_participant(human, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai1, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai2, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+
+        let mut car_data_map = HashMap::new();
+        car_data_map.insert(ai1, make_ai_car_data());
+        car_data_map.insert(ai2, make_ai_car_data());
+
+        // The human submits first.
+        race.pending_actions.push(LapAction {
+            player_uuid: human,
+            boost_value: 2,
+        });
+
+        race.enqueue_ai_actions(&car_data_map);
+
+        // Both AI seats are now filled (human + 2 AI = 3) with legal boosts.
+        assert_eq!(race.pending_actions.len(), 3);
+        for ai in [ai1, ai2] {
+            let action = race
+                .pending_actions
+                .iter()
+                .find(|a| a.player_uuid == ai)
+                .expect("AI action should be enqueued");
+            assert!(action.boost_value <= 4, "boost must be a legal card (0-4)");
+        }
+
+        // All active participants have now submitted -> the lap is ready.
+        assert!(race.all_actions_submitted());
+
+        // Calling again is idempotent (does not double-add already-acted seats).
+        race.enqueue_ai_actions(&car_data_map);
+        assert_eq!(race.pending_actions.len(), 3);
+    }
+
+    /// The solo-mode track shape (mirrors `routes::races::build_solo_track`):
+    /// ceilings tuned so a starter car advances with any boost >= 1.
+    fn solo_track() -> Track {
+        let sectors = vec![
+            Sector {
+                id: 0,
+                name: "Start".to_string(),
+                min_value: 0,
+                max_value: 10,
+                slot_capacity: None,
+                sector_type: SectorType::Start,
+            },
+            Sector {
+                id: 1,
+                name: "Straight".to_string(),
+                min_value: 5,
+                max_value: 14,
+                slot_capacity: None,
+                sector_type: SectorType::Straight,
+            },
+            Sector {
+                id: 2,
+                name: "Curve".to_string(),
+                min_value: 5,
+                max_value: 14,
+                slot_capacity: None,
+                sector_type: SectorType::Curve,
+            },
+            Sector {
+                id: 3,
+                name: "Finish".to_string(),
+                min_value: 8,
+                max_value: 16,
+                slot_capacity: None,
+                sector_type: SectorType::Finish,
+            },
+        ];
+        Track::new("Solo Circuit".to_string(), sectors).unwrap()
+    }
+
+    #[test]
+    fn solo_race_runs_to_completion() {
+        // Three laps so we can also assert the lap counter visibly advances.
+        let total_laps = 3;
+        let mut race = Race::new("Solo".to_string(), solo_track(), total_laps);
+        race.status = RaceStatus::InProgress;
+        race.lap_characteristic = LapCharacteristic::Straight;
+
+        let human = Uuid::new_v4();
+        let ai1 = Uuid::new_v4();
+        let ai2 = Uuid::new_v4();
+        race.add_participant(human, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai1, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai2, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+
+        let mut car_data_map = HashMap::new();
+        for uuid in [human, ai1, ai2] {
+            car_data_map.insert(uuid, make_ai_car_data());
+        }
+
+        // Drive turns: the human always plays a MoveUp boost; AI auto-fill.
+        let mut turns = 0;
+        let mut max_lap_seen = race.current_lap;
+        while matches!(race.status, RaceStatus::InProgress) && turns < 400 {
+            turns += 1;
+            if race
+                .participants
+                .iter()
+                .any(|p| p.player_uuid == human && !p.is_finished)
+            {
+                race.pending_actions.push(LapAction {
+                    player_uuid: human,
+                    boost_value: 1,
+                });
+            }
+            race.enqueue_ai_actions(&car_data_map);
+
+            let actions = race.pending_actions.clone();
+            assert!(!actions.is_empty(), "a turn should always have actions");
+            let perfs = race
+                .calculate_all_performances(&actions, &car_data_map)
+                .unwrap();
+            race.process_lap_with_car_data(&actions, &perfs).unwrap();
+            max_lap_seen = max_lap_seen.max(race.current_lap);
+
+            race.pending_actions.clear();
+            race.action_submissions.clear();
+            race.pending_performance_calculations.clear();
+        }
+
+        // The displayed lap must advance past lap 1 over a multi-lap race.
+        assert!(
+            max_lap_seen > 1,
+            "race.current_lap should advance beyond 1 (saw {max_lap_seen})"
+        );
+        assert_eq!(
+            max_lap_seen, total_laps,
+            "leader should reach the final lap"
+        );
+
+        assert!(
+            matches!(race.status, RaceStatus::Finished),
+            "race should finish; status was {:?} after {turns} turns",
+            race.status
+        );
+        assert!(
+            race.participants.iter().all(|p| p.is_finished),
+            "every participant should cross the finish line"
+        );
+        assert!(
+            race.participants
+                .iter()
+                .all(|p| p.finish_position.is_some()),
+            "every participant should get a final ranking"
+        );
+    }
+
     // ========== BoostHand Tests ==========
 
     #[test]
     fn test_boost_hand_initialization() {
-        let hand = BoostHand::new();
+        let hand = BoostHand::new(); // default = Medium
 
-        // Verify initial state
-        assert_eq!(hand.cards_remaining, 5, "Should start with 5 cards");
-        assert_eq!(hand.current_cycle, 1, "Should start at cycle 1");
-        assert_eq!(hand.cycles_completed, 0, "Should have 0 completed cycles");
+        assert_eq!(hand.tyre_type, TyreType::Medium);
+        assert_eq!(hand.cards_remaining, 5, "Medium pool has 5 cards");
+        assert_eq!(hand.pit_stops_completed, 0);
 
-        // Verify all cards are available
-        for i in 0..=4 {
-            assert!(hand.is_card_available(i), "Card {i} should be available");
+        // Boost 0 is always available; the Medium pool contains 2,3,4.
+        assert!(hand.is_card_available(0), "Boost 0 is always free");
+        for value in [2, 3, 4] {
+            assert!(hand.is_card_available(value), "Card {value} available");
         }
-
-        // Verify cards HashMap has correct size
-        assert_eq!(hand.cards.len(), 5, "Should have 5 cards in HashMap");
+        // Value 1 is not in the Medium pool.
+        assert!(!hand.is_card_available(1));
     }
 
     #[test]
-    fn test_boost_hand_use_card() {
-        let mut hand = BoostHand::new();
+    fn test_tyre_pools() {
+        assert_eq!(TyreType::Soft.initial_pool(), vec![3, 4, 4]);
+        assert_eq!(TyreType::Medium.initial_pool(), vec![2, 2, 3, 3, 4]);
+        assert_eq!(TyreType::Hard.initial_pool(), vec![1, 1, 1, 2, 2, 3]);
 
-        // Use card 2
-        let result = hand.use_card(2);
-        assert!(result.is_ok(), "Should successfully use card 2");
-
-        // Verify card 2 is now unavailable
-        assert!(!hand.is_card_available(2), "Card 2 should be unavailable");
-        assert_eq!(hand.cards_remaining, 4, "Should have 4 cards remaining");
-
-        // Verify other cards are still available
-        assert!(
-            hand.is_card_available(0),
-            "Card 0 should still be available"
-        );
-        assert!(
-            hand.is_card_available(1),
-            "Card 1 should still be available"
-        );
-        assert!(
-            hand.is_card_available(3),
-            "Card 3 should still be available"
-        );
-        assert!(
-            hand.is_card_available(4),
-            "Card 4 should still be available"
-        );
+        assert_eq!(BoostHand::with_tyre(TyreType::Soft).cards_remaining, 3);
+        assert_eq!(BoostHand::with_tyre(TyreType::Medium).cards_remaining, 5);
+        assert_eq!(BoostHand::with_tyre(TyreType::Hard).cards_remaining, 6);
     }
 
     #[test]
-    fn test_boost_hand_cannot_use_same_card_twice() {
-        let mut hand = BoostHand::new();
+    fn test_boost_hand_use_card_with_duplicates() {
+        let mut hand = BoostHand::with_tyre(TyreType::Medium); // [2,2,3,3,4]
 
-        // Use card 3 first time
-        let result1 = hand.use_card(3);
-        assert!(result1.is_ok(), "First use should succeed");
-
-        // Try to use card 3 again
-        let result2 = hand.use_card(3);
-        assert!(result2.is_err(), "Second use should fail");
-        assert_eq!(
-            result2.unwrap_err(),
-            "Boost card 3 is not available",
-            "Should return correct error message"
-        );
-    }
-
-    #[test]
-    fn test_boost_hand_replenishment() {
-        let mut hand = BoostHand::new();
-
-        // Use all 5 cards
+        // Two value-2 cards: first use leaves it available, second depletes it.
         hand.use_card(2).unwrap();
+        assert!(hand.is_card_available(2), "One value-2 card remains");
         assert_eq!(hand.cards_remaining, 4);
 
-        hand.use_card(0).unwrap();
+        hand.use_card(2).unwrap();
+        assert!(!hand.is_card_available(2), "Both value-2 cards spent");
         assert_eq!(hand.cards_remaining, 3);
 
-        hand.use_card(4).unwrap();
-        assert_eq!(hand.cards_remaining, 2);
-
-        hand.use_card(1).unwrap();
-        assert_eq!(hand.cards_remaining, 1);
-
-        // Using the last card should trigger replenishment
-        hand.use_card(3).unwrap();
-
-        // Verify replenishment occurred
-        assert_eq!(hand.cards_remaining, 5, "All cards should be replenished");
-        assert_eq!(hand.current_cycle, 2, "Should be in cycle 2");
-        assert_eq!(hand.cycles_completed, 1, "Should have 1 completed cycle");
-
-        // Verify all cards are available again
-        for i in 0..=4 {
-            assert!(
-                hand.is_card_available(i),
-                "Card {i} should be available after replenishment"
-            );
-        }
+        let err = hand.use_card(2).unwrap_err();
+        assert_eq!(err, "Boost card 2 is not available");
     }
 
     #[test]
-    fn test_boost_hand_multiple_cycles() {
-        let mut hand = BoostHand::new();
+    fn test_boost_zero_is_always_free() {
+        let mut hand = BoostHand::with_tyre(TyreType::Soft); // [3,4,4]
 
-        // Complete first cycle
-        for i in 0..=4 {
-            hand.use_card(i).unwrap();
+        // Spend the whole pool.
+        for value in [3, 4, 4] {
+            hand.use_card(value).unwrap();
         }
-        assert_eq!(hand.current_cycle, 2);
-        assert_eq!(hand.cycles_completed, 1);
+        assert_eq!(hand.cards_remaining, 0);
 
-        // Complete second cycle
-        for i in 0..=4 {
-            hand.use_card(i).unwrap();
-        }
-        assert_eq!(hand.current_cycle, 3);
-        assert_eq!(hand.cycles_completed, 2);
+        // Boost 0 still works, never decrements, never errors.
+        assert!(hand.is_card_available(0));
+        hand.use_card(0).unwrap();
+        assert_eq!(hand.cards_remaining, 0);
+    }
 
-        // Verify all cards are still available
-        for i in 0..=4 {
-            assert!(hand.is_card_available(i), "Card {i} should be available");
+    #[test]
+    fn test_boost_hand_no_auto_replenish() {
+        let mut hand = BoostHand::with_tyre(TyreType::Medium);
+
+        for value in [2, 2, 3, 3, 4] {
+            hand.use_card(value).unwrap();
         }
+
+        assert_eq!(hand.cards_remaining, 0, "Pool does not auto-replenish");
+        assert_eq!(hand.pit_stops_completed, 0);
+        assert_eq!(hand.get_available_cards(), vec![0], "Only free 0 remains");
+    }
+
+    #[test]
+    fn test_boost_hand_refill_changes_tyre() {
+        let mut hand = BoostHand::with_tyre(TyreType::Medium);
+        hand.use_card(4).unwrap();
+
+        // Pit onto Soft tyres.
+        hand.refill(TyreType::Soft);
+
+        assert_eq!(hand.tyre_type, TyreType::Soft);
+        assert_eq!(hand.cards_remaining, 3, "Soft pool has 3 cards");
+        assert_eq!(hand.pit_stops_completed, 1);
+        assert_eq!(hand.get_available_cards(), vec![0, 3, 4]);
     }
 
     #[test]
     fn test_boost_hand_get_available_cards() {
-        let mut hand = BoostHand::new();
+        let mut hand = BoostHand::with_tyre(TyreType::Medium); // [2,2,3,3,4]
 
-        // Initially all cards should be available
-        let available = hand.get_available_cards();
-        assert_eq!(available.len(), 5, "Should have 5 available cards");
-        assert_eq!(
-            available,
-            vec![0, 1, 2, 3, 4],
-            "Should return sorted list of all cards"
-        );
+        // Distinct available values plus the always-free 0.
+        assert_eq!(hand.get_available_cards(), vec![0, 2, 3, 4]);
 
-        // Use some cards
-        hand.use_card(1).unwrap();
-        hand.use_card(3).unwrap();
+        // Deplete value 2 entirely.
+        hand.use_card(2).unwrap();
+        hand.use_card(2).unwrap();
 
         let available = hand.get_available_cards();
-        assert_eq!(available.len(), 3, "Should have 3 available cards");
-        assert_eq!(
-            available,
-            vec![0, 2, 4],
-            "Should return sorted list of available cards"
-        );
-        assert!(!available.contains(&1), "Should not include used card 1");
-        assert!(!available.contains(&3), "Should not include used card 3");
+        assert_eq!(available, vec![0, 3, 4]);
+        assert!(!available.contains(&2), "Spent value-2 card excluded");
     }
 
     #[test]
     fn test_boost_hand_is_card_available_invalid_card() {
         let hand = BoostHand::new();
 
-        // Test with invalid card values
-        assert!(
-            !hand.is_card_available(5),
-            "Card 5 should not be available (out of range)"
-        );
-        assert!(
-            !hand.is_card_available(10),
-            "Card 10 should not be available (out of range)"
-        );
-        assert!(
-            !hand.is_card_available(255),
-            "Card 255 should not be available (out of range)"
-        );
+        // Out-of-pool / out-of-range values are unavailable (0 is the exception).
+        assert!(!hand.is_card_available(5));
+        assert!(!hand.is_card_available(10));
+        assert!(!hand.is_card_available(255));
     }
 
     #[test]
     fn test_boost_hand_default_trait() {
         let hand = BoostHand::default();
 
-        // Verify default is same as new()
+        assert_eq!(hand.tyre_type, TyreType::Medium);
         assert_eq!(hand.cards_remaining, 5);
-        assert_eq!(hand.current_cycle, 1);
-        assert_eq!(hand.cycles_completed, 0);
-
-        for i in 0..=4 {
-            assert!(hand.is_card_available(i));
-        }
+        assert_eq!(hand.pit_stops_completed, 0);
     }
 
     #[test]
-    fn test_boost_hand_use_card_sequence() {
-        let mut hand = BoostHand::new();
-
-        // Use cards in a specific sequence
-        let sequence = [4, 1, 3, 0, 2];
-
-        for (index, &card) in sequence.iter().enumerate() {
-            let result = hand.use_card(card);
-            assert!(result.is_ok(), "Should successfully use card {card}");
-
-            // After using the 5th card (index 4), replenishment occurs immediately
-            if index == 4 {
-                // Replenishment should have occurred
-                assert_eq!(
-                    hand.cards_remaining, 5,
-                    "Should be replenished after using all cards"
-                );
-                assert_eq!(hand.cycles_completed, 1, "Should have completed 1 cycle");
-            } else {
-                // Cards should decrease normally
-                assert_eq!(
-                    hand.cards_remaining,
-                    5 - (index as u32) - 1,
-                    "Cards remaining should decrease"
-                );
-            }
-        }
-
-        // After using all cards, should be replenished
-        assert_eq!(hand.cards_remaining, 5);
-        assert_eq!(hand.cycles_completed, 1);
+    fn test_card_counts() {
+        let hand = BoostHand::with_tyre(TyreType::Medium); // [2,2,3,3,4]
+        assert_eq!(hand.card_counts(), vec![(1, 0), (2, 2), (3, 2), (4, 1)]);
     }
 
     // ========== End BoostHand Tests ==========
@@ -2089,16 +2481,15 @@ mod tests {
         }];
 
         let result1 = race.process_lap(&actions).unwrap();
-        // `lap` now reflects the leader's lap around the track; no full lap has
-        // been completed yet on this track, so it stays at 1.
-        assert_eq!(result1.lap, 1);
+        // One turn = one lap: after the first turn the race is on lap 2.
+        assert_eq!(result1.lap, 2);
 
         // Lap characteristic might change for next lap
         let second_characteristic = race.lap_characteristic.clone();
 
-        // Process another turn
+        // Process another turn -> lap 3 (capped at total_laps = 3).
         let result2 = race.process_lap(&actions).unwrap();
-        assert_eq!(result2.lap, 1);
+        assert_eq!(result2.lap, 3);
 
         // Verify lap characteristics are being tracked
         assert!(matches!(
@@ -2133,7 +2524,7 @@ mod tests {
             },
         ];
         let track = Track::new("Mini Track".to_string(), sectors).unwrap();
-        // total_laps now means laps AROUND THE TRACK, not number of turns.
+        // total_laps = number of turns to play (1 turn = 1 lap).
         let mut race = Race::new("Test Race".to_string(), track, 2);
 
         let player_uuid = Uuid::new_v4();
@@ -2147,21 +2538,25 @@ mod tests {
             boost_value: 2,
         }];
 
-        // The race must NOT end on a turn counter; drive turns until the
-        // participant completes its laps and the race finishes.
+        // One turn = one lap: the race ends after exactly `total_laps` turns.
         let mut finished = false;
+        let mut turns = 0u32;
         for _ in 0..50 {
             race.process_lap(&actions).unwrap();
+            turns += 1;
             if race.status == RaceStatus::Finished {
                 finished = true;
                 break;
             }
         }
 
-        assert!(finished, "race should finish once all laps are completed");
+        assert!(finished, "race should finish after total_laps turns");
+        assert_eq!(
+            turns, race.total_laps,
+            "race ends after exactly total_laps turns"
+        );
         assert!(race.participants[0].is_finished);
-        // Completed more than total_laps crossings of the finish line.
-        assert!(race.participants[0].current_lap > race.total_laps);
+        assert_eq!(race.current_lap, race.total_laps);
         assert!(race.participants[0].finish_position.is_some());
     }
 
@@ -2997,16 +3392,17 @@ mod tests {
 
         // Verify initial boost hand state
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
-        assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
-        assert!(race.participants[0].boost_hand.is_card_available(2));
+        assert_eq!(race.participants[0].boost_hand.pit_stops_completed, 0);
+        // Card 4 is unique in the Medium pool [2,2,3,3,4], so one use depletes it.
+        assert!(race.participants[0].boost_hand.is_card_available(4));
 
-        // Use boost card 2
-        let result = race.process_individual_lap_action(player_uuid, 2, &car_data);
+        // Use boost card 4
+        let result = race.process_individual_lap_action(player_uuid, 4, &car_data);
 
         assert!(result.is_ok());
 
-        // Verify card 2 is now unavailable
-        assert!(!race.participants[0].boost_hand.is_card_available(2));
+        // Verify card 4 is now unavailable
+        assert!(!race.participants[0].boost_hand.is_card_available(4));
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
 
         // Clear pending actions to test again
@@ -3014,8 +3410,8 @@ mod tests {
         race.action_submissions.clear();
         race.pending_performance_calculations.clear();
 
-        // Try to use card 2 again - should fail
-        let result = race.process_individual_lap_action(player_uuid, 2, &car_data);
+        // Try to use card 4 again - should fail
+        let result = race.process_individual_lap_action(player_uuid, 4, &car_data);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not available"));
@@ -3086,12 +3482,12 @@ mod tests {
             pilot,
         };
 
-        // Use all 5 boost cards for player 1
-        let boost_sequence_p1 = [2, 0, 4, 1, 3];
-        let boost_sequence_p2 = [0, 1, 2, 3, 4];
+        // Deplete player 1's whole Medium pool [2,2,3,3,4] over 5 turns. There is
+        // NO auto-replenish, so the pool empties and stays empty until a pit stop.
+        let boost_sequence_p1 = [2, 2, 3, 3, 4];
 
         for (index, &boost_value) in boost_sequence_p1.iter().enumerate() {
-            // Player 1 submits action
+            // Player 1 submits a real card.
             let result =
                 race.process_individual_lap_action(player_uuids[0], boost_value, &car_data);
 
@@ -3100,65 +3496,56 @@ mod tests {
                 "Failed to use boost card {boost_value} for player 1"
             );
 
-            // Player 2 submits action to complete the lap
-            let _result2 = race.process_individual_lap_action(
-                player_uuids[1],
-                boost_sequence_p2[index],
-                &car_data,
-            );
+            // Player 2 plays the free boost 0 to complete the lap.
+            let _result2 = race.process_individual_lap_action(player_uuids[1], 0, &car_data);
 
-            // Check cards remaining after each use
-            if index < 4 {
-                // Before last card
-                assert_eq!(
-                    race.participants[0].boost_hand.cards_remaining,
-                    4 - index as u32,
-                    "Cards remaining should decrease"
-                );
-                assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
-                assert_eq!(race.participants[0].boost_hand.cycles_completed, 0);
-            } else {
-                // After using the 5th card, replenishment should occur
-                assert_eq!(
-                    race.participants[0].boost_hand.cards_remaining, 5,
-                    "All cards should be replenished"
-                );
-                assert_eq!(
-                    race.participants[0].boost_hand.current_cycle, 2,
-                    "Should be in cycle 2"
-                );
-                assert_eq!(
-                    race.participants[0].boost_hand.cycles_completed, 1,
-                    "Should have 1 completed cycle"
-                );
-            }
+            // Cards remaining decrease by exactly one per real card, no refill.
+            assert_eq!(
+                race.participants[0].boost_hand.cards_remaining,
+                4 - index as u32,
+                "Cards remaining should decrease by one per used card"
+            );
+            assert_eq!(race.participants[0].boost_hand.pit_stops_completed, 0);
         }
 
-        // Verify all cards are available again after replenishment
-        for i in 0..=4 {
-            assert!(
-                race.participants[0].boost_hand.is_card_available(i),
-                "Card {i} should be available after replenishment"
-            );
-        }
-
-        // Test that we can use the same cards again in the new cycle
-        let result = race.process_individual_lap_action(
-            player_uuids[0],
-            2, // Same card we used first in previous cycle
-            &car_data,
+        // Pool is empty and does NOT auto-replenish.
+        assert_eq!(race.participants[0].boost_hand.cards_remaining, 0);
+        assert_eq!(
+            race.participants[0].boost_hand.get_available_cards(),
+            vec![0],
+            "Only the free boost 0 remains until a pit stop"
         );
 
+        // Player 1 pits (refills the pool, consumes the turn as a free boost-0 lap);
+        // player 2 plays boost 0 to complete the lap.
+        race.process_individual_pit_action(player_uuids[0], None, &car_data)
+            .unwrap();
+        race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+            .unwrap();
+
+        // The pit refilled the Medium pool and recorded a pit stop.
+        assert_eq!(
+            race.participants[0].boost_hand.cards_remaining, 5,
+            "Pit stop refills the Medium pool"
+        );
+        assert_eq!(race.participants[0].boost_hand.pit_stops_completed, 1);
+        assert_eq!(
+            race.participants[0].boost_hand.get_available_cards(),
+            vec![0, 2, 3, 4],
+            "Medium pool is available again after the pit"
+        );
+
+        // We can use card 2 again from the refreshed pool.
+        let result = race.process_individual_lap_action(player_uuids[0], 2, &car_data);
         assert!(
             result.is_ok(),
-            "Should be able to use card 2 again after replenishment"
+            "Should be able to use card 2 again after the pit refill"
         );
-        assert!(!race.participants[0].boost_hand.is_card_available(2));
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 4);
     }
 
     #[test]
-    fn test_boost_card_multiple_cycles() {
+    fn test_boost_card_multiple_pits_refill_pool() {
         use crate::domain::{
             Body, BodyName, Car, ComponentRarity, Engine, EngineName, Pilot, PilotClass, PilotName,
             PilotPerformance, PilotRarity, PilotSkills,
@@ -3166,7 +3553,7 @@ mod tests {
         use crate::services::car_validation::ValidatedCarData;
 
         let track = create_test_track();
-        let mut race = Race::new("Multiple Cycles Test".to_string(), track, 20);
+        let mut race = Race::new("Multiple Pits Test".to_string(), track, 60);
 
         // Add 2 participants
         let mut player_uuids = Vec::new();
@@ -3222,46 +3609,49 @@ mod tests {
             pilot,
         };
 
-        // Complete 3 full cycles (15 laps total)
-        for cycle in 1..=3 {
-            for card in 0..=4 {
-                // Player 1 uses a card
-                let result = race.process_individual_lap_action(player_uuids[0], card, &car_data);
-
-                assert!(
-                    result.is_ok(),
-                    "Cycle {cycle}, card {card} should work for player 1"
-                );
-
-                // Player 2 completes the lap (also uses the same card sequence)
-                let _result2 = race.process_individual_lap_action(player_uuids[1], card, &car_data);
+        // Repeat: deplete the Medium pool, then pit to refill it. No auto-replenish.
+        for pit in 1..=3 {
+            // Spend the full Medium pool [2,2,3,3,4].
+            for &card in &[2u32, 2, 3, 3, 4] {
+                race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                    .unwrap();
+                race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+                    .unwrap();
             }
 
-            // After each cycle, verify replenishment occurred
+            // Pool is empty; only the free boost 0 remains.
+            assert_eq!(
+                race.participants[0].boost_hand.cards_remaining, 0,
+                "Pit {pit}: pool empties without auto-replenish"
+            );
+            assert_eq!(
+                race.participants[0].boost_hand.get_available_cards(),
+                vec![0]
+            );
+
+            // Pit to refill the pool.
+            race.process_individual_pit_action(player_uuids[0], None, &car_data)
+                .unwrap();
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+                .unwrap();
+
             assert_eq!(
                 race.participants[0].boost_hand.cards_remaining, 5,
-                "Cycle {cycle}: All cards should be replenished"
+                "Pit {pit}: pool is refilled to 5"
             );
             assert_eq!(
-                race.participants[0].boost_hand.current_cycle,
-                cycle + 1,
-                "Cycle {cycle}: Should be in next cycle"
-            );
-            assert_eq!(
-                race.participants[0].boost_hand.cycles_completed, cycle,
-                "Cycle {cycle}: Should have completed {cycle} cycles"
+                race.participants[0].boost_hand.pit_stops_completed, pit,
+                "Pit {pit}: pit count increments"
             );
         }
 
-        // Verify final state after 3 complete cycles
-        assert_eq!(race.participants[0].boost_hand.current_cycle, 4);
-        assert_eq!(race.participants[0].boost_hand.cycles_completed, 3);
+        // Final state: three pit stops, a full Medium pool.
+        assert_eq!(race.participants[0].boost_hand.pit_stops_completed, 3);
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
-
-        // All cards should be available
-        for i in 0..=4 {
-            assert!(race.participants[0].boost_hand.is_card_available(i));
-        }
+        assert_eq!(
+            race.participants[0].boost_hand.get_available_cards(),
+            vec![0, 2, 3, 4]
+        );
     }
 
     #[test]
@@ -3331,7 +3721,7 @@ mod tests {
 
         // Verify boost hand state unchanged
         assert_eq!(race.participants[0].boost_hand.cards_remaining, 5);
-        assert_eq!(race.participants[0].boost_hand.current_cycle, 1);
+        assert_eq!(race.participants[0].boost_hand.pit_stops_completed, 0);
     }
 
     // ========== Boost Usage History Tests ==========
@@ -3404,15 +3794,18 @@ mod tests {
         // Initially, history should be empty
         assert_eq!(race.participants[0].boost_usage_history.len(), 0);
 
-        // Use 3 boost cards
+        // Use 3 boosts: 2 (real), 0 (free no-op), 4 (real). Boost 0 does not
+        // consume a card, so cards_remaining only drops on the real cards.
+        // Starting pool is 5; expected remaining after each: 2->4, 0->4, 4->3.
         let boost_sequence: Vec<u8> = vec![2, 0, 4];
+        let expected_remaining: [u32; 3] = [4, 4, 3];
 
         for (index, &boost_value) in boost_sequence.iter().enumerate() {
             race.process_individual_lap_action(player_uuids[0], u32::from(boost_value), &car_data)
                 .unwrap();
 
-            // Complete lap with player 2
-            race.process_individual_lap_action(player_uuids[1], u32::from(boost_value), &car_data)
+            // Complete lap with player 2 (free boost 0).
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
                 .unwrap();
 
             // Verify history record was created
@@ -3423,12 +3816,16 @@ mod tests {
                 index + 1
             );
 
-            // Verify the latest record
+            // Verify the latest record. `cycle_number` now records pit stops
+            // completed (0, since no pit happened), and replenishment never occurs.
             let latest_record = &race.participants[0].boost_usage_history[index];
             assert_eq!(latest_record.boost_value, boost_value);
             assert_eq!(latest_record.lap_number, (index + 1) as u32);
-            assert_eq!(latest_record.cycle_number, 1);
-            assert_eq!(latest_record.cards_remaining_after, 4 - index as u32);
+            assert_eq!(latest_record.cycle_number, 0);
+            assert_eq!(
+                latest_record.cards_remaining_after,
+                expected_remaining[index]
+            );
             assert!(!latest_record.replenishment_occurred);
         }
     }
@@ -3498,29 +3895,43 @@ mod tests {
             pilot,
         };
 
-        // Use all 5 boost cards to trigger replenishment
-        for card in 0..=4 {
+        // Spend the full Medium pool [2,2,3,3,4], then pit to refill. History
+        // records the pit segment (pit_stops_completed at time of use) in
+        // `cycle_number`, and `replenishment_occurred` is always false now.
+        for &card in &[2u32, 2, 3, 3, 4] {
             race.process_individual_lap_action(player_uuids[0], card, &car_data)
                 .unwrap();
-
-            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
                 .unwrap();
         }
 
-        // Verify we have 5 history records
+        // 5 records so far, all in pit segment 0, none flagged as replenished.
         assert_eq!(race.participants[0].boost_usage_history.len(), 5);
-
-        // Verify the last record shows replenishment occurred
-        let last_record = &race.participants[0].boost_usage_history[4];
-        assert_eq!(last_record.boost_value, 4);
-        assert_eq!(last_record.cycle_number, 1);
-        assert_eq!(last_record.cards_remaining_after, 5); // Replenished
-        assert!(last_record.replenishment_occurred);
-
-        // Verify earlier records don't show replenishment
-        for i in 0..4 {
-            assert!(!race.participants[0].boost_usage_history[i].replenishment_occurred);
+        for record in &race.participants[0].boost_usage_history {
+            assert_eq!(record.cycle_number, 0, "all uses are before any pit stop");
+            assert!(!record.replenishment_occurred, "no auto-replenishment");
         }
+
+        // Cards remaining counts down monotonically (no mid-sequence refill).
+        let remaining: Vec<u32> = race.participants[0]
+            .boost_usage_history
+            .iter()
+            .map(|r| r.cards_remaining_after)
+            .collect();
+        assert_eq!(remaining, vec![4, 3, 2, 1, 0]);
+
+        // Pit refills the pool; the pit itself is a free boost-0 lap.
+        race.process_individual_pit_action(player_uuids[0], None, &car_data)
+            .unwrap();
+        race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+            .unwrap();
+
+        // The pit's boost-0 usage was recorded after the refill, so its segment is 1.
+        let pit_record = race.participants[0].boost_usage_history.last().unwrap();
+        assert_eq!(pit_record.boost_value, 0);
+        assert_eq!(pit_record.cycle_number, 1, "recorded after the pit stop");
+        assert_eq!(pit_record.cards_remaining_after, 5, "pool was refilled");
+        assert!(!pit_record.replenishment_occurred);
     }
 
     #[test]
@@ -3588,49 +3999,56 @@ mod tests {
             pilot,
         };
 
-        // Complete 2 full cycles
-        // Cycle 1: use cards 0, 1, 2, 3, 4
-        for card in 0..=4 {
+        // `get_boost_cycle_summaries` now groups by pit segment (`cycle_number` =
+        // pit stops completed at time of use), since the auto-cycle mechanic is
+        // gone. Drive one segment, pit, then a second segment.
+
+        // Segment 0 (before any pit): use Medium cards 2, 3, 4 on laps 1, 2, 3.
+        for card in [2u32, 3, 4] {
             race.process_individual_lap_action(player_uuids[0], card, &car_data)
                 .unwrap();
-
-            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
                 .unwrap();
         }
 
-        // Cycle 2: use cards 4, 3, 2, 1, 0 (reverse order)
-        for card in (0..=4).rev() {
+        // Pit (free boost-0 lap, lap 4) refills the pool and bumps the segment to 1.
+        race.process_individual_pit_action(player_uuids[0], None, &car_data)
+            .unwrap();
+        race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+            .unwrap();
+
+        // Segment 1 (after the pit): use Medium cards 2, 3, 4 on laps 5, 6, 7.
+        for card in [2u32, 3, 4] {
             race.process_individual_lap_action(player_uuids[0], card, &car_data)
                 .unwrap();
-
-            race.process_individual_lap_action(player_uuids[1], card, &car_data)
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
                 .unwrap();
         }
 
-        // Get cycle summaries
+        // Get segment summaries
         let summaries = race.participants[0].get_boost_cycle_summaries();
 
-        // Should have 2 cycle summaries
+        // Should have 2 segments (segment 0 and segment 1).
         assert_eq!(summaries.len(), 2);
 
-        // Verify cycle 1 summary
-        let cycle1 = &summaries[0];
-        assert_eq!(cycle1.cycle_number, 1);
-        assert_eq!(cycle1.cards_used, vec![0, 1, 2, 3, 4]);
-        assert_eq!(cycle1.laps_in_cycle, vec![1, 2, 3, 4, 5]);
+        // Verify segment 0 summary: cards 2,3,4 on laps 1,2,3.
+        let segment0 = &summaries[0];
+        assert_eq!(segment0.cycle_number, 0);
+        assert_eq!(segment0.cards_used, vec![2, 3, 4]);
+        assert_eq!(segment0.laps_in_cycle, vec![1, 2, 3]);
         #[allow(clippy::float_cmp)]
         {
-            assert_eq!(cycle1.average_boost, 2.0); // (0+1+2+3+4)/5 = 2.0
+            assert_eq!(segment0.average_boost, 3.0); // (2+3+4)/3 = 3.0
         }
 
-        // Verify cycle 2 summary
-        let cycle2 = &summaries[1];
-        assert_eq!(cycle2.cycle_number, 2);
-        assert_eq!(cycle2.cards_used, vec![4, 3, 2, 1, 0]);
-        assert_eq!(cycle2.laps_in_cycle, vec![6, 7, 8, 9, 10]);
+        // Verify segment 1 summary: the pit's boost 0 (lap 4) then 2,3,4 (laps 5-7).
+        let segment1 = &summaries[1];
+        assert_eq!(segment1.cycle_number, 1);
+        assert_eq!(segment1.cards_used, vec![0, 2, 3, 4]);
+        assert_eq!(segment1.laps_in_cycle, vec![4, 5, 6, 7]);
         #[allow(clippy::float_cmp)]
         {
-            assert_eq!(cycle2.average_boost, 2.0); // (4+3+2+1+0)/5 = 2.0
+            assert_eq!(segment1.average_boost, 2.25); // (0+2+3+4)/4 = 2.25
         }
     }
 
@@ -3706,7 +4124,8 @@ mod tests {
             race.process_individual_lap_action(player_uuids[0], boost_value, &car_data)
                 .unwrap();
 
-            race.process_individual_lap_action(player_uuids[1], boost_value, &car_data)
+            // Player 2 plays the free boost 0 to complete the lap.
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
                 .unwrap();
         }
 
@@ -3721,12 +4140,12 @@ mod tests {
             assert_eq!(participant.get_average_boost_value(), 3.0);
         }
 
-        // Test get_boost_usage_for_cycle
-        let cycle1_usage = participant.get_boost_usage_for_cycle(1);
-        assert_eq!(cycle1_usage.len(), 3);
-        assert_eq!(cycle1_usage[0].boost_value, 3);
-        assert_eq!(cycle1_usage[1].boost_value, 4);
-        assert_eq!(cycle1_usage[2].boost_value, 2);
+        // No pit stops happened, so all usage is in segment 0.
+        let segment0_usage = participant.get_boost_usage_for_cycle(0);
+        assert_eq!(segment0_usage.len(), 3);
+        assert_eq!(segment0_usage[0].boost_value, 3);
+        assert_eq!(segment0_usage[1].boost_value, 4);
+        assert_eq!(segment0_usage[2].boost_value, 2);
     }
 
     #[test]
@@ -3794,47 +4213,60 @@ mod tests {
             pilot,
         };
 
-        // Complete 2 full cycles (10 laps)
-        for _cycle in 1..=2 {
-            for card in 0..=4 {
-                race.process_individual_lap_action(player_uuids[0], card, &car_data)
-                    .unwrap();
-
-                race.process_individual_lap_action(player_uuids[1], card, &car_data)
-                    .unwrap();
-            }
+        // Two pit segments. In each, deplete the full Medium pool [2,2,3,3,4],
+        // then pit (a free boost-0 lap) to refill before the next segment.
+        // Segment 0: laps 1-5 (cycle_number 0).
+        for &card in &[2u32, 2, 3, 3, 4] {
+            race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                .unwrap();
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+                .unwrap();
+        }
+        // Pit at lap 6 (cycle_number 1 from here on).
+        race.process_individual_pit_action(player_uuids[0], None, &car_data)
+            .unwrap();
+        race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+            .unwrap();
+        // Segment 1: laps 7-11 (cycle_number 1).
+        for &card in &[2u32, 2, 3, 3, 4] {
+            race.process_individual_lap_action(player_uuids[0], card, &car_data)
+                .unwrap();
+            race.process_individual_lap_action(player_uuids[1], 0, &car_data)
+                .unwrap();
         }
 
         let participant = &race.participants[0];
 
-        // Should have 10 history records (2 cycles * 5 cards)
-        assert_eq!(participant.boost_usage_history.len(), 10);
+        // 11 records: 5 (segment 0) + 1 (pit boost 0) + 5 (segment 1).
+        assert_eq!(participant.boost_usage_history.len(), 11);
 
-        // Verify cycle numbers in history
+        // Verify segment (cycle_number) tagging: first 5 are segment 0, the rest
+        // (including the pit's boost-0 lap) are segment 1.
         for i in 0..5 {
+            assert_eq!(participant.boost_usage_history[i].cycle_number, 0);
+        }
+        for i in 5..11 {
             assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
         }
-        for i in 5..10 {
-            assert_eq!(participant.boost_usage_history[i].cycle_number, 2);
+
+        // Replenishment flag is always false under the new semantics.
+        for record in &participant.boost_usage_history {
+            assert!(!record.replenishment_occurred);
         }
 
-        // Verify replenishment flags
-        assert!(participant.boost_usage_history[4].replenishment_occurred); // End of cycle 1
-        assert!(participant.boost_usage_history[9].replenishment_occurred); // End of cycle 2
-
-        // Get cycle summaries
+        // Get segment summaries
         let summaries = participant.get_boost_cycle_summaries();
         assert_eq!(summaries.len(), 2);
 
-        // Verify both cycles have 5 cards each
+        // Segment 0 used 5 cards; segment 1 used 6 (the pit's 0 plus 5 cards).
         assert_eq!(summaries[0].cards_used.len(), 5);
-        assert_eq!(summaries[1].cards_used.len(), 5);
+        assert_eq!(summaries[1].cards_used.len(), 6);
 
-        // Test statistics
-        assert_eq!(participant.get_total_boosts_used(), 10);
+        // Test statistics: 11 boosts, sum = (2+2+3+3+4)*2 + 0 = 28, avg = 28/11.
+        assert_eq!(participant.get_total_boosts_used(), 11);
         #[allow(clippy::float_cmp)]
         {
-            assert_eq!(participant.get_average_boost_value(), 2.0); // (0+1+2+3+4)*2 / 10 = 2.0
+            assert_eq!(participant.get_average_boost_value(), 28.0 / 11.0);
         }
     }
 

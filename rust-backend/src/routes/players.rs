@@ -62,16 +62,22 @@ pub struct PlayerResponse {
     pub message: String,
 }
 
-pub fn routes() -> Router<Database> {
+/// Player routes backed by the in-memory `MockPlayerRepository` from `AppState`.
+///
+/// Registration (in `auth.rs`) stores new players in this same repository, so
+/// these routes serve real registered players without needing a database —
+/// which is what the frontend Team page relies on. This also covers the asset
+/// mutators (cars / pilots / configuration): they previously queried a Mongo
+/// `players` collection that registered players never populated, so they 404'd
+/// for every real player. They now operate on the same store as registration.
+///
+/// TODO: protect these with `AuthMiddleware` + an ownership check — the routes
+/// currently trust the path `player_uuid`.
+pub fn team_routes() -> Router<MockAppState> {
     Router::new()
-        // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
-        // TODO: Apply middleware layers in startup.rs:
-        // 1. AuthMiddleware to validate JWT tokens and extract UserContext
-        // 2. RequireOwnership::player("player_uuid") to validate ownership
-        // Routes that require player ownership or admin role:
-        // Note: GET/PUT/DELETE on /players/:player_uuid are served by
-        // `team_routes()` (in-memory MockPlayerRepository), since that is where
-        // registration stores players. See `team_routes` below.
+        .route("/players/:player_uuid", get(get_player_by_uuid_mock))
+        .route("/players/:player_uuid", put(update_team_name_mock))
+        .route("/players/:player_uuid", delete(delete_player_mock))
         .route(
             "/players/:player_uuid/configuration",
             put(update_player_configuration),
@@ -86,18 +92,6 @@ pub fn routes() -> Router<Database> {
             "/players/:player_uuid/pilots/:pilot_uuid",
             delete(remove_pilot_from_player),
         )
-}
-
-/// Player routes backed by the in-memory `MockPlayerRepository` from `AppState`.
-///
-/// Registration (in `auth.rs`) stores new players in this same repository, so
-/// these routes serve real registered players without needing a database —
-/// which is what the frontend Team page relies on.
-pub fn team_routes() -> Router<MockAppState> {
-    Router::new()
-        .route("/players/:player_uuid", get(get_player_by_uuid_mock))
-        .route("/players/:player_uuid", put(update_team_name_mock))
-        .route("/players/:player_uuid", delete(delete_player_mock))
 }
 
 /// Get a player by UUID from the in-memory repository.
@@ -311,9 +305,9 @@ pub async fn get_player_by_email(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Updating player configuration", skip(database, payload))]
+#[tracing::instrument(name = "Updating player configuration", skip(state, payload))]
 pub async fn update_player_configuration(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<UpdatePlayerConfigurationRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -333,7 +327,29 @@ pub async fn update_player_configuration(
         }
     };
 
-    match update_player_configuration_by_uuid(&database, player_uuid, new_team_name, payload.cars)
+    // Replace the player's cars, then update the team name. Both operate on the
+    // in-memory repository where registration stores players (the same store the
+    // GET/PUT/DELETE team routes use), so configuration changes target the player
+    // that actually exists instead of an empty Mongo collection.
+    match state
+        .player_repository
+        .set_cars_by_uuid(player_uuid, payload.cars)
+        .await
+    {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            tracing::warn!("Player not found for UUID: {}", player_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to update cars: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    match state
+        .player_repository
+        .update_team_name_by_uuid(player_uuid, new_team_name)
         .await
     {
         Ok(Some(updated_player)) => {
@@ -473,9 +489,9 @@ pub async fn delete_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Adding car to player", skip(database, payload))]
+#[tracing::instrument(name = "Adding car to player", skip(state, payload))]
 pub async fn add_car_to_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddCarRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -502,7 +518,11 @@ pub async fn add_car_to_player(
         }
     };
 
-    match add_car_to_player_by_uuid(&database, player_uuid, car).await {
+    match state
+        .player_repository
+        .add_car_by_uuid(player_uuid, car)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Car added successfully to player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -537,9 +557,9 @@ pub async fn add_car_to_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Removing car from player", skip(database))]
+#[tracing::instrument(name = "Removing car from player", skip(state))]
 pub async fn remove_car_from_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path((player_uuid_str, car_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -558,7 +578,11 @@ pub async fn remove_car_from_player(
         }
     };
 
-    match remove_car_from_player_by_uuid(&database, player_uuid, car_uuid).await {
+    match state
+        .player_repository
+        .remove_car_by_uuid(player_uuid, car_uuid)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Car removed successfully from player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -593,9 +617,9 @@ pub async fn remove_car_from_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Adding pilot to player", skip(database, payload))]
+#[tracing::instrument(name = "Adding pilot to player", skip(state, payload))]
 pub async fn add_pilot_to_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddPilotRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -653,7 +677,11 @@ pub async fn add_pilot_to_player(
         }
     };
 
-    match add_pilot_to_player_by_uuid(&database, player_uuid, pilot).await {
+    match state
+        .player_repository
+        .add_pilot_by_uuid(player_uuid, pilot)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Pilot added successfully to player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -688,9 +716,9 @@ pub async fn add_pilot_to_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Removing pilot from player", skip(database))]
+#[tracing::instrument(name = "Removing pilot from player", skip(state))]
 pub async fn remove_pilot_from_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path((player_uuid_str, pilot_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -709,7 +737,11 @@ pub async fn remove_pilot_from_player(
         }
     };
 
-    match remove_pilot_from_player_by_uuid(&database, player_uuid, pilot_uuid).await {
+    match state
+        .player_repository
+        .remove_pilot_by_uuid(player_uuid, pilot_uuid)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Pilot removed successfully from player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -811,110 +843,6 @@ pub async fn delete_player_by_uuid(
     let filter = doc! { "uuid": player_uuid.to_string() };
     let result = collection.delete_one(filter, None).await?;
     Ok(result.deleted_count > 0)
-}
-
-#[tracing::instrument(
-    name = "Adding car to player by UUID in the database",
-    skip(database, car)
-)]
-pub async fn add_car_to_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    car: Car,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Removing car from player by UUID in the database",
-    skip(database)
-)]
-pub async fn remove_car_from_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    car_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$pull": { "cars": { "uuid": car_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Adding pilot to player by UUID in the database",
-    skip(database, pilot)
-)]
-pub async fn add_pilot_to_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    pilot: Pilot,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Removing pilot from player by UUID in the database",
-    skip(database)
-)]
-pub async fn remove_pilot_from_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    pilot_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-#[tracing::instrument(
-    name = "Updating player configuration by UUID in the database",
-    skip(database, new_team_name, cars)
-)]
-pub async fn update_player_configuration_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    new_team_name: TeamName,
-    cars: Vec<Car>,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "team_name": new_team_name.as_ref(),
-            "cars": mongodb::bson::to_bson(&cars)?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
-    collection
-        .find_one_and_update(filter, update, options)
-        .await
 }
 
 /* TEMPORARILY COMMENTED OUT - ADMIN FUNCTIONS HAVE TRACING FORMAT ISSUES
@@ -1045,3 +973,71 @@ async fn get_player_by_email_impl(
         }
     }
 }*/
+
+#[cfg(test)]
+mod player_asset_tests {
+    use super::*;
+    use crate::app_state::AppState;
+    use crate::domain::{Email, Password, Player, TeamName};
+    use crate::test_utils::TestAppState;
+    use axum::extract::{Path, State};
+    use axum::Json;
+
+    /// Build a `MockAppState` whose in-memory repository holds a single player
+    /// (mirroring the post-registration state), returning that player's uuid.
+    fn seeded_state_with_player() -> (MockAppState, uuid::Uuid) {
+        let email = Email::parse("driver@example.com").unwrap();
+        let password_hash = Password::new("Sup3rSecret!".to_string())
+            .unwrap()
+            .hash()
+            .unwrap();
+        let team_name = TeamName::parse("Test Team").unwrap();
+        let player = Player::new(email, password_hash, team_name, vec![], vec![]).unwrap();
+        let player_uuid = player.uuid;
+
+        let parts = TestAppState::with_test_data(vec![player], vec![], vec![]);
+        let state = AppState::new(
+            parts.player_repo,
+            parts.race_repo,
+            parts.session_repo,
+            parts.jwt_service,
+            parts.session_manager,
+        );
+        (state, player_uuid)
+    }
+
+    /// Regression for the two-store split (#3): `add_car` MUST act on the same
+    /// in-memory repository where registration stores players. Previously the
+    /// handler queried a Mongo `players` collection that registered players never
+    /// populated, so every real player got a 404. Here the player exists only in
+    /// the mock repo (as after registration); the car must be added, not 404'd.
+    #[tokio::test]
+    async fn add_car_targets_the_registration_store() {
+        let (state, player_uuid) = seeded_state_with_player();
+
+        let response = add_car_to_player(
+            State(state.clone()),
+            Path(player_uuid.to_string()),
+            Json(AddCarRequest {
+                name: "Test Car".to_string(),
+            }),
+        )
+        .await
+        .expect("adding a car to a registered player must succeed (not 404)");
+
+        assert_eq!(
+            response.0.player.cars.len(),
+            1,
+            "the car must be persisted to the player in the in-memory store"
+        );
+
+        // And it is observable on the same store the team routes read from.
+        let stored = state
+            .player_repository
+            .find_by_uuid(player_uuid)
+            .await
+            .unwrap()
+            .expect("player should still be present");
+        assert_eq!(stored.cars.len(), 1);
+    }
+}

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 
-use super::race::{BoostHand, MovementProbability, Sector};
+use super::race::{BoostHand, MovementProbability, Sector, TyreType};
 
 /// Error types for boost card operations
 #[derive(Debug, thiserror::Error, Serialize, Deserialize, ToSchema)]
@@ -23,27 +23,23 @@ pub enum BoostCardError {
 pub struct BoostUsageResult {
     pub boost_value: u8,
     pub cards_remaining: u32,
-    pub current_cycle: u32,
-    pub replenishment_occurred: bool,
+    pub pit_stops_completed: u32,
 }
 
 /// Boost availability information for API responses
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BoostAvailability {
-    /// Available boost card values
+    /// Available boost card values (always includes 0, the free no-boost move)
     pub available_cards: Vec<u8>,
 
-    /// Full hand state (for detailed view)
+    /// Remaining count per boost card value (keys "1".."4")
     /// Using String keys for `MongoDB` compatibility
-    pub hand_state: HashMap<String, bool>,
+    pub hand_state: HashMap<String, u32>,
 
-    /// Current cycle information
-    pub current_cycle: u32,
-    pub cycles_completed: u32,
+    /// Currently fitted tyre and pit-stop count
+    pub tyre_type: TyreType,
+    pub pit_stops_completed: u32,
     pub cards_remaining: u32,
-
-    /// Replenishment indicator (cards remaining until replenish)
-    pub next_replenishment_at: Option<u32>,
 
     /// Performance preview for available cards only
     pub boost_impact_preview: Vec<BoostImpactOption>,
@@ -64,7 +60,7 @@ pub struct BoostCardErrorResponse {
     pub error_code: String,
     pub message: String,
     pub available_cards: Vec<u8>,
-    pub current_cycle: u32,
+    pub pit_stops_completed: u32,
     pub cards_remaining: u32,
 }
 
@@ -89,7 +85,7 @@ impl BoostCardErrorResponse {
             error_code,
             message,
             available_cards: boost_hand.get_available_cards(),
-            current_cycle: boost_hand.current_cycle,
+            pit_stops_completed: boost_hand.pit_stops_completed,
             cards_remaining: boost_hand.cards_remaining,
         }
     }
@@ -101,7 +97,8 @@ pub struct BoostHandManager;
 impl BoostHandManager {
     /// Validate boost card selection
     ///
-    /// Checks if the selected boost card is valid and available in the hand
+    /// Checks if the selected boost card is valid and available in the hand.
+    /// Boost value 0 (the free no-boost move) is always valid.
     ///
     /// # Arguments
     /// * `boost_hand` - The player's boost hand
@@ -132,8 +129,9 @@ impl BoostHandManager {
 
     /// Process boost card usage
     ///
-    /// Validates the boost card selection, marks it as used, and triggers
-    /// replenishment if all cards have been used.
+    /// Validates the boost card selection and consumes one matching card.
+    /// Boost value 0 is a free no-op. The pool does NOT auto-replenish; only a
+    /// pit stop (`BoostHand::refill`) restores cards.
     ///
     /// # Arguments
     /// * `boost_hand` - Mutable reference to the player's boost hand
@@ -149,10 +147,7 @@ impl BoostHandManager {
         // Validate first
         Self::validate_boost_selection(boost_hand, boost_value)?;
 
-        // Track state before using card
-        let cards_before = boost_hand.cards_remaining;
-
-        // Use the card
+        // Use the card (boost 0 is a free no-op; the pool does not auto-replenish)
         boost_hand
             .use_card(boost_value)
             .map_err(|_| BoostCardError::CardNotAvailable {
@@ -160,23 +155,17 @@ impl BoostHandManager {
                 available_cards: boost_hand.get_available_cards(),
             })?;
 
-        // Check if replenishment occurred
-        // Replenishment happens when all cards were used (cards_before was 1)
-        // and now cards_remaining is 5 again
-        let replenishment_occurred = cards_before == 1 && boost_hand.cards_remaining == 5;
-
         Ok(BoostUsageResult {
             boost_value,
             cards_remaining: boost_hand.cards_remaining,
-            current_cycle: boost_hand.current_cycle,
-            replenishment_occurred,
+            pit_stops_completed: boost_hand.pit_stops_completed,
         })
     }
 
     /// Get boost availability for API response
     ///
     /// Generates a comprehensive boost availability response including
-    /// available cards, hand state, cycle information, and performance
+    /// available cards, hand state, tyre/pit information, and performance
     /// impact preview for each boost option.
     ///
     /// # Arguments
@@ -199,11 +188,10 @@ impl BoostHandManager {
             .map(|boost| {
                 let is_available = boost_hand.is_card_available(boost);
 
-                // Calculate predicted final value with boost
+                // Calculate predicted final value with boost. Additive model,
+                // matching lap resolution: final = min(base, max) + boost.
                 let capped_base = std::cmp::min(base_performance, current_sector.max_value);
-                let boost_multiplier = 1.0 + (f64::from(boost) * 0.08);
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let predicted_final = (f64::from(capped_base) * boost_multiplier).round() as u32;
+                let predicted_final = capped_base + u32::from(boost);
 
                 // Calculate movement probability
                 let movement_probability =
@@ -221,14 +209,9 @@ impl BoostHandManager {
         BoostAvailability {
             available_cards,
             hand_state: boost_hand.cards.clone(),
-            current_cycle: boost_hand.current_cycle,
-            cycles_completed: boost_hand.cycles_completed,
+            tyre_type: boost_hand.tyre_type,
+            pit_stops_completed: boost_hand.pit_stops_completed,
             cards_remaining: boost_hand.cards_remaining,
-            next_replenishment_at: if boost_hand.cards_remaining > 0 {
-                Some(boost_hand.cards_remaining)
-            } else {
-                None
-            },
             boost_impact_preview,
         }
     }
@@ -257,8 +240,9 @@ mod tests {
     use super::*;
     use crate::domain::race::SectorType;
 
+    // Medium tyre pool is [2, 2, 3, 3, 4] -> counts {2:2, 3:2, 4:1}, 5 cards.
     fn create_test_boost_hand() -> BoostHand {
-        BoostHand::new()
+        BoostHand::with_tyre(TyreType::Medium)
     }
 
     fn create_test_sector() -> Sector {
@@ -273,30 +257,44 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_boost_selection_valid() {
-        let hand = create_test_boost_hand();
-
-        // All cards should be valid initially
-        for i in 0..=4 {
-            let result = BoostHandManager::validate_boost_selection(&hand, i);
-            assert!(result.is_ok(), "Card {i} should be valid");
+    fn test_validate_boost_zero_always_available() {
+        let mut hand = create_test_boost_hand();
+        // Spend the whole pool; 0 must still validate.
+        for value in [2, 2, 3, 3, 4] {
+            hand.use_card(value).unwrap();
         }
+        assert_eq!(hand.cards_remaining, 0);
+        assert!(BoostHandManager::validate_boost_selection(&hand, 0).is_ok());
+    }
+
+    #[test]
+    fn test_validate_boost_selection_pool_values() {
+        let hand = create_test_boost_hand();
+        // Values present in the Medium pool (plus the free 0) validate.
+        for value in [0, 2, 3, 4] {
+            assert!(
+                BoostHandManager::validate_boost_selection(&hand, value).is_ok(),
+                "Card {value} should be valid"
+            );
+        }
+        // Value 1 is not in the Medium pool.
+        assert!(matches!(
+            BoostHandManager::validate_boost_selection(&hand, 1).unwrap_err(),
+            BoostCardError::CardNotAvailable { boost_value: 1, .. }
+        ));
     }
 
     #[test]
     fn test_validate_boost_selection_invalid_value() {
         let hand = create_test_boost_hand();
 
-        // Test invalid boost values
         let result = BoostHandManager::validate_boost_selection(&hand, 5);
-        assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
             BoostCardError::InvalidBoostValue(5)
         ));
 
         let result = BoostHandManager::validate_boost_selection(&hand, 10);
-        assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
             BoostCardError::InvalidBoostValue(10)
@@ -307,21 +305,18 @@ mod tests {
     fn test_validate_boost_selection_unavailable_card() {
         let mut hand = create_test_boost_hand();
 
-        // Use card 2
-        hand.use_card(2).unwrap();
+        // Use the single value-4 card; it should now be unavailable.
+        hand.use_card(4).unwrap();
 
-        // Card 2 should now be unavailable
-        let result = BoostHandManager::validate_boost_selection(&hand, 2);
-        assert!(result.is_err());
-
+        let result = BoostHandManager::validate_boost_selection(&hand, 4);
         match result.unwrap_err() {
             BoostCardError::CardNotAvailable {
                 boost_value,
                 available_cards,
             } => {
-                assert_eq!(boost_value, 2);
-                assert_eq!(available_cards.len(), 4);
-                assert!(!available_cards.contains(&2));
+                assert_eq!(boost_value, 4);
+                assert!(!available_cards.contains(&4));
+                assert!(available_cards.contains(&0), "0 is always available");
             }
             _ => panic!("Expected CardNotAvailable error"),
         }
@@ -331,74 +326,58 @@ mod tests {
     fn test_use_boost_card_success() {
         let mut hand = create_test_boost_hand();
 
-        let result = BoostHandManager::use_boost_card(&mut hand, 3);
-        assert!(result.is_ok());
-
-        let usage_result = result.unwrap();
-        assert_eq!(usage_result.boost_value, 3);
+        let usage_result = BoostHandManager::use_boost_card(&mut hand, 2).unwrap();
+        assert_eq!(usage_result.boost_value, 2);
         assert_eq!(usage_result.cards_remaining, 4);
-        assert_eq!(usage_result.current_cycle, 1);
-        assert!(!usage_result.replenishment_occurred);
+        assert_eq!(usage_result.pit_stops_completed, 0);
 
-        // Verify card is now unavailable
-        assert!(!hand.is_card_available(3));
+        // One value-2 card remains, so 2 is still available.
+        assert!(hand.is_card_available(2));
     }
 
     #[test]
-    fn test_use_boost_card_triggers_replenishment() {
+    fn test_use_boost_card_depletes_duplicate() {
         let mut hand = create_test_boost_hand();
 
-        // Use 4 cards
-        BoostHandManager::use_boost_card(&mut hand, 0).unwrap();
-        BoostHandManager::use_boost_card(&mut hand, 1).unwrap();
+        // Two value-2 cards: spend both.
         BoostHandManager::use_boost_card(&mut hand, 2).unwrap();
-        BoostHandManager::use_boost_card(&mut hand, 3).unwrap();
+        BoostHandManager::use_boost_card(&mut hand, 2).unwrap();
 
-        // Use last card - should trigger replenishment
-        let result = BoostHandManager::use_boost_card(&mut hand, 4);
-        assert!(result.is_ok());
+        assert!(!hand.is_card_available(2));
+        let err = BoostHandManager::use_boost_card(&mut hand, 2).unwrap_err();
+        assert!(matches!(
+            err,
+            BoostCardError::CardNotAvailable { boost_value: 2, .. }
+        ));
+    }
 
-        let usage_result = result.unwrap();
-        assert_eq!(usage_result.cards_remaining, 5);
-        assert_eq!(usage_result.current_cycle, 2);
-        assert!(usage_result.replenishment_occurred);
+    #[test]
+    fn test_use_boost_card_no_auto_replenish() {
+        let mut hand = create_test_boost_hand();
 
-        // All cards should be available again
-        for i in 0..=4 {
-            assert!(hand.is_card_available(i));
+        // Spend the whole pool.
+        for value in [2, 2, 3, 3, 4] {
+            BoostHandManager::use_boost_card(&mut hand, value).unwrap();
         }
+
+        assert_eq!(hand.cards_remaining, 0);
+        assert_eq!(hand.pit_stops_completed, 0, "No pit stop occurred");
+        // Only the free 0 remains.
+        assert_eq!(hand.get_available_cards(), vec![0]);
+        // Boost 0 is still usable for free.
+        assert!(BoostHandManager::use_boost_card(&mut hand, 0).is_ok());
+        assert_eq!(hand.cards_remaining, 0);
     }
 
     #[test]
     fn test_use_boost_card_invalid() {
         let mut hand = create_test_boost_hand();
 
-        // Try to use invalid card
         let result = BoostHandManager::use_boost_card(&mut hand, 5);
-        assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
             BoostCardError::InvalidBoostValue(5)
         ));
-    }
-
-    #[test]
-    fn test_use_boost_card_unavailable() {
-        let mut hand = create_test_boost_hand();
-
-        // Use card 2
-        BoostHandManager::use_boost_card(&mut hand, 2).unwrap();
-
-        // Try to use card 2 again
-        let result = BoostHandManager::use_boost_card(&mut hand, 2);
-        assert!(result.is_err());
-
-        match result.unwrap_err() {
-            BoostCardError::CardNotAvailable { boost_value, .. } => {
-                assert_eq!(boost_value, 2);
-            }
-            _ => panic!("Expected CardNotAvailable error"),
-        }
     }
 
     #[test]
@@ -410,32 +389,19 @@ mod tests {
         let availability =
             BoostHandManager::get_boost_availability(&hand, &sector, base_performance);
 
-        // Verify basic fields
-        assert_eq!(availability.available_cards.len(), 5);
-        assert_eq!(availability.current_cycle, 1);
-        assert_eq!(availability.cycles_completed, 0);
+        assert_eq!(availability.tyre_type, TyreType::Medium);
+        assert_eq!(availability.pit_stops_completed, 0);
         assert_eq!(availability.cards_remaining, 5);
-        assert_eq!(availability.next_replenishment_at, Some(5));
 
-        // Verify boost impact preview
+        // Preview always covers 0-4.
         assert_eq!(availability.boost_impact_preview.len(), 5);
 
-        // All cards should be available
         for option in &availability.boost_impact_preview {
-            assert!(option.is_available);
-        }
-
-        // Verify predicted values increase with boost
-        let values: Vec<u32> = availability
-            .boost_impact_preview
-            .iter()
-            .map(|o| o.predicted_final_value)
-            .collect();
-
-        for i in 1..values.len() {
-            assert!(
-                values[i] >= values[i - 1],
-                "Values should increase with boost"
+            let expected_available = matches!(option.boost_value, 0 | 2 | 3 | 4);
+            assert_eq!(
+                option.is_available, expected_available,
+                "Availability mismatch for boost {}",
+                option.boost_value
             );
         }
     }
@@ -446,29 +412,19 @@ mod tests {
         let sector = create_test_sector();
         let base_performance = 15;
 
-        // Use some cards
-        hand.use_card(1).unwrap();
-        hand.use_card(3).unwrap();
+        // Use the value-4 card.
+        hand.use_card(4).unwrap();
 
         let availability =
             BoostHandManager::get_boost_availability(&hand, &sector, base_performance);
 
-        // Verify available cards
-        assert_eq!(availability.available_cards.len(), 3);
+        assert_eq!(availability.cards_remaining, 4);
         assert!(availability.available_cards.contains(&0));
-        assert!(availability.available_cards.contains(&2));
-        assert!(availability.available_cards.contains(&4));
+        assert!(!availability.available_cards.contains(&4));
 
-        // Verify cards_remaining
-        assert_eq!(availability.cards_remaining, 3);
-        assert_eq!(availability.next_replenishment_at, Some(3));
-
-        // Verify boost impact preview shows correct availability
         for option in &availability.boost_impact_preview {
-            if option.boost_value == 1 || option.boost_value == 3 {
-                assert!(!option.is_available, "Used cards should not be available");
-            } else {
-                assert!(option.is_available, "Unused cards should be available");
+            if option.boost_value == 4 {
+                assert!(!option.is_available, "Spent value-4 card is unavailable");
             }
         }
     }
@@ -477,15 +433,12 @@ mod tests {
     fn test_calculate_movement_probability() {
         let sector = create_test_sector(); // min: 10, max: 20
 
-        // Test move down (below min)
         let prob = BoostHandManager::calculate_movement_probability(5, &sector);
         assert!(matches!(prob, MovementProbability::MoveDown));
 
-        // Test stay (within range)
         let prob = BoostHandManager::calculate_movement_probability(15, &sector);
         assert!(matches!(prob, MovementProbability::Stay));
 
-        // Test move up (above max)
         let prob = BoostHandManager::calculate_movement_probability(25, &sector);
         assert!(matches!(prob, MovementProbability::MoveUp));
     }
@@ -494,30 +447,28 @@ mod tests {
     fn test_boost_card_error_response_from_error() {
         let hand = create_test_boost_hand();
 
-        // Test InvalidBoostValue error
+        // InvalidBoostValue error
         let error = BoostCardError::InvalidBoostValue(5);
         let response = BoostCardErrorResponse::from_error(&error, &hand);
 
         assert_eq!(response.error_code, "INVALID_BOOST_VALUE");
         assert!(response.message.contains("Invalid boost value"));
-        assert_eq!(response.available_cards.len(), 5);
-        assert_eq!(response.current_cycle, 1);
+        assert_eq!(response.pit_stops_completed, 0);
         assert_eq!(response.cards_remaining, 5);
 
-        // Test CardNotAvailable error
+        // CardNotAvailable error
         let mut hand = create_test_boost_hand();
-        hand.use_card(2).unwrap();
+        hand.use_card(4).unwrap();
 
         let error = BoostCardError::CardNotAvailable {
-            boost_value: 2,
+            boost_value: 4,
             available_cards: hand.get_available_cards(),
         };
         let response = BoostCardErrorResponse::from_error(&error, &hand);
 
         assert_eq!(response.error_code, "BOOST_CARD_NOT_AVAILABLE");
         assert!(response.message.contains("not available"));
-        assert_eq!(response.available_cards.len(), 4);
-        assert!(!response.available_cards.contains(&2));
+        assert!(!response.available_cards.contains(&4));
     }
 
     #[test]
@@ -529,25 +480,11 @@ mod tests {
         let availability =
             BoostHandManager::get_boost_availability(&hand, &sector, base_performance);
 
-        // Verify boost calculations
-        // Base is 15, capped to sector max (20)
-        // Boost 0: 15 * 1.0 = 15 (Stay)
-        // Boost 1: 15 * 1.08 = 16.2 ≈ 16 (Stay)
-        // Boost 2: 15 * 1.16 = 17.4 ≈ 17 (Stay)
-        // Boost 3: 15 * 1.24 = 18.6 ≈ 19 (Stay)
-        // Boost 4: 15 * 1.32 = 19.8 ≈ 20 (Stay)
-
+        // Additive model: final = min(base, max) + boost. Base 15 (under ceiling 20).
         for option in &availability.boost_impact_preview {
-            let expected_multiplier = 1.0 + (f64::from(option.boost_value) * 0.08);
-            let expected_value = (15.0 * expected_multiplier).round() as u32;
-
-            assert_eq!(
-                option.predicted_final_value, expected_value,
-                "Boost {} should produce value {}",
-                option.boost_value, expected_value
-            );
-
-            // All should stay in sector (values 15-20 are within 10-20 range)
+            let expected_value = 15 + u32::from(option.boost_value);
+            assert_eq!(option.predicted_final_value, expected_value);
+            // Values 15-19 all stay within the 10-20 range.
             assert!(matches!(
                 option.movement_probability,
                 MovementProbability::Stay

@@ -4,9 +4,8 @@
 
 use rust_backend::domain::{
     boost_hand_manager::{BoostAvailability, BoostImpactOption, BoostUsageResult},
-    BoostHand, BoostUsageRecord, MovementProbability, Race, Sector, SectorType, Track,
+    BoostHand, BoostUsageRecord, MovementProbability, Race, Sector, SectorType, Track, TyreType,
 };
-use std::collections::HashMap;
 use uuid::Uuid;
 
 // Helper function to create a test track
@@ -60,52 +59,81 @@ fn create_test_race_with_participants(participant_count: usize) -> (Race, Vec<Uu
 }
 
 #[test]
-fn test_boost_hand_initializes_with_all_cards_available() {
+fn test_boost_hand_initializes_with_medium_pool() {
     // Arrange
     let (race, _player_uuids) = create_test_race_with_participants(1);
     let participant = &race.participants[0];
 
-    // Assert - Verify boost hand is initialized correctly
+    // Assert - Default (Medium) pool is [2, 2, 3, 3, 4] -> 5 cards.
+    assert_eq!(participant.boost_hand.tyre_type, TyreType::Medium);
     assert_eq!(participant.boost_hand.cards_remaining, 5);
-    assert_eq!(participant.boost_hand.current_cycle, 1);
-    assert_eq!(participant.boost_hand.cycles_completed, 0);
+    assert_eq!(participant.boost_hand.pit_stops_completed, 0);
 
-    // Verify all cards 0-4 are available
-    for i in 0..=4 {
-        assert!(participant.boost_hand.is_card_available(i));
+    // Boost 0 (free no-op) plus the Medium pool values are available; 1 is not.
+    for value in [0, 2, 3, 4] {
+        assert!(participant.boost_hand.is_card_available(value));
     }
+    assert!(!participant.boost_hand.is_card_available(1));
 
     let available_cards = participant.boost_hand.get_available_cards();
-    assert_eq!(available_cards, vec![0, 1, 2, 3, 4]);
+    assert_eq!(available_cards, vec![0, 2, 3, 4]);
 }
 
 #[test]
-fn test_using_boost_card_marks_it_unavailable() {
+fn test_using_boost_card_decrements_count() {
     // Arrange
     let (mut race, player_uuids) = create_test_race_with_participants(1);
     let player_uuid = player_uuids[0];
 
-    // Act - Use boost card 2
+    // Act - Use boost card 4 (single copy in the Medium pool)
     let participant = race
         .participants
         .iter_mut()
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    let result = participant.boost_hand.use_card(2);
+    let result = participant.boost_hand.use_card(4);
     assert!(result.is_ok());
 
-    // Assert - Verify boost hand state updated
+    // Assert - Verify boost hand state updated. The lone value-4 card is gone.
     assert_eq!(participant.boost_hand.cards_remaining, 4);
-    assert!(!participant.boost_hand.is_card_available(2));
+    assert!(!participant.boost_hand.is_card_available(4));
 
     let available_cards = participant.boost_hand.get_available_cards();
-    assert_eq!(available_cards.len(), 4);
+    // 0 is always present, plus the remaining 2s and 3s.
+    assert_eq!(available_cards, vec![0, 2, 3]);
+    assert!(!available_cards.contains(&4));
+}
+
+#[test]
+fn test_duplicate_card_can_be_used_until_depleted() {
+    // Arrange - Medium pool has two value-2 cards.
+    let (mut race, player_uuids) = create_test_race_with_participants(1);
+    let player_uuid = player_uuids[0];
+
+    let participant = race
+        .participants
+        .iter_mut()
+        .find(|p| p.player_uuid == player_uuid)
+        .unwrap();
+
+    // Act - Use boost card 2 twice (both copies)
+    assert!(participant.boost_hand.use_card(2).is_ok());
+    // One copy remains, still available.
+    assert!(participant.boost_hand.is_card_available(2));
+    assert!(participant.boost_hand.use_card(2).is_ok());
+
+    // Now depleted; a third use fails.
+    let result3 = participant.boost_hand.use_card(2);
+    assert!(result3.is_err());
+    assert_eq!(result3.unwrap_err(), "Boost card 2 is not available");
+
+    let available_cards = participant.boost_hand.get_available_cards();
     assert!(!available_cards.contains(&2));
 }
 
 #[test]
-fn test_cannot_use_same_boost_card_twice() {
+fn test_boost_zero_is_always_free_and_never_decrements() {
     // Arrange
     let (mut race, player_uuids) = create_test_race_with_participants(1);
     let player_uuid = player_uuids[0];
@@ -116,23 +144,24 @@ fn test_cannot_use_same_boost_card_twice() {
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    // Act - Use boost card 3
-    let result1 = participant.boost_hand.use_card(3);
-    assert!(result1.is_ok());
+    // Act - Spend the entire Medium pool [2, 2, 3, 3, 4].
+    for value in [2, 2, 3, 3, 4] {
+        participant.boost_hand.use_card(value).unwrap();
+    }
 
-    // Try to use boost card 3 again
-    let result2 = participant.boost_hand.use_card(3);
+    // Assert - No auto-replenish. Only the free 0 remains.
+    assert_eq!(participant.boost_hand.cards_remaining, 0);
+    assert_eq!(participant.boost_hand.pit_stops_completed, 0);
+    assert_eq!(participant.boost_hand.get_available_cards(), vec![0]);
 
-    // Assert - Should return error
-    assert!(result2.is_err());
-    assert_eq!(result2.unwrap_err(), "Boost card 3 is not available");
-
-    let available_cards = participant.boost_hand.get_available_cards();
-    assert!(!available_cards.contains(&3));
+    // Boost 0 is still usable for free and does NOT decrement cards_remaining.
+    assert!(participant.boost_hand.use_card(0).is_ok());
+    assert!(participant.boost_hand.use_card(0).is_ok());
+    assert_eq!(participant.boost_hand.cards_remaining, 0);
 }
 
 #[test]
-fn test_boost_hand_replenishes_after_all_cards_used() {
+fn test_pit_refill_restores_pool() {
     // Arrange
     let (mut race, player_uuids) = create_test_race_with_participants(1);
     let player_uuid = player_uuids[0];
@@ -143,24 +172,25 @@ fn test_boost_hand_replenishes_after_all_cards_used() {
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    // Act - Use all 5 boost cards
-    for boost_value in 0..=4 {
-        let result = participant.boost_hand.use_card(boost_value);
-        assert!(result.is_ok(), "Failed to use boost card {boost_value}");
+    // Act - Spend the whole Medium pool, then pit-refill onto Soft tyres.
+    for value in [2, 2, 3, 3, 4] {
+        participant.boost_hand.use_card(value).unwrap();
     }
+    assert_eq!(participant.boost_hand.cards_remaining, 0);
 
-    // Assert - Verify replenishment occurred
+    participant.boost_hand.refill(TyreType::Soft);
+
+    // Assert - Soft pool is [3, 4, 4] -> 3 cards; pit count incremented.
+    assert_eq!(participant.boost_hand.tyre_type, TyreType::Soft);
+    assert_eq!(participant.boost_hand.cards_remaining, 3);
+    assert_eq!(participant.boost_hand.pit_stops_completed, 1);
+    assert_eq!(participant.boost_hand.get_available_cards(), vec![0, 3, 4]);
+
+    // A second refill keeps incrementing the pit count.
+    participant.boost_hand.refill(TyreType::Medium);
+    assert_eq!(participant.boost_hand.tyre_type, TyreType::Medium);
     assert_eq!(participant.boost_hand.cards_remaining, 5);
-    assert_eq!(participant.boost_hand.current_cycle, 2);
-    assert_eq!(participant.boost_hand.cycles_completed, 1);
-
-    let available_cards = participant.boost_hand.get_available_cards();
-    assert_eq!(available_cards.len(), 5);
-
-    // All cards should be available again
-    for i in 0..=4 {
-        assert!(participant.boost_hand.is_card_available(i));
-    }
+    assert_eq!(participant.boost_hand.pit_stops_completed, 2);
 }
 
 #[test]
@@ -169,7 +199,7 @@ fn test_boost_hand_state_persists_across_operations() {
     let (mut race, player_uuids) = create_test_race_with_participants(1);
     let player_uuid = player_uuids[0];
 
-    // Act - Use some boost cards
+    // Act - Use some boost cards (valid Medium-pool values).
     {
         let participant = race
             .participants
@@ -177,7 +207,7 @@ fn test_boost_hand_state_persists_across_operations() {
             .find(|p| p.player_uuid == player_uuid)
             .unwrap();
 
-        participant.boost_hand.use_card(1).unwrap();
+        participant.boost_hand.use_card(2).unwrap();
         participant.boost_hand.use_card(3).unwrap();
     }
 
@@ -191,12 +221,8 @@ fn test_boost_hand_state_persists_across_operations() {
     assert_eq!(participant.boost_hand.cards_remaining, 3);
 
     let available_cards = participant.boost_hand.get_available_cards();
-    assert_eq!(available_cards.len(), 3);
-    assert!(available_cards.contains(&0));
-    assert!(available_cards.contains(&2));
-    assert!(available_cards.contains(&4));
-    assert!(!available_cards.contains(&1));
-    assert!(!available_cards.contains(&3));
+    // One 2, one 3, and the lone 4 remain, plus the free 0.
+    assert_eq!(available_cards, vec![0, 2, 3, 4]);
 }
 
 #[test]
@@ -216,11 +242,13 @@ fn test_boost_usage_history_tracks_all_usages() {
     for (lap_number, &boost_value) in boost_sequence.iter().enumerate() {
         participant.boost_hand.use_card(boost_value).unwrap();
 
-        // Manually add to history (simulating what the race engine would do)
+        // Manually add to history (simulating what the race engine would do).
+        // `cycle_number` is the pit segment (pit_stops_completed at time of use),
+        // which is 0 before any pit stop.
         let usage_record = BoostUsageRecord {
             boost_value,
             lap_number: (lap_number + 1) as u32,
-            cycle_number: participant.boost_hand.current_cycle,
+            cycle_number: participant.boost_hand.pit_stops_completed,
             cards_remaining_after: participant.boost_hand.cards_remaining,
             replenishment_occurred: false,
         };
@@ -232,7 +260,7 @@ fn test_boost_usage_history_tracks_all_usages() {
 
     for (i, &boost_value) in boost_sequence.iter().enumerate() {
         assert_eq!(participant.boost_usage_history[i].boost_value, boost_value);
-        assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
+        assert_eq!(participant.boost_usage_history[i].cycle_number, 0);
         assert_eq!(
             participant.boost_usage_history[i].lap_number,
             (i + 1) as u32
@@ -252,14 +280,15 @@ fn test_invalid_boost_value_handling() {
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    // Act & Assert - Try to use invalid boost values
+    // Act & Assert - Out-of-pool / out-of-range values are unavailable.
+    assert!(!participant.boost_hand.is_card_available(1)); // not in Medium pool
     assert!(!participant.boost_hand.is_card_available(5));
     assert!(!participant.boost_hand.is_card_available(10));
     assert!(!participant.boost_hand.is_card_available(255));
 
-    // Valid cards should still be available
-    for i in 0..=4 {
-        assert!(participant.boost_hand.is_card_available(i));
+    // Free move and Medium-pool values are available.
+    for value in [0, 2, 3, 4] {
+        assert!(participant.boost_hand.is_card_available(value));
     }
 }
 
@@ -272,17 +301,10 @@ fn test_boost_availability_response_structure() {
     // Act - Create boost availability response
     let boost_availability = BoostAvailability {
         cards_remaining: participant.boost_hand.cards_remaining,
-        current_cycle: participant.boost_hand.current_cycle,
-        cycles_completed: participant.boost_hand.cycles_completed,
+        tyre_type: participant.boost_hand.tyre_type,
+        pit_stops_completed: participant.boost_hand.pit_stops_completed,
         available_cards: participant.boost_hand.get_available_cards(),
-        hand_state: {
-            let mut hand_state = HashMap::new();
-            for i in 0..=4 {
-                hand_state.insert(i.to_string(), participant.boost_hand.is_card_available(i));
-            }
-            hand_state
-        },
-        next_replenishment_at: Some(5 - participant.boost_hand.cards_remaining),
+        hand_state: participant.boost_hand.cards.clone(),
         boost_impact_preview: (0..=4)
             .map(|boost_value| BoostImpactOption {
                 boost_value,
@@ -295,19 +317,20 @@ fn test_boost_availability_response_structure() {
 
     // Assert - Verify response structure
     assert_eq!(boost_availability.cards_remaining, 5);
-    assert_eq!(boost_availability.current_cycle, 1);
-    assert_eq!(boost_availability.cycles_completed, 0);
-    assert_eq!(boost_availability.available_cards.len(), 5);
+    assert_eq!(boost_availability.tyre_type, TyreType::Medium);
+    assert_eq!(boost_availability.pit_stops_completed, 0);
+    assert_eq!(boost_availability.available_cards, vec![0, 2, 3, 4]);
     assert_eq!(boost_availability.boost_impact_preview.len(), 5);
 
-    // All cards should be available initially
+    // Cards 0, 2, 3, 4 available; 1 is not (not in Medium pool).
     for option in &boost_availability.boost_impact_preview {
-        assert!(option.is_available);
+        let expected = matches!(option.boost_value, 0 | 2 | 3 | 4);
+        assert_eq!(option.is_available, expected);
     }
 }
 
 #[test]
-fn test_multiple_cycles_track_correctly() {
+fn test_pit_segments_track_correctly_in_history() {
     // Arrange
     let (mut race, player_uuids) = create_test_race_with_participants(1);
     let player_uuid = player_uuids[0];
@@ -318,22 +341,44 @@ fn test_multiple_cycles_track_correctly() {
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    // Act - Complete first cycle
-    for boost_value in 0..=4 {
+    // Act - Spend the whole pool (segment 0), pit-refill, then use more (segment 1).
+    let segment0 = [2, 2, 3, 3, 4];
+    for (lap_number, &boost_value) in segment0.iter().enumerate() {
         participant.boost_hand.use_card(boost_value).unwrap();
+        participant.boost_usage_history.push(BoostUsageRecord {
+            boost_value,
+            lap_number: (lap_number + 1) as u32,
+            cycle_number: participant.boost_hand.pit_stops_completed,
+            cards_remaining_after: participant.boost_hand.cards_remaining,
+            replenishment_occurred: false,
+        });
     }
 
-    // Use some cards from second cycle
-    participant.boost_hand.use_card(1).unwrap();
-    participant.boost_hand.use_card(4).unwrap();
+    participant.boost_hand.refill(TyreType::Medium);
 
-    // Assert - Verify cycle tracking
-    assert_eq!(participant.boost_hand.current_cycle, 2);
-    assert_eq!(participant.boost_hand.cycles_completed, 1);
+    let segment1 = [2, 4];
+    for (offset, &boost_value) in segment1.iter().enumerate() {
+        participant.boost_hand.use_card(boost_value).unwrap();
+        participant.boost_usage_history.push(BoostUsageRecord {
+            boost_value,
+            lap_number: (segment0.len() + offset + 1) as u32,
+            cycle_number: participant.boost_hand.pit_stops_completed,
+            cards_remaining_after: participant.boost_hand.cards_remaining,
+            replenishment_occurred: false,
+        });
+    }
+
+    // Assert - Segment tagging via cycle_number (= pit_stops_completed).
+    assert_eq!(participant.boost_hand.pit_stops_completed, 1);
     assert_eq!(participant.boost_hand.cards_remaining, 3);
+    assert_eq!(participant.boost_usage_history.len(), 7);
 
-    let available_cards = participant.boost_hand.get_available_cards();
-    assert_eq!(available_cards, vec![0, 2, 3]);
+    for i in 0..5 {
+        assert_eq!(participant.boost_usage_history[i].cycle_number, 0);
+    }
+    for i in 5..7 {
+        assert_eq!(participant.boost_usage_history[i].cycle_number, 1);
+    }
 }
 
 #[test]
@@ -348,18 +393,19 @@ fn test_boost_cycle_summaries_calculated_correctly() {
         .find(|p| p.player_uuid == player_uuid)
         .unwrap();
 
-    // Act - Complete first cycle with specific sequence and track history
-    let boost_sequence = vec![2, 0, 4, 1, 3];
+    // Act - Spend the whole Medium pool in a specific order and track history.
+    // All uses are in pit segment 0 (no pit stop yet); summaries group by
+    // `cycle_number`, which is now the pit segment.
+    let boost_sequence = vec![2, 0, 4, 3, 2];
     for (lap_number, &boost_value) in boost_sequence.iter().enumerate() {
         participant.boost_hand.use_card(boost_value).unwrap();
 
-        // Manually add to history
         let usage_record = BoostUsageRecord {
             boost_value,
             lap_number: (lap_number + 1) as u32,
-            cycle_number: 1, // First cycle
+            cycle_number: participant.boost_hand.pit_stops_completed,
             cards_remaining_after: participant.boost_hand.cards_remaining,
-            replenishment_occurred: lap_number == 4, // Last card triggers replenishment
+            replenishment_occurred: false,
         };
         participant.boost_usage_history.push(usage_record);
     }
@@ -369,12 +415,12 @@ fn test_boost_cycle_summaries_calculated_correctly() {
     assert_eq!(cycle_summaries.len(), 1);
 
     let cycle1 = &cycle_summaries[0];
-    assert_eq!(cycle1.cycle_number, 1);
+    assert_eq!(cycle1.cycle_number, 0);
     assert_eq!(cycle1.cards_used, boost_sequence);
     assert_eq!(cycle1.laps_in_cycle, vec![1, 2, 3, 4, 5]);
 
     // Verify average boost
-    let expected_average = (2.0 + 0.0 + 4.0 + 1.0 + 3.0) / 5.0;
+    let expected_average = (2.0 + 0.0 + 4.0 + 3.0 + 2.0) / 5.0;
     assert!((cycle1.average_boost - expected_average).abs() < 0.01);
 }
 
@@ -385,7 +431,7 @@ fn test_concurrent_players_have_independent_boost_hands() {
     let player1_uuid = player_uuids[0];
     let player2_uuid = player_uuids[1];
 
-    // Act - Both players use boost card 2
+    // Act - Both players use boost card 2 (valid Medium-pool value)
     {
         let participant1 = race
             .participants
@@ -416,11 +462,12 @@ fn test_concurrent_players_have_independent_boost_hands() {
         .find(|p| p.player_uuid == player2_uuid)
         .unwrap();
 
-    // Verify each player's boost hand is independent
+    // Verify each player's boost hand is independent. One value-2 card remains
+    // for each (the pool has two), so 2 is still available.
     assert_eq!(participant1.boost_hand.cards_remaining, 4);
     assert_eq!(participant2.boost_hand.cards_remaining, 4);
-    assert!(!participant1.boost_hand.is_card_available(2));
-    assert!(!participant2.boost_hand.is_card_available(2));
+    assert!(participant1.boost_hand.is_card_available(2));
+    assert!(participant2.boost_hand.is_card_available(2));
 }
 
 #[test]
@@ -434,22 +481,20 @@ fn test_boost_usage_result_structure() {
     let usage_result = BoostUsageResult {
         boost_value: 3,
         cards_remaining: boost_hand.cards_remaining,
-        current_cycle: boost_hand.current_cycle,
-        replenishment_occurred: false,
+        pit_stops_completed: boost_hand.pit_stops_completed,
     };
 
     // Assert - Verify result structure
     assert_eq!(usage_result.boost_value, 3);
     assert_eq!(usage_result.cards_remaining, 4);
-    assert_eq!(usage_result.current_cycle, 1);
-    assert!(!usage_result.replenishment_occurred);
+    assert_eq!(usage_result.pit_stops_completed, 0);
 }
 
 #[test]
 fn test_boost_hand_serialization_compatibility() {
     // Arrange
     let mut boost_hand = BoostHand::new();
-    boost_hand.use_card(1).unwrap();
+    boost_hand.use_card(2).unwrap();
     boost_hand.use_card(3).unwrap();
 
     // Act - Verify the hand can be serialized/deserialized (important for database storage)
@@ -458,8 +503,11 @@ fn test_boost_hand_serialization_compatibility() {
 
     // Assert - Verify state is preserved
     assert_eq!(deserialized.cards_remaining, boost_hand.cards_remaining);
-    assert_eq!(deserialized.current_cycle, boost_hand.current_cycle);
-    assert_eq!(deserialized.cycles_completed, boost_hand.cycles_completed);
+    assert_eq!(deserialized.tyre_type, boost_hand.tyre_type);
+    assert_eq!(
+        deserialized.pit_stops_completed,
+        boost_hand.pit_stops_completed
+    );
 
     for i in 0..=4 {
         assert_eq!(

@@ -12,6 +12,7 @@ import AdminDashboard from './components/AdminDashboard';
 import GameLobby from './components/GameLobby';
 import GameWrapper from './components/GameWrapper';
 import RacePlayPage from './components/RacePlayPage';
+import PreviewRacePage from './components/PreviewRacePage'; // DEV-ONLY: remove with /preview-race route
 import './App.css';
 
 function App() {
@@ -22,6 +23,8 @@ function App() {
           <ErrorNotification />
           <Routes>
             <Route path="/" element={<MainPage />} />
+            {/* DEV-ONLY: mock race UI for sprite review, no backend/auth needed */}
+            <Route path="/preview-race" element={<PreviewRacePage />} />
             <Route path="/register" element={<RegistrationPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route

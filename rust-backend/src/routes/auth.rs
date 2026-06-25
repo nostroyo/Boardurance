@@ -33,7 +33,8 @@ pub fn routes() -> Router<AppState<MockPlayerRepository, MockRaceRepository, Moc
 
 // Helper function to create starter assets for new players
 #[allow(clippy::type_complexity)]
-fn create_starter_assets() -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Body>), String> {
+pub(crate) fn create_starter_assets(
+) -> Result<(Vec<Car>, Vec<Pilot>, Vec<Engine>, Vec<Body>), String> {
     // Create 6 pilots with different classes and rarities
     let pilot1 = Pilot::new(
         PilotName::parse("Speedster Ace").unwrap(),

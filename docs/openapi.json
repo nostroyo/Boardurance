@@ -1,0 +1,4778 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "rust-backend",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/players": {
+      "get": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Get all players",
+        "operationId": "get_all_players",
+        "responses": {
+          "200": {
+            "description": "List of all players",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Player"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/by-email/{email}": {
+      "get": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Get player by email address",
+        "operationId": "get_player_by_email",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "description": "Player's email address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Player found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Player"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/{player_uuid}": {
+      "get": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Get player by UUID",
+        "operationId": "get_player_by_uuid",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Player found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Player"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Update player team name",
+        "operationId": "update_player_team_name",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamNameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Team name updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Delete player",
+        "operationId": "delete_player",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Player deleted successfully"
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/{player_uuid}/cars": {
+      "post": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Add car to player",
+        "operationId": "add_car_to_player",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCarRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Car added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/{player_uuid}/cars/{car_uuid}": {
+      "delete": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Remove car from player",
+        "operationId": "remove_car_from_player",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "car_uuid",
+            "in": "path",
+            "description": "Car UUID to remove",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Car removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Player or car not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/{player_uuid}/pilots": {
+      "post": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Add pilot to player",
+        "operationId": "add_pilot_to_player",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPilotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pilot added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Player not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/players/{player_uuid}/pilots/{pilot_uuid}": {
+      "delete": {
+        "tags": [
+          "players"
+        ],
+        "summary": "Remove pilot from player",
+        "operationId": "remove_pilot_from_player",
+        "parameters": [
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player's UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pilot_uuid",
+            "in": "path",
+            "description": "Pilot UUID to remove",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pilot removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Player or pilot not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get all races",
+        "operationId": "get_all_races",
+        "responses": {
+          "200": {
+            "description": "List of all races",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Race"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Create a new race",
+        "operationId": "create_race",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Race created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get race by UUID",
+        "operationId": "get_race",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Race found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Race"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/apply-lap": {
+      "post": {
+        "tags": [
+          "boost-cards"
+        ],
+        "summary": "Apply individual lap action for a player with boost card validation",
+        "description": "This endpoint processes a player's lap action including boost card selection.\nThe boost card system enforces strategic resource management:\n- Players have 5 boost cards (values 0-4) available per cycle\n- Each card can only be used once per cycle\n- When all 5 cards are used, the hand automatically replenishes\n- Boost cards add to performance: `min(base_value, sector.max_value)` + `boost_value`\n\n# Boost Card Usage Flow\n1. Player selects an available boost card (0-4)\n2. System validates card availability in current cycle\n3. Card is marked as used and performance is calculated\n4. If all cards used, hand replenishes for next cycle\n\n# Error Handling\n- `BOOST_CARD_NOT_AVAILABLE`: Selected card already used in current cycle\n- `INVALID_BOOST_VALUE`: Boost value outside 0-4 range\n- `CAR_VALIDATION_FAILED`: Invalid car/player combination",
+        "operationId": "apply_lap_action",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Lap action request with boost card selection",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyLapRequest"
+              },
+              "example": {
+                "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                "car_uuid": "550e8400-e29b-41d4-a716-446655440001",
+                "boost_value": 3
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Lap action processed successfully. Returns updated race status with boost hand state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedRaceStatusResponse"
+                },
+                "example": {
+                  "race_progress": {
+                    "status": "Ongoing",
+                    "current_lap": 2,
+                    "total_laps": 5,
+                    "participants_count": 4,
+                    "finished_participants": 0
+                  },
+                  "player_data": {
+                    "boost_availability": {
+                      "available_cards": [
+                        0,
+                        1,
+                        2,
+                        4
+                      ],
+                      "hand_state": {
+                        "0": true,
+                        "1": true,
+                        "2": true,
+                        "3": false,
+                        "4": true
+                      },
+                      "current_cycle": 1,
+                      "cycles_completed": 0,
+                      "cards_remaining": 4,
+                      "next_replenishment_at": 4
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Boost card validation error or invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoostCardErrorResponse"
+                },
+                "examples": {
+                  "card_not_available": {
+                    "summary": "Boost card already used",
+                    "description": "Player tried to use a boost card that was already used in the current cycle",
+                    "value": {
+                      "error_code": "BOOST_CARD_NOT_AVAILABLE",
+                      "message": "Boost card 3 is not available. Available cards: [0, 1, 2, 4]",
+                      "available_cards": [
+                        0,
+                        1,
+                        2,
+                        4
+                      ],
+                      "current_cycle": 1,
+                      "cards_remaining": 4
+                    }
+                  },
+                  "invalid_boost_value": {
+                    "summary": "Invalid boost value",
+                    "description": "Player provided boost value outside the valid range (0-4)",
+                    "value": {
+                      "error_code": "INVALID_BOOST_VALUE",
+                      "message": "Invalid boost value: 5. Must be between 0 and 4",
+                      "available_cards": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4
+                      ],
+                      "current_cycle": 1,
+                      "cards_remaining": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "409": {
+            "description": "Cannot process action (race not in progress, etc.)"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/join": {
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Join a race",
+        "operationId": "join_race",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully joined race",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "409": {
+            "description": "Cannot join race"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/pit": {
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Perform a pit stop for a player",
+        "description": "Refills the player's boost card pool (optionally switching tyre) and\nconsumes the turn as a free boost-0 lap.",
+        "operationId": "pit_stop_action",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PitStopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pit stop applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedRaceStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoostCardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoostCardErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invalid race state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoostCardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/players/{player_uuid}/boost-availability": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get boost card availability for a player in a race",
+        "description": "This endpoint returns the current boost hand state for a player, including:\n- Available boost cards (0-4) that can be used\n- Complete hand state showing which cards are available/used\n- Current cycle information (cycle number, cycles completed)\n- Cards remaining before next replenishment\n- Next replenishment lap number\n\nThe boost hand system manages 5 cards per cycle. When all cards are used,\nthe hand automatically replenishes for the next cycle. This endpoint helps\nthe frontend display which boost options are currently available to the player.\n\n# Boost Hand Mechanics\n- Each player has 5 boost cards (values 0-4) per cycle\n- Cards can only be used once per cycle\n- When all 5 cards are used, the hand replenishes automatically\n- Next replenishment occurs when `cards_remaining` reaches 0",
+        "operationId": "get_boost_availability",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Boost availability retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoostAvailabilityResponse"
+                },
+                "example": {
+                  "available_cards": [
+                    1,
+                    2,
+                    4
+                  ],
+                  "hand_state": {
+                    "0": false,
+                    "1": true,
+                    "2": true,
+                    "3": false,
+                    "4": true
+                  },
+                  "current_cycle": 1,
+                  "cycles_completed": 0,
+                  "cards_remaining": 3,
+                  "next_replenishment_at": 3
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found in race or race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_NOT_FOUND",
+                  "message": "Player not found in race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Race not in progress or player already finished",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_FINISHED",
+                  "message": "Player has already finished the race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/players/{player_uuid}/car-data": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get complete car data for a player in a race",
+        "description": "This endpoint returns comprehensive car information including:\n- Car details (name, UUID)\n- Pilot information (skills, performance, class, rarity)\n- Engine specifications (straight/curve values, rarity)\n- Body specifications (straight/curve values, rarity)\n\nThe data is retrieved using the `CarValidationService` which ensures\nthe car belongs to the player and has all required components.",
+        "operationId": "get_car_data",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Car data retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarDataResponse"
+                },
+                "example": {
+                  "car": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440001",
+                    "name": "Lightning Bolt"
+                  },
+                  "pilot": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440002",
+                    "name": "Max Speed",
+                    "pilot_class": "SpeedDemon",
+                    "rarity": "Professional",
+                    "skills": {
+                      "reaction_time": 8,
+                      "precision": 7,
+                      "focus": 6,
+                      "stamina": 7
+                    },
+                    "performance": {
+                      "straight_value": 5,
+                      "curve_value": 4
+                    }
+                  },
+                  "engine": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440003",
+                    "name": "V8 Turbo",
+                    "rarity": "Rare",
+                    "straight_value": 8,
+                    "curve_value": 6
+                  },
+                  "body": {
+                    "uuid": "550e8400-e29b-41d4-a716-446655440004",
+                    "name": "Aerodynamic Frame",
+                    "rarity": "Rare",
+                    "straight_value": 7,
+                    "curve_value": 8
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found in race",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_NOT_FOUND",
+                  "message": "Player not found in race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/players/{player_uuid}/lap-history": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get lap history for a player in a race",
+        "description": "This endpoint returns the player's lap-by-lap performance history for the current race.\nIt provides:\n- Lap records with boost usage, performance values, and movement information\n- Boost cycle summaries with aggregated statistics per cycle\n\nThe lap history helps players analyze their performance trends and boost card\nusage patterns throughout the race. Each lap record includes:\n- Lap number and lap characteristic (Straight/Curve)\n- Boost card used and which cycle it was from\n- Base and final performance values\n- Movement information (from/to sectors, movement type)\n\nCycle summaries provide aggregated statistics:\n- Cards used in each cycle\n- Laps when cards were used\n- Average boost value per cycle\n\n# Note\nHistorical performance and movement data is currently limited to boost usage tracking.\nFull lap-by-lap performance reconstruction would require storing additional historical data.",
+        "operationId": "get_lap_history",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lap history retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LapHistoryResponse"
+                },
+                "example": {
+                  "laps": [
+                    {
+                      "lap_number": 1,
+                      "lap_characteristic": "Straight",
+                      "boost_used": 2,
+                      "boost_cycle": 1,
+                      "base_value": 20,
+                      "final_value": 23,
+                      "from_sector": 0,
+                      "to_sector": 3,
+                      "movement_type": "MovedUp"
+                    },
+                    {
+                      "lap_number": 2,
+                      "lap_characteristic": "Curve",
+                      "boost_used": 0,
+                      "boost_cycle": 1,
+                      "base_value": 18,
+                      "final_value": 18,
+                      "from_sector": 3,
+                      "to_sector": 4,
+                      "movement_type": "StayedInSector"
+                    }
+                  ],
+                  "cycle_summaries": [
+                    {
+                      "cycle_number": 1,
+                      "cards_used": [
+                        2,
+                        0,
+                        3
+                      ],
+                      "laps_in_cycle": [
+                        1,
+                        2,
+                        3
+                      ],
+                      "average_boost": 1.67
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found in race or race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_NOT_FOUND",
+                  "message": "Player not found in race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/players/{player_uuid}/local-view": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get local view for a player in a race",
+        "description": "This endpoint calculates and returns the player's 5-sector local view (current sector Â±2).\nIt provides:\n- The player's current sector as the center\n- 5 visible sectors with their details (id, name, thresholds, capacity, type)\n- All participants within the visible range with their positions\n- Current occupancy for each visible sector\n\nThe local view handles circular track wrapping automatically, so sectors at the\nbeginning/end of the track are properly included when the player is near track boundaries.\n\n# Sector Range Calculation\nFor a player at sector N on a track with M sectors:\n- Visible sectors: [N-2, N-1, N, N+1, N+2] (with modulo wrapping)\n- Example: Player at sector 1 on 10-sector track sees [9, 0, 1, 2, 3]",
+        "operationId": "get_local_view",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Local view calculated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocalViewResponse"
+                },
+                "example": {
+                  "center_sector": 5,
+                  "visible_sectors": [
+                    {
+                      "id": 3,
+                      "name": "Sector 3",
+                      "min_value": 15,
+                      "max_value": 25,
+                      "slot_capacity": 3,
+                      "sector_type": "Normal",
+                      "current_occupancy": 1
+                    },
+                    {
+                      "id": 4,
+                      "name": "Sector 4",
+                      "min_value": 20,
+                      "max_value": 30,
+                      "slot_capacity": 3,
+                      "sector_type": "Normal",
+                      "current_occupancy": 2
+                    },
+                    {
+                      "id": 5,
+                      "name": "Sector 5",
+                      "min_value": 25,
+                      "max_value": 35,
+                      "slot_capacity": 3,
+                      "sector_type": "Normal",
+                      "current_occupancy": 1
+                    },
+                    {
+                      "id": 6,
+                      "name": "Sector 6",
+                      "min_value": 30,
+                      "max_value": 40,
+                      "slot_capacity": 3,
+                      "sector_type": "Normal",
+                      "current_occupancy": 0
+                    },
+                    {
+                      "id": 7,
+                      "name": "Sector 7",
+                      "min_value": 35,
+                      "max_value": 45,
+                      "slot_capacity": 3,
+                      "sector_type": "Normal",
+                      "current_occupancy": 1
+                    }
+                  ],
+                  "visible_participants": [
+                    {
+                      "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                      "player_name": "Player 1",
+                      "car_name": "Lightning Bolt",
+                      "current_sector": 5,
+                      "position_in_sector": 1,
+                      "total_value": 45,
+                      "current_lap": 2,
+                      "is_finished": false
+                    },
+                    {
+                      "player_uuid": "550e8400-e29b-41d4-a716-446655440001",
+                      "player_name": "Player 2",
+                      "car_name": "Thunder Strike",
+                      "current_sector": 4,
+                      "position_in_sector": 1,
+                      "total_value": 42,
+                      "current_lap": 2,
+                      "is_finished": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found in race or race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_NOT_FOUND",
+                  "message": "Player not found in race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/players/{player_uuid}/performance-preview": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get performance preview for all boost options",
+        "description": "This endpoint calculates and returns performance predictions for all boost card options (0-4).\nIt provides:\n- Base performance breakdown (engine, body, pilot contributions)\n- Sector ceiling application\n- Final performance values for each boost option\n- Movement probability for each boost option\n- Boost cycle information (available cards, cycle status)\n\nThe performance calculation follows the additive model used by lap resolution:\n`final_value = min(base_value, sector.max_value) + boost_value`\n\nMovement probabilities are determined by comparing final values to sector thresholds:\n- `MoveUp`: `final_value` > `sector.max_value`\n- Stay: `sector.min_value` <= `final_value` <= `sector.max_value`\n- `MoveDown`: `final_value` < `sector.min_value`",
+        "operationId": "get_performance_preview",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "path",
+            "description": "Player UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Performance preview calculated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformancePreviewResponse"
+                },
+                "example": {
+                  "base_performance": {
+                    "engine_contribution": 8,
+                    "body_contribution": 7,
+                    "pilot_contribution": 5,
+                    "base_value": 20,
+                    "sector_ceiling": 25,
+                    "capped_base_value": 20,
+                    "lap_characteristic": "Straight"
+                  },
+                  "boost_options": [
+                    {
+                      "boost_value": 0,
+                      "is_available": false,
+                      "final_value": 20,
+                      "movement_probability": "Stay"
+                    },
+                    {
+                      "boost_value": 1,
+                      "is_available": true,
+                      "final_value": 22,
+                      "movement_probability": "Stay"
+                    },
+                    {
+                      "boost_value": 2,
+                      "is_available": true,
+                      "final_value": 23,
+                      "movement_probability": "Stay"
+                    },
+                    {
+                      "boost_value": 3,
+                      "is_available": true,
+                      "final_value": 25,
+                      "movement_probability": "MoveUp"
+                    },
+                    {
+                      "boost_value": 4,
+                      "is_available": true,
+                      "final_value": 26,
+                      "movement_probability": "MoveUp"
+                    }
+                  ],
+                  "boost_cycle_info": {
+                    "current_cycle": 1,
+                    "cycles_completed": 0,
+                    "cards_remaining": 4,
+                    "available_cards": [
+                      1,
+                      2,
+                      3,
+                      4
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Player not found in race or race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "PLAYER_NOT_FOUND",
+                  "message": "Player not found in race",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Race not in progress or player already finished",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RACE_NOT_IN_PROGRESS",
+                  "message": "Race is not in progress",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/register": {
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Register a player for a race",
+        "operationId": "register_player",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPlayerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully registered for race",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterPlayerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or car validation failed"
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "409": {
+            "description": "Cannot register (race started, player already registered, etc.)"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/start": {
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Start a race",
+        "operationId": "start_race",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Race started successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "409": {
+            "description": "Cannot start race"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/status": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get race status",
+        "operationId": "get_race_status",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Race status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RaceStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/status-detailed": {
+      "get": {
+        "tags": [
+          "boost-cards"
+        ],
+        "summary": "Get detailed race status with comprehensive boost hand information",
+        "description": "This endpoint provides complete race status including boost card system state.\nWhen `player_uuid` is provided, returns player-specific data including:\n- Current boost hand state (available/used cards)\n- Boost cycle information (current cycle, cycles completed)\n- Boost usage history and cycle summaries\n- Performance impact preview for each boost card\n\n# Boost Hand State Information\n- `available_cards`: List of boost card values (0-4) currently available\n- `hand_state`: Detailed boolean map of each card's availability\n- `current_cycle`: Current boost cycle number (starts at 1)\n- `cycles_completed`: Number of complete cycles finished\n- `cards_remaining`: Cards left before next replenishment\n- `boost_impact_preview`: Performance prediction for each boost option\n\n# Usage History\n- `boost_usage_history`: Lap-by-lap record of boost card usage\n- `boost_cycle_summaries`: Aggregated statistics per cycle",
+        "operationId": "get_race_status_detailed",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "player_uuid",
+            "in": "query",
+            "description": "Player UUID for player-specific boost hand data",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "include_history",
+            "in": "query",
+            "description": "Include detailed lap and boost usage history",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed race status with boost hand information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailedRaceStatusResponse"
+                },
+                "example": {
+                  "race_progress": {
+                    "status": "Ongoing",
+                    "current_lap": 3,
+                    "total_laps": 5,
+                    "participants_count": 2,
+                    "finished_participants": 0
+                  },
+                  "track_situation": {
+                    "sectors": [
+                      {
+                        "sector_id": 1,
+                        "sector_name": "Start/Finish",
+                        "participants": [
+                          {
+                            "player_uuid": "550e8400-e29b-41d4-a716-446655440000",
+                            "position_in_sector": 1,
+                            "total_value": 45,
+                            "current_lap": 3
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "player_data": {
+                    "boost_availability": {
+                      "available_cards": [
+                        1,
+                        4
+                      ],
+                      "hand_state": {
+                        "0": false,
+                        "1": true,
+                        "2": false,
+                        "3": false,
+                        "4": true
+                      },
+                      "current_cycle": 1,
+                      "cycles_completed": 0,
+                      "cards_remaining": 2,
+                      "next_replenishment_at": 2,
+                      "boost_impact_preview": [
+                        {
+                          "boost_value": 0,
+                          "is_available": false,
+                          "predicted_final_value": 20,
+                          "movement_probability": "Stay"
+                        },
+                        {
+                          "boost_value": 1,
+                          "is_available": true,
+                          "predicted_final_value": 22,
+                          "movement_probability": "MoveUp"
+                        }
+                      ]
+                    },
+                    "boost_usage_history": [
+                      {
+                        "lap_number": 1,
+                        "boost_value": 2,
+                        "cycle_number": 1,
+                        "cards_remaining_after": 3,
+                        "replenishment_occurred": false
+                      },
+                      {
+                        "lap_number": 2,
+                        "boost_value": 0,
+                        "cycle_number": 1,
+                        "cards_remaining_after": 2,
+                        "replenishment_occurred": false
+                      }
+                    ],
+                    "boost_cycle_summaries": [
+                      {
+                        "cycle_number": 1,
+                        "cards_used": [
+                          2,
+                          0,
+                          3
+                        ],
+                        "laps_in_cycle": [
+                          1,
+                          2,
+                          3
+                        ],
+                        "average_boost": 1.67
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/turn": {
+      "post": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Process a turn in the race",
+        "operationId": "process_turn",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessLapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Lap processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LapResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "404": {
+            "description": "Race not found"
+          },
+          "409": {
+            "description": "Cannot process turn"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/v1/races/{race_uuid}/turn-phase": {
+      "get": {
+        "tags": [
+          "races"
+        ],
+        "summary": "Get turn phase information for a race",
+        "description": "This endpoint returns the current turn phase state for simultaneous turn resolution.\nIt provides information about:\n- Current turn phase (`WaitingForPlayers`, `AllSubmitted`, Processing, Complete)\n- Current lap number and lap characteristic\n- List of players who have submitted actions\n- List of players who are still pending action submission\n- Total number of active players\n\nTurn phases are determined by:\n- Complete: Race status is not `InProgress`\n- `AllSubmitted`: All active participants have submitted actions\n- `WaitingForPlayers`: Some participants haven't submitted actions yet",
+        "operationId": "get_turn_phase",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Turn phase information retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnPhaseResponse"
+                },
+                "example": {
+                  "turn_phase": "WaitingForPlayers",
+                  "current_lap": 2,
+                  "lap_characteristic": "Straight",
+                  "submitted_players": [
+                    "550e8400-e29b-41d4-a716-446655440000",
+                    "550e8400-e29b-41d4-a716-446655440001"
+                  ],
+                  "pending_players": [
+                    "550e8400-e29b-41d4-a716-446655440002"
+                  ],
+                  "total_active_players": 3
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_UUID",
+                  "message": "Invalid UUID format",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Race not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RACE_NOT_FOUND",
+                  "message": "Race not found",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DATABASE_ERROR",
+                  "message": "Internal server error",
+                  "details": "Failed to fetch race: connection timeout"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Login user",
+        "operationId": "login_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCredentials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input data",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a new user",
+        "operationId": "register_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRegistration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input data",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "409": {
+            "description": "User already exists",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health_check": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health check endpoint",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/races/{race_uuid}/submit-action": {
+      "post": {
+        "tags": [
+          "crate::routes::races"
+        ],
+        "summary": "Submit a single player's turn action (boost selection)",
+        "description": "This endpoint allows individual players to submit their boost selection for the current turn.\nUnlike the batch `process_turn` endpoint, this handles one player at a time and stores\nthe action until all players have submitted their choices.",
+        "operationId": "submit_turn_action",
+        "parameters": [
+          {
+            "name": "race_uuid",
+            "in": "path",
+            "description": "Race UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitTurnActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Action submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitTurnActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "404": {
+            "description": "Race or player not found"
+          },
+          "409": {
+            "description": "Action already submitted or race not in progress"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddCarRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "AddPilotRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "pilot_class",
+          "rarity",
+          "skills"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pilot_class": {
+            "$ref": "#/components/schemas/PilotClass"
+          },
+          "rarity": {
+            "$ref": "#/components/schemas/PilotRarity"
+          },
+          "skills": {
+            "$ref": "#/components/schemas/PilotSkillsRequest"
+          }
+        }
+      },
+      "ApplyLapRequest": {
+        "type": "object",
+        "description": "Request to apply a lap action with boost card selection\n\n# Boost Card System\nThe `boost_value` field represents which boost card to use (0-4).\nEach player has 5 boost cards per cycle that can be used once each.\nWhen all cards are used, the hand automatically replenishes.\n\n# Performance Calculation\nFinal performance = `min(base_performance, sector.max_value)` + `boost_value`\n(additive model, matching lap resolution). `boost_value` ranges 0-4.",
+        "required": [
+          "player_uuid",
+          "car_uuid",
+          "boost_value"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Boost card value to use (0-4). Must be available in current cycle.",
+            "example": 3,
+            "maximum": 4,
+            "minimum": 0
+          },
+          "car_uuid": {
+            "type": "string",
+            "description": "UUID of the car being used for this lap",
+            "example": "550e8400-e29b-41d4-a716-446655440001"
+          },
+          "player_uuid": {
+            "type": "string",
+            "description": "UUID of the player making the lap action",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        }
+      },
+      "BasePerformance": {
+        "type": "object",
+        "required": [
+          "engine_contribution",
+          "body_contribution",
+          "pilot_contribution",
+          "base_value",
+          "sector_ceiling",
+          "capped_base_value",
+          "lap_characteristic"
+        ],
+        "properties": {
+          "base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "body_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "capped_base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "engine_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "type": "string"
+          },
+          "pilot_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "sector_ceiling": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Body": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "rarity",
+          "straight_value",
+          "curve_value",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "curve_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "$ref": "#/components/schemas/BodyName"
+          },
+          "rarity": {
+            "$ref": "#/components/schemas/ComponentRarity"
+          },
+          "straight_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BodyInfo": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "rarity",
+          "straight_value",
+          "curve_value"
+        ],
+        "properties": {
+          "curve_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "straight_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "BodyName": {
+        "type": "string"
+      },
+      "BoostAvailability": {
+        "type": "object",
+        "description": "Boost availability information for API responses",
+        "required": [
+          "available_cards",
+          "hand_state",
+          "tyre_type",
+          "pit_stops_completed",
+          "cards_remaining",
+          "boost_impact_preview"
+        ],
+        "properties": {
+          "available_cards": {
+            "type": "string",
+            "format": "binary",
+            "description": "Available boost card values (always includes 0, the free no-boost move)"
+          },
+          "boost_impact_preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoostImpactOption"
+            },
+            "description": "Performance preview for available cards only"
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "hand_state": {
+            "type": "object",
+            "description": "Remaining count per boost card value (keys \"1\"..\"4\")\nUsing String keys for `MongoDB` compatibility",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "tyre_type": {
+            "$ref": "#/components/schemas/TyreType"
+          }
+        }
+      },
+      "BoostAvailabilityResponse": {
+        "type": "object",
+        "required": [
+          "available_cards",
+          "hand_state",
+          "tyre_type",
+          "pit_stops_completed",
+          "cards_remaining"
+        ],
+        "properties": {
+          "available_cards": {
+            "type": "string",
+            "format": "binary"
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "hand_state": {
+            "type": "object",
+            "description": "Remaining count per boost card value (keys \"1\"..\"4\").",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "tyre_type": {
+            "$ref": "#/components/schemas/TyreType"
+          }
+        }
+      },
+      "BoostCardError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "error_type",
+              "details"
+            ],
+            "properties": {
+              "details": {
+                "type": "integer",
+                "format": "int32",
+                "minimum": 0
+              },
+              "error_type": {
+                "type": "string",
+                "enum": [
+                  "InvalidBoostValue"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "error_type",
+              "details"
+            ],
+            "properties": {
+              "details": {
+                "type": "object",
+                "required": [
+                  "boost_value",
+                  "available_cards"
+                ],
+                "properties": {
+                  "available_cards": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "boost_value": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              },
+              "error_type": {
+                "type": "string",
+                "enum": [
+                  "CardNotAvailable"
+                ]
+              }
+            }
+          }
+        ],
+        "description": "Error types for boost card operations",
+        "discriminator": {
+          "propertyName": "error_type"
+        }
+      },
+      "BoostCardErrorResponse": {
+        "type": "object",
+        "description": "Error response struct with available cards information",
+        "required": [
+          "error_code",
+          "message",
+          "available_cards",
+          "pit_stops_completed",
+          "cards_remaining"
+        ],
+        "properties": {
+          "available_cards": {
+            "type": "string",
+            "format": "binary"
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "BoostCycleInfo": {
+        "type": "object",
+        "required": [
+          "tyre_type",
+          "pit_stops_completed",
+          "cards_remaining",
+          "available_cards"
+        ],
+        "properties": {
+          "available_cards": {
+            "type": "string",
+            "format": "binary"
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "tyre_type": {
+            "$ref": "#/components/schemas/TyreType"
+          }
+        }
+      },
+      "BoostCycleSummary": {
+        "type": "object",
+        "description": "Summary statistics for a complete boost cycle\nProvides cycle-level analytics for strategic analysis",
+        "required": [
+          "cycle_number",
+          "cards_used",
+          "laps_in_cycle",
+          "average_boost"
+        ],
+        "properties": {
+          "average_boost": {
+            "type": "number",
+            "format": "float",
+            "description": "Average boost value for this cycle"
+          },
+          "cards_used": {
+            "type": "string",
+            "format": "binary",
+            "description": "Boost card values used in this cycle (in order)"
+          },
+          "cycle_number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Cycle number",
+            "minimum": 0
+          },
+          "laps_in_cycle": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Lap numbers when cards were used in this cycle"
+          }
+        }
+      },
+      "BoostHand": {
+        "type": "object",
+        "description": "Boost hand management system for tracking available boost cards.\n\nCards are a multiset of values 1-4 drawn from the chosen [`TyreType`]'s pool.\nBoost value 0 is NOT a card: it is the always-available free no-boost move.\nThe hand does NOT auto-replenish; a pit stop ([`BoostHand::refill`]) is the\nonly way to restore cards (and may swap tyre).",
+        "required": [
+          "cards",
+          "cards_remaining"
+        ],
+        "properties": {
+          "cards": {
+            "type": "object",
+            "description": "Remaining count for each boost card value.\nKeys are values `\"1\"..\"4\"` (value 0 is never a card).\nUsing String keys for `MongoDB` compatibility.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of cards remaining (sum of all counts).",
+            "minimum": 0
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of pit stops completed (each refills the pool).",
+            "minimum": 0
+          },
+          "tyre_type": {
+            "$ref": "#/components/schemas/TyreType"
+          }
+        }
+      },
+      "BoostImpactOption": {
+        "type": "object",
+        "description": "Boost impact option with availability flag",
+        "required": [
+          "boost_value",
+          "is_available",
+          "predicted_final_value",
+          "movement_probability"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "is_available": {
+            "type": "boolean"
+          },
+          "movement_probability": {
+            "$ref": "#/components/schemas/MovementProbability"
+          },
+          "predicted_final_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "BoostOption": {
+        "type": "object",
+        "required": [
+          "boost_value",
+          "is_available",
+          "final_value",
+          "movement_probability"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "final_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "is_available": {
+            "type": "boolean"
+          },
+          "movement_probability": {
+            "type": "string"
+          }
+        }
+      },
+      "BoostUsageRecord": {
+        "type": "object",
+        "description": "Record of a single boost card usage\nTracks lap-by-lap boost card usage for history and analytics",
+        "required": [
+          "lap_number",
+          "boost_value",
+          "cycle_number",
+          "cards_remaining_after",
+          "replenishment_occurred"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Boost card value that was used (0-4)",
+            "minimum": 0
+          },
+          "cards_remaining_after": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of cards remaining after this usage",
+            "minimum": 0
+          },
+          "cycle_number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Cycle number when the boost was used",
+            "minimum": 0
+          },
+          "lap_number": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lap number when the boost was used",
+            "minimum": 0
+          },
+          "replenishment_occurred": {
+            "type": "boolean",
+            "description": "Whether replenishment occurred after this usage"
+          }
+        }
+      },
+      "BoostUsageResult": {
+        "type": "object",
+        "description": "Result of using a boost card",
+        "required": [
+          "boost_value",
+          "cards_remaining",
+          "pit_stops_completed"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "cards_remaining": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pit_stops_completed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Car": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "pilot_uuids",
+          "is_equipped",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "body_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "engine_uuid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "is_equipped": {
+            "type": "boolean"
+          },
+          "name": {
+            "$ref": "#/components/schemas/CarName"
+          },
+          "pilot_uuids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "CarDataResponse": {
+        "type": "object",
+        "required": [
+          "car",
+          "pilot",
+          "engine",
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/BodyInfo"
+          },
+          "car": {
+            "$ref": "#/components/schemas/CarInfo"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/EngineInfo"
+          },
+          "pilot": {
+            "$ref": "#/components/schemas/PilotInfo"
+          }
+        }
+      },
+      "CarInfo": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "CarName": {
+        "type": "string"
+      },
+      "ComponentRarity": {
+        "type": "string",
+        "enum": [
+          "Common",
+          "Uncommon",
+          "Rare",
+          "Epic",
+          "Legendary"
+        ]
+      },
+      "CreateRaceRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "track_name",
+          "sectors",
+          "total_laps"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateSectorRequest"
+            }
+          },
+          "total_laps": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "track_name": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateSectorRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "min_value",
+          "max_value",
+          "sector_type"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "min_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "sector_type": {
+            "$ref": "#/components/schemas/SectorType"
+          },
+          "slot_capacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
+      "CurrentPlayerPosition": {
+        "type": "object",
+        "required": [
+          "current_sector",
+          "position_in_sector",
+          "sector_rank",
+          "overall_rank",
+          "distance_to_leader"
+        ],
+        "properties": {
+          "current_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "distance_to_leader": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "overall_rank": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "sector_rank": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "CycleSummary": {
+        "type": "object",
+        "required": [
+          "cycle_number",
+          "cards_used",
+          "laps_in_cycle",
+          "average_boost"
+        ],
+        "properties": {
+          "average_boost": {
+            "type": "number",
+            "format": "float"
+          },
+          "cards_used": {
+            "type": "string",
+            "format": "binary"
+          },
+          "cycle_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "laps_in_cycle": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "DetailedRaceStatusResponse": {
+        "type": "object",
+        "required": [
+          "race_progress",
+          "track_situation",
+          "race_metadata"
+        ],
+        "properties": {
+          "player_data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlayerSpecificData"
+              }
+            ],
+            "nullable": true
+          },
+          "race_metadata": {
+            "$ref": "#/components/schemas/RaceMetadata"
+          },
+          "race_progress": {
+            "$ref": "#/components/schemas/RaceProgressStatus"
+          },
+          "track_situation": {
+            "$ref": "#/components/schemas/TrackSituationData"
+          }
+        }
+      },
+      "Email": {
+        "type": "string"
+      },
+      "Engine": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "rarity",
+          "straight_value",
+          "curve_value",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "curve_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "$ref": "#/components/schemas/EngineName"
+          },
+          "rarity": {
+            "$ref": "#/components/schemas/ComponentRarity"
+          },
+          "straight_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "EngineInfo": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "rarity",
+          "straight_value",
+          "curve_value"
+        ],
+        "properties": {
+          "curve_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "straight_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "EngineName": {
+        "type": "string"
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Standard error response format used across all endpoints\n\nThis struct provides a consistent error response format with:\n- error: A short error code or category\n- message: A human-readable error message\n- details: Optional additional information about the error",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "details": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "HashedPassword": {
+        "type": "string",
+        "description": "A hashed password stored in the database"
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "JoinRaceRequest": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_uuid",
+          "pilot_uuid"
+        ],
+        "properties": {
+          "car_uuid": {
+            "type": "string"
+          },
+          "pilot_uuid": {
+            "type": "string"
+          },
+          "player_uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "LapAction": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "boost_value"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "player_uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "LapActionRequest": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "boost_value"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "player_uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "LapCharacteristic": {
+        "type": "string",
+        "enum": [
+          "Straight",
+          "Curve"
+        ]
+      },
+      "LapHistoryResponse": {
+        "type": "object",
+        "required": [
+          "laps",
+          "cycle_summaries"
+        ],
+        "properties": {
+          "cycle_summaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CycleSummary"
+            }
+          },
+          "laps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LapRecord"
+            }
+          }
+        }
+      },
+      "LapPerformanceRecord": {
+        "type": "object",
+        "required": [
+          "lap_number",
+          "boost_used",
+          "final_value",
+          "movement_type",
+          "from_sector",
+          "to_sector"
+        ],
+        "properties": {
+          "boost_used": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "final_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "from_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "movement_type": {
+            "$ref": "#/components/schemas/MovementType"
+          },
+          "to_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "LapRecord": {
+        "type": "object",
+        "required": [
+          "lap_number",
+          "lap_characteristic",
+          "boost_used",
+          "boost_cycle",
+          "base_value",
+          "final_value",
+          "from_sector",
+          "to_sector",
+          "movement_type"
+        ],
+        "properties": {
+          "base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "boost_cycle": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "boost_used": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "final_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "from_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "type": "string"
+          },
+          "lap_number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "movement_type": {
+            "type": "string"
+          },
+          "to_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "LapResult": {
+        "type": "object",
+        "required": [
+          "lap",
+          "lap_characteristic",
+          "sector_positions",
+          "movements"
+        ],
+        "properties": {
+          "lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "$ref": "#/components/schemas/LapCharacteristic"
+          },
+          "movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParticipantMovement"
+            }
+          },
+          "sector_positions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/RaceParticipant"
+              }
+            }
+          }
+        }
+      },
+      "LapResultResponse": {
+        "type": "object",
+        "required": [
+          "result",
+          "race_status"
+        ],
+        "properties": {
+          "race_status": {
+            "$ref": "#/components/schemas/RaceStatus"
+          },
+          "result": {
+            "$ref": "#/components/schemas/LapResult"
+          }
+        }
+      },
+      "LeaderboardEntry": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_name",
+          "current_sector",
+          "position_in_sector",
+          "total_value",
+          "current_lap",
+          "overall_rank"
+        ],
+        "properties": {
+          "car_name": {
+            "type": "string"
+          },
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "current_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "overall_rank": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "player_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "player_uuid": {
+            "type": "string"
+          },
+          "position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "LocalViewResponse": {
+        "type": "object",
+        "required": [
+          "center_sector",
+          "total_sectors",
+          "visible_sectors",
+          "visible_participants"
+        ],
+        "properties": {
+          "center_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_sectors": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total number of sectors on the track. Lets the UI number sectors with\nthe leading (highest-index) sector as \"Sector 1\".",
+            "minimum": 0
+          },
+          "visible_participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParticipantInfo"
+            }
+          },
+          "visible_sectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectorInfo"
+            }
+          }
+        }
+      },
+      "MovementProbability": {
+        "type": "string",
+        "description": "Movement probability based on performance prediction",
+        "enum": [
+          "MoveUp",
+          "Stay",
+          "MoveDown"
+        ]
+      },
+      "MovementType": {
+        "type": "string",
+        "enum": [
+          "StayedInSector",
+          "MovedUp",
+          "MovedDown",
+          "FinishedLap",
+          "FinishedRace"
+        ]
+      },
+      "ParticipantInfo": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_name",
+          "current_sector",
+          "position_in_sector",
+          "total_value",
+          "current_lap",
+          "is_finished"
+        ],
+        "properties": {
+          "car_name": {
+            "type": "string"
+          },
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "current_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "is_finished": {
+            "type": "boolean"
+          },
+          "player_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "player_uuid": {
+            "type": "string"
+          },
+          "position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "ParticipantMovement": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "from_sector",
+          "to_sector",
+          "movement_type"
+        ],
+        "properties": {
+          "from_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "movement_type": {
+            "$ref": "#/components/schemas/MovementType"
+          },
+          "player_uuid": {
+            "type": "string"
+          },
+          "to_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PerformanceCalculation": {
+        "type": "object",
+        "description": "Detailed performance calculation breakdown",
+        "required": [
+          "engine_contribution",
+          "body_contribution",
+          "pilot_contribution",
+          "base_value",
+          "sector_ceiling",
+          "capped_base_value",
+          "boost_value",
+          "final_value"
+        ],
+        "properties": {
+          "base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "body_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "capped_base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "engine_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "final_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pilot_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "sector_ceiling": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PerformancePreview": {
+        "type": "object",
+        "required": [
+          "engine_contribution",
+          "body_contribution",
+          "pilot_contribution",
+          "base_value",
+          "sector_ceiling",
+          "capped_base_value"
+        ],
+        "properties": {
+          "base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "body_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "capped_base_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "engine_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "pilot_contribution": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "sector_ceiling": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PerformancePreviewResponse": {
+        "type": "object",
+        "required": [
+          "base_performance",
+          "boost_options",
+          "boost_cycle_info"
+        ],
+        "properties": {
+          "base_performance": {
+            "$ref": "#/components/schemas/BasePerformance"
+          },
+          "boost_cycle_info": {
+            "$ref": "#/components/schemas/BoostCycleInfo"
+          },
+          "boost_options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoostOption"
+            }
+          }
+        }
+      },
+      "PerformanceThresholds": {
+        "type": "object",
+        "required": [
+          "min_value",
+          "max_value",
+          "move_up_threshold",
+          "move_down_threshold"
+        ],
+        "properties": {
+          "max_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "min_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "move_down_threshold": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "move_up_threshold": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "Pilot": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "pilot_class",
+          "rarity",
+          "skills",
+          "performance",
+          "experience_level",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "experience_level": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "$ref": "#/components/schemas/PilotName"
+          },
+          "performance": {
+            "$ref": "#/components/schemas/PilotPerformance"
+          },
+          "pilot_class": {
+            "$ref": "#/components/schemas/PilotClass"
+          },
+          "rarity": {
+            "$ref": "#/components/schemas/PilotRarity"
+          },
+          "skills": {
+            "$ref": "#/components/schemas/PilotSkills"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PilotClass": {
+        "type": "string",
+        "enum": [
+          "Speedster",
+          "Technician",
+          "Endurance",
+          "AllRounder"
+        ]
+      },
+      "PilotClassBonus": {
+        "type": "object",
+        "required": [
+          "speed_bonus",
+          "acceleration_bonus",
+          "handling_bonus",
+          "durability_bonus"
+        ],
+        "properties": {
+          "acceleration_bonus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "durability_bonus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "handling_bonus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "speed_bonus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PilotInfo": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "pilot_class",
+          "rarity",
+          "skills",
+          "performance"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "performance": {
+            "$ref": "#/components/schemas/PilotPerformance"
+          },
+          "pilot_class": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "skills": {
+            "$ref": "#/components/schemas/PilotSkills"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "PilotName": {
+        "type": "string"
+      },
+      "PilotPerformance": {
+        "type": "object",
+        "required": [
+          "straight_value",
+          "curve_value"
+        ],
+        "properties": {
+          "curve_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "straight_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PilotRarity": {
+        "type": "string",
+        "enum": [
+          "Rookie",
+          "Professional",
+          "Expert",
+          "Champion",
+          "Legend"
+        ]
+      },
+      "PilotSkills": {
+        "type": "object",
+        "required": [
+          "reaction_time",
+          "precision",
+          "focus",
+          "stamina"
+        ],
+        "properties": {
+          "focus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "precision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "reaction_time": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "stamina": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PilotSkillsRequest": {
+        "type": "object",
+        "required": [
+          "reaction_time",
+          "precision",
+          "focus",
+          "stamina"
+        ],
+        "properties": {
+          "focus": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "precision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "reaction_time": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "stamina": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PitStopRequest": {
+        "type": "object",
+        "description": "Request to perform a pit stop.\n\nA pit stop refills the player's boost card pool and consumes the turn as a\nfree boost-0 lap. Optionally switches to a new tyre type (which defines the\nrefilled pool); if omitted, the current tyre is kept.",
+        "required": [
+          "player_uuid",
+          "car_uuid"
+        ],
+        "properties": {
+          "car_uuid": {
+            "type": "string",
+            "description": "UUID of the car being used"
+          },
+          "new_tyre": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TyreType"
+              }
+            ],
+            "nullable": true
+          },
+          "player_uuid": {
+            "type": "string",
+            "description": "UUID of the player pitting"
+          }
+        }
+      },
+      "Player": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "email",
+          "password_hash",
+          "team_name",
+          "role",
+          "cars",
+          "pilots",
+          "engines",
+          "bodies",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "bodies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Body"
+            }
+          },
+          "cars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Car"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "$ref": "#/components/schemas/Email"
+          },
+          "engines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Engine"
+            }
+          },
+          "password_hash": {
+            "$ref": "#/components/schemas/HashedPassword"
+          },
+          "pilots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Pilot"
+            }
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "team_name": {
+            "$ref": "#/components/schemas/TeamName"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PlayerRacePosition": {
+        "type": "object",
+        "required": [
+          "starting_sector",
+          "position_in_sector",
+          "qualification_rank"
+        ],
+        "properties": {
+          "position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "qualification_rank": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "starting_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "PlayerResponse": {
+        "type": "object",
+        "required": [
+          "player",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "player": {
+            "$ref": "#/components/schemas/Player"
+          }
+        }
+      },
+      "PlayerSpecificData": {
+        "type": "object",
+        "required": [
+          "boost_availability",
+          "performance_preview",
+          "current_position",
+          "boost_usage_history",
+          "boost_cycle_summaries"
+        ],
+        "properties": {
+          "boost_availability": {
+            "$ref": "#/components/schemas/BoostAvailability"
+          },
+          "boost_cycle_summaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoostCycleSummary"
+            }
+          },
+          "boost_usage_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoostUsageRecord"
+            }
+          },
+          "current_position": {
+            "$ref": "#/components/schemas/CurrentPlayerPosition"
+          },
+          "lap_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LapPerformanceRecord"
+            },
+            "nullable": true
+          },
+          "performance_preview": {
+            "$ref": "#/components/schemas/PerformancePreview"
+          }
+        }
+      },
+      "ProcessLapRequest": {
+        "type": "object",
+        "required": [
+          "actions"
+        ],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LapActionRequest"
+            }
+          }
+        }
+      },
+      "Race": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "track",
+          "participants",
+          "lap_characteristic",
+          "current_lap",
+          "total_laps",
+          "status",
+          "created_at",
+          "updated_at",
+          "pending_actions",
+          "action_submissions",
+          "pending_performance_calculations"
+        ],
+        "properties": {
+          "_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "action_submissions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "$ref": "#/components/schemas/LapCharacteristic"
+          },
+          "name": {
+            "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RaceParticipant"
+            }
+          },
+          "pending_actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LapAction"
+            }
+          },
+          "pending_performance_calculations": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PerformanceCalculation"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/RaceStatus"
+          },
+          "total_laps": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          },
+          "turns_taken": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of processing turns taken so far. Used only as a safety bound to\nguarantee a race terminates even on an unwinnable track.",
+            "minimum": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "RaceMetadata": {
+        "type": "object",
+        "required": [
+          "race_uuid",
+          "race_name",
+          "track_name",
+          "total_turns"
+        ],
+        "properties": {
+          "estimated_completion": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "race_name": {
+            "type": "string"
+          },
+          "race_uuid": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "total_turns": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "track_name": {
+            "type": "string"
+          }
+        }
+      },
+      "RaceParticipant": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_uuid",
+          "pilot_uuid",
+          "current_sector",
+          "current_position_in_sector",
+          "current_lap",
+          "total_value",
+          "is_finished",
+          "boost_hand"
+        ],
+        "properties": {
+          "boost_hand": {
+            "$ref": "#/components/schemas/BoostHand"
+          },
+          "boost_usage_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoostUsageRecord"
+            },
+            "description": "History of boost card usage for this participant"
+          },
+          "car_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "current_position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "current_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "finish_position": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "is_ai": {
+            "type": "boolean",
+            "description": "Whether this participant is controlled by the AI (solo mode opponents).\nDefaults to `false` so existing/serialized races deserialize as human."
+          },
+          "is_finished": {
+            "type": "boolean"
+          },
+          "pilot_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "player_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "total_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "RaceProgressStatus": {
+        "type": "object",
+        "required": [
+          "status",
+          "current_lap",
+          "total_laps",
+          "lap_characteristic",
+          "turn_phase",
+          "participants_count",
+          "finished_participants"
+        ],
+        "properties": {
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "finished_participants": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "$ref": "#/components/schemas/LapCharacteristic"
+          },
+          "participants_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/RaceStatusType"
+          },
+          "total_laps": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "turn_phase": {
+            "$ref": "#/components/schemas/TurnPhase"
+          }
+        }
+      },
+      "RaceResponse": {
+        "type": "object",
+        "required": [
+          "race",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "race": {
+            "$ref": "#/components/schemas/Race"
+          }
+        }
+      },
+      "RaceStatus": {
+        "type": "string",
+        "enum": [
+          "Waiting",
+          "InProgress",
+          "Finished",
+          "Cancelled"
+        ]
+      },
+      "RaceStatusType": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Waiting"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "Ongoing"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "Finished"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "Error"
+            ],
+            "properties": {
+              "Error": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RegisterPlayerRequest": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_uuid"
+        ],
+        "properties": {
+          "car_uuid": {
+            "type": "string"
+          },
+          "player_uuid": {
+            "type": "string"
+          },
+          "tyre_type": {
+            "$ref": "#/components/schemas/TyreType"
+          }
+        }
+      },
+      "RegisterPlayerResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message",
+          "race_status",
+          "player_position"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "player_position": {
+            "$ref": "#/components/schemas/PlayerRacePosition"
+          },
+          "race_status": {
+            "$ref": "#/components/schemas/RaceProgressStatus"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Sector": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "min_value",
+          "max_value",
+          "sector_type"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "min_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "sector_type": {
+            "$ref": "#/components/schemas/SectorType"
+          },
+          "slot_capacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
+      "SectorCapacityInfo": {
+        "type": "object",
+        "required": [
+          "current_occupancy"
+        ],
+        "properties": {
+          "available_slots": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "current_occupancy": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_capacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
+      "SectorInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "min_value",
+          "max_value",
+          "sector_type",
+          "current_occupancy"
+        ],
+        "properties": {
+          "current_occupancy": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "min_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "sector_type": {
+            "type": "string"
+          },
+          "slot_capacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
+      "SectorParticipant": {
+        "type": "object",
+        "required": [
+          "player_uuid",
+          "car_name",
+          "position_in_sector",
+          "total_value",
+          "current_lap",
+          "is_finished"
+        ],
+        "properties": {
+          "car_name": {
+            "type": "string"
+          },
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "is_finished": {
+            "type": "boolean"
+          },
+          "player_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "player_uuid": {
+            "type": "string"
+          },
+          "position_in_sector": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "SectorSituation": {
+        "type": "object",
+        "required": [
+          "sector_id",
+          "sector_name",
+          "sector_type",
+          "capacity_info",
+          "participants",
+          "performance_thresholds"
+        ],
+        "properties": {
+          "capacity_info": {
+            "$ref": "#/components/schemas/SectorCapacityInfo"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectorParticipant"
+            }
+          },
+          "performance_thresholds": {
+            "$ref": "#/components/schemas/PerformanceThresholds"
+          },
+          "sector_id": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "sector_name": {
+            "type": "string"
+          },
+          "sector_type": {
+            "$ref": "#/components/schemas/SectorType"
+          }
+        }
+      },
+      "SectorType": {
+        "type": "string",
+        "enum": [
+          "Start",
+          "Straight",
+          "Curve",
+          "Finish"
+        ]
+      },
+      "SubmitTurnActionRequest": {
+        "type": "object",
+        "description": "Request to submit a single player's turn action",
+        "required": [
+          "player_uuid",
+          "boost_value"
+        ],
+        "properties": {
+          "boost_value": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "player_uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "SubmitTurnActionResponse": {
+        "type": "object",
+        "description": "Response after submitting a turn action",
+        "required": [
+          "success",
+          "message",
+          "turn_phase",
+          "players_submitted",
+          "total_players"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "players_submitted": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "total_players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "turn_phase": {
+            "type": "string"
+          }
+        }
+      },
+      "TeamName": {
+        "type": "string"
+      },
+      "Track": {
+        "type": "object",
+        "required": [
+          "uuid",
+          "name",
+          "sectors"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Sector"
+            }
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TrackSituationData": {
+        "type": "object",
+        "required": [
+          "sectors",
+          "recent_movements",
+          "lap_leaderboard"
+        ],
+        "properties": {
+          "lap_leaderboard": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntry"
+            }
+          },
+          "recent_movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParticipantMovement"
+            }
+          },
+          "sectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectorSituation"
+            }
+          }
+        }
+      },
+      "TurnPhase": {
+        "type": "string",
+        "enum": [
+          "WaitingForPlayers",
+          "AllSubmitted",
+          "Processing",
+          "TurnProcessed",
+          "Complete"
+        ]
+      },
+      "TurnPhaseResponse": {
+        "type": "object",
+        "required": [
+          "turn_phase",
+          "current_lap",
+          "total_laps",
+          "lap_characteristic",
+          "submitted_players",
+          "pending_players",
+          "total_active_players"
+        ],
+        "properties": {
+          "current_lap": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "lap_characteristic": {
+            "type": "string"
+          },
+          "pending_players": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "submitted_players": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "total_active_players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_laps": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "turn_phase": {
+            "type": "string"
+          }
+        }
+      },
+      "TyreType": {
+        "type": "string",
+        "description": "Tyre type chosen at race entry (and at each pit stop). It determines the\nboost card pool: softer tyres give fewer but stronger cards, harder tyres\ngive more but weaker cards.",
+        "enum": [
+          "Soft",
+          "Medium",
+          "Hard"
+        ]
+      },
+      "UpdateTeamNameRequest": {
+        "type": "object",
+        "required": [
+          "team_name"
+        ],
+        "properties": {
+          "team_name": {
+            "type": "string"
+          }
+        }
+      },
+      "UserCredentials": {
+        "type": "object",
+        "description": "User credentials for authentication",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "UserRegistration": {
+        "type": "object",
+        "description": "Registration data for new users",
+        "required": [
+          "email",
+          "password",
+          "team_name"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "team_name": {
+            "type": "string"
+          }
+        }
+      },
+      "UserRole": {
+        "type": "string",
+        "description": "User roles for authorization",
+        "enum": [
+          "Player",
+          "Admin",
+          "SuperAdmin"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "test",
+      "description": "Test endpoints"
+    },
+    {
+      "name": "players",
+      "description": "Player management endpoints"
+    },
+    {
+      "name": "races",
+      "description": "Race management and gameplay endpoints"
+    },
+    {
+      "name": "boost-cards",
+      "description": "Boost card system endpoints with strategic resource management"
+    },
+    {
+      "name": "Authentication",
+      "description": "User authentication endpoints"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+pub mod ai_player;
 mod auth;
 mod body;
 pub mod boost_hand_manager;

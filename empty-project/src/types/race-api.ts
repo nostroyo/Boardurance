@@ -68,8 +68,8 @@ export interface PerformancePreview {
     movement_probability: MovementProbability;
   }>;
   boost_cycle_info: {
-    current_cycle: number;
-    cycles_completed: number;
+    tyre_type: TyreType;
+    pit_stops_completed: number;
     cards_remaining: number;
     available_cards: number[];
   };
@@ -89,6 +89,7 @@ export type TurnPhaseStatus =
 export interface TurnPhase {
   turn_phase: TurnPhaseStatus;
   current_lap: number;
+  total_laps: number;
   lap_characteristic: LapCharacteristic;
   submitted_players: string[];
   pending_players: string[];
@@ -101,6 +102,11 @@ export interface TurnPhase {
 
 export interface LocalView {
   center_sector: number;
+  /**
+   * Total sectors on the track; used to number the lead sector as "Sector 1".
+   * Optional for backward-compatible test fixtures — the backend always sends it.
+   */
+  total_sectors?: number;
   visible_sectors: Array<{
     id: number;
     name: string;
@@ -126,13 +132,16 @@ export interface LocalView {
 // Boost Availability Types (from /boost-availability endpoint)
 // ============================================================================
 
+/** Tyre type chosen at race entry / pit stop, defining the boost card pool. */
+export type TyreType = 'Soft' | 'Medium' | 'Hard';
+
 export interface BoostAvailability {
   available_cards: number[];
-  hand_state: Record<string, boolean>;
-  current_cycle: number;
-  cycles_completed: number;
+  /** Remaining count per boost card value (keys "1".."4"). */
+  hand_state: Record<string, number>;
+  tyre_type: TyreType;
+  pit_stops_completed: number;
   cards_remaining: number;
-  next_replenishment_at: number | null;
 }
 
 // ============================================================================
@@ -174,4 +183,14 @@ export interface SubmitActionResponse {
   turn_phase: string; // "WaitingForPlayers", "Processing", "TurnProcessed"
   players_submitted: number;
   total_players: number;
+}
+
+// ============================================================================
+// Solo Race Types (for POST /races/solo endpoint)
+// ============================================================================
+
+/** Response from POST /races/solo. Only `race.uuid` is needed to route into play. */
+export interface CreateSoloRaceResponse {
+  race: { uuid: string } & Record<string, unknown>;
+  message: string;
 }

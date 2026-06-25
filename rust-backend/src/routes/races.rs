@@ -37,8 +37,9 @@ use crate::domain::boost_hand_manager::{
     BoostAvailability, BoostCardErrorResponse, BoostHandManager,
 };
 use crate::domain::{
-    LapAction, LapCharacteristic, LapResult, MovementProbability, MovementType,
-    PerformanceCalculation, Race, RaceStatus, Sector, SectorType, Track,
+    BoostCycleSummary, BoostUsageRecord, LapAction, LapCharacteristic, LapResult,
+    MovementProbability, MovementType, PerformanceCalculation, Race, RaceParticipant, RaceStatus,
+    Sector, SectorType, Track, TyreType,
 };
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
@@ -96,6 +97,269 @@ async fn build_car_data_map(
         }
     }
     map
+}
+
+// ===================== Solo mode (AI opponents) =====================
+
+/// Number of AI opponents seeded for solo races.
+const SOLO_BOT_COUNT: usize = 2;
+
+/// A seeded AI opponent's racing identity (player + completed car + primary pilot).
+#[derive(Debug, Clone)]
+struct BotIdentity {
+    player_uuid: Uuid,
+    car_uuid: Uuid,
+    pilot_uuid: Uuid,
+}
+
+/// Registry of seeded AI opponents, populated once at startup by
+/// [`seed_solo_bots`] and read when bootstrapping a solo race.
+static SOLO_BOTS: LazyLock<Mutex<Vec<BotIdentity>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// Seed AI opponent players (each with a complete, pre-equipped car) into the
+/// in-memory player repository and record their racing identities. Idempotent:
+/// repeated calls after the first are no-ops.
+///
+/// Reuses [`crate::routes::auth::create_starter_assets`] so AI cars resolve
+/// through the same `build_car_data_map` pipeline as human players.
+pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
+    use crate::domain::{Email, Password, Player, TeamName};
+
+    if !SOLO_BOTS.lock().unwrap().is_empty() {
+        return;
+    }
+
+    let mut identities = Vec::new();
+
+    for i in 0..SOLO_BOT_COUNT {
+        let (cars, pilots, engines, bodies) = match crate::routes::auth::create_starter_assets() {
+            Ok(assets) => assets,
+            Err(e) => {
+                tracing::error!("Failed to build assets for AI bot {i}: {e}");
+                continue;
+            }
+        };
+
+        let email = match Email::parse(&format!("bot{i}@boardurance.ai")) {
+            Ok(email) => email,
+            Err(e) => {
+                tracing::error!("Invalid bot email for bot {i}: {e}");
+                continue;
+            }
+        };
+        let password_hash = match Password::new(format!("BotPassword{i}!")).and_then(|p| p.hash()) {
+            Ok(hash) => hash,
+            Err(e) => {
+                tracing::error!("Failed to hash bot password for bot {i}: {e}");
+                continue;
+            }
+        };
+        let team_name = match TeamName::parse(&format!("AI Racer {}", i + 1)) {
+            Ok(name) => name,
+            Err(e) => {
+                tracing::error!("Invalid bot team name for bot {i}: {e}");
+                continue;
+            }
+        };
+
+        let player = match Player::new_with_assets(
+            email,
+            password_hash,
+            team_name,
+            cars,
+            pilots,
+            engines,
+            bodies,
+        ) {
+            Ok(player) => player,
+            Err(e) => {
+                tracing::error!("Failed to build AI bot player {i}: {e}");
+                continue;
+            }
+        };
+
+        // The first car is completed by `new_with_assets`. Vary opponents by
+        // assigning each a different primary pilot from that car's roster.
+        let Some(car) = player.cars.first() else {
+            continue;
+        };
+        let pilot_count = car.pilot_uuids.len().max(1);
+        let pilot_uuid = car
+            .pilot_uuids
+            .get(i % pilot_count)
+            .or_else(|| car.pilot_uuids.first())
+            .copied();
+        let (Some(pilot_uuid), car_uuid) = (pilot_uuid, car.uuid) else {
+            tracing::error!("AI bot {i} car has no pilots; skipping");
+            continue;
+        };
+
+        if let Err(e) = repo.create(&player).await {
+            tracing::error!("Failed to seed AI bot player {i}: {e:?}");
+            continue;
+        }
+
+        identities.push(BotIdentity {
+            player_uuid: player.uuid,
+            car_uuid,
+            pilot_uuid,
+        });
+    }
+
+    tracing::info!("Seeded {} AI opponent(s) for solo mode", identities.len());
+    *SOLO_BOTS.lock().unwrap() = identities;
+}
+
+/// Build the standard solo-mode track. Sector ceilings are tuned so a
+/// starter-grade car (base ~17-20) advances one sector with any boost >= 1 and
+/// never drops back, so a solo race always reaches completion.
+fn build_solo_track() -> Result<Track, String> {
+    let sectors = vec![
+        Sector {
+            id: 0,
+            name: "Start".to_string(),
+            min_value: 0,
+            max_value: 10,
+            slot_capacity: None,
+            sector_type: SectorType::Start,
+        },
+        Sector {
+            id: 1,
+            name: "Straight".to_string(),
+            min_value: 5,
+            max_value: 14,
+            slot_capacity: None,
+            sector_type: SectorType::Straight,
+        },
+        Sector {
+            id: 2,
+            name: "Curve".to_string(),
+            min_value: 5,
+            max_value: 14,
+            slot_capacity: None,
+            sector_type: SectorType::Curve,
+        },
+        Sector {
+            id: 3,
+            name: "Finish".to_string(),
+            min_value: 8,
+            max_value: 16,
+            slot_capacity: None,
+            sector_type: SectorType::Finish,
+        },
+    ];
+
+    Track::new("Solo Circuit".to_string(), sectors)
+}
+
+/// Request to start a solo race. Only the human player's UUID is required; the
+/// backend picks the player's first complete car and fills the rest of the grid
+/// with seeded AI opponents.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateSoloRaceRequest {
+    pub player_uuid: String,
+    /// Starting tyre for the human player, which defines the boost pool.
+    /// Defaults to Medium.
+    #[serde(default)]
+    pub tyre_type: TyreType,
+}
+
+/// Start a solo race: the human player plus seeded AI opponents, auto-started
+/// and ready to play. The backend selects the player's first complete car and
+/// its primary pilot, then fills the remaining grid with AI bots.
+#[utoipa::path(
+    post,
+    path = "/races/solo",
+    request_body = CreateSoloRaceRequest,
+    responses(
+        (status = 201, description = "Solo race created and started", body = RaceResponse),
+        (status = 400, description = "Invalid player UUID"),
+        (status = 404, description = "Player or a complete car not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "races"
+)]
+#[tracing::instrument(name = "Creating a solo race", skip(state, payload))]
+pub async fn create_solo_race(
+    State(state): State<RaceTurnState>,
+    Json(payload): Json<CreateSoloRaceRequest>,
+) -> Result<(StatusCode, Json<RaceResponse>), StatusCode> {
+    let player_uuid = Uuid::parse_str(&payload.player_uuid).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {e}");
+        StatusCode::BAD_REQUEST
+    })?;
+
+    // Resolve the human's first complete car and its primary pilot.
+    let player = match state.player_repository.find_by_uuid(player_uuid).await {
+        Ok(Some(player)) => player,
+        Ok(None) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to load player {player_uuid}: {e:?}");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    let Some(car) = player.cars.iter().find(|c| c.is_complete()) else {
+        tracing::warn!("Player {player_uuid} has no complete car for a solo race");
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let Some(&pilot_uuid) = car.pilot_uuids.first() else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let human_car_uuid = car.uuid;
+
+    // Build the track and the auto-started race.
+    let track = build_solo_track().map_err(|e| {
+        tracing::error!("Invalid solo track: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    // One turn = one lap; the race runs for this many turns/laps.
+    let mut race = Race::new("Solo Race".to_string(), track, 5);
+    race.status = RaceStatus::InProgress;
+    race.lap_characteristic = LapCharacteristic::Straight;
+    race.current_lap = 1;
+
+    // Add the human (with their chosen tyre), then the seeded AI opponents.
+    if let Err(e) =
+        race.add_participant_with_tyre(player_uuid, human_car_uuid, pilot_uuid, payload.tyre_type)
+    {
+        tracing::error!("Failed to add human to solo race: {e}");
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let bots = SOLO_BOTS.lock().unwrap().clone();
+    // Give AI opponents varied tyre strategies (cycling Soft/Medium/Hard) so the
+    // grid isn't homogeneous.
+    let ai_tyres = [TyreType::Soft, TyreType::Medium, TyreType::Hard];
+    for (i, bot) in bots.into_iter().enumerate() {
+        let tyre = ai_tyres[i % ai_tyres.len()];
+        if let Err(e) =
+            race.add_ai_participant_with_tyre(bot.player_uuid, bot.car_uuid, bot.pilot_uuid, tyre)
+        {
+            tracing::warn!("Failed to add AI opponent to solo race: {e}");
+        }
+    }
+
+    // Normalize the grid: everyone starts at the line in a stable order.
+    // Positions are 0-based (matching `sort_participants_in_sectors` and the UI's
+    // slot 1 = position 0), so the front slot is filled from the very first turn.
+    for (index, participant) in race.participants.iter_mut().enumerate() {
+        participant.current_sector = 0;
+        participant.current_position_in_sector = index as u32;
+    }
+
+    store_save(race.clone());
+    tracing::info!(
+        "Solo race {} started with {} participants",
+        race.uuid,
+        race.participants.len()
+    );
+
+    Ok((
+        StatusCode::CREATED,
+        Json(RaceResponse {
+            race,
+            message: "Solo race created and started".to_string(),
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -169,6 +433,9 @@ pub struct LapResultResponse {
 pub struct RegisterPlayerRequest {
     pub player_uuid: String,
     pub car_uuid: String,
+    /// Starting tyre, which defines the boost card pool. Defaults to Medium.
+    #[serde(default)]
+    pub tyre_type: TyreType,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -208,12 +475,8 @@ pub struct DetailedRaceStatusResponse {
 /// When all cards are used, the hand automatically replenishes.
 ///
 /// # Performance Calculation
-/// Final performance = `base_performance` * (1 + `boost_value` * 0.08)
-/// - `boost_value` 0: No boost (1.0x multiplier)
-/// - `boost_value` 1: 8% boost (1.08x multiplier)
-/// - `boost_value` 2: 16% boost (1.16x multiplier)
-/// - `boost_value` 3: 24% boost (1.24x multiplier)
-/// - `boost_value` 4: 32% boost (1.32x multiplier)
+/// Final performance = `min(base_performance, sector.max_value)` + `boost_value`
+/// (additive model, matching lap resolution). `boost_value` ranges 0-4.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ApplyLapRequest {
     /// UUID of the player making the lap action
@@ -227,6 +490,22 @@ pub struct ApplyLapRequest {
     /// Boost card value to use (0-4). Must be available in current cycle.
     #[schema(example = 3, minimum = 0, maximum = 4)]
     pub boost_value: u32,
+}
+
+/// Request to perform a pit stop.
+///
+/// A pit stop refills the player's boost card pool and consumes the turn as a
+/// free boost-0 lap. Optionally switches to a new tyre type (which defines the
+/// refilled pool); if omitted, the current tyre is kept.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PitStopRequest {
+    /// UUID of the player pitting
+    pub player_uuid: String,
+    /// UUID of the car being used
+    pub car_uuid: String,
+    /// Optional new tyre to fit during the pit stop. Defaults to the current tyre.
+    #[serde(default)]
+    pub new_tyre: Option<TyreType>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -326,8 +605,8 @@ pub struct PlayerSpecificData {
     pub performance_preview: PerformancePreview,
     pub current_position: CurrentPlayerPosition,
     pub lap_history: Option<Vec<LapPerformanceRecord>>,
-    pub boost_usage_history: Vec<crate::domain::BoostUsageRecord>,
-    pub boost_cycle_summaries: Vec<crate::domain::BoostCycleSummary>,
+    pub boost_usage_history: Vec<BoostUsageRecord>,
+    pub boost_cycle_summaries: Vec<BoostCycleSummary>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -433,6 +712,7 @@ pub struct BodyInfo {
 pub struct TurnPhaseResponse {
     pub turn_phase: String, // "WaitingForPlayers", "AllSubmitted", "Processing", "TurnProcessed", "Complete"
     pub current_lap: u32,
+    pub total_laps: u32,
     pub lap_characteristic: String,
     pub submitted_players: Vec<String>, // UUIDs
     pub pending_players: Vec<String>,   // UUIDs
@@ -444,6 +724,9 @@ pub struct TurnPhaseResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct LocalViewResponse {
     pub center_sector: u32,
+    /// Total number of sectors on the track. Lets the UI number sectors with
+    /// the leading (highest-index) sector as "Sector 1".
+    pub total_sectors: u32,
     pub visible_sectors: Vec<SectorInfo>,
     pub visible_participants: Vec<ParticipantInfo>,
 }
@@ -501,8 +784,8 @@ pub struct BoostOption {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BoostCycleInfo {
-    pub current_cycle: u32,
-    pub cycles_completed: u32,
+    pub tyre_type: TyreType,
+    pub pit_stops_completed: u32,
     pub cards_remaining: u32,
     pub available_cards: Vec<u8>,
 }
@@ -512,11 +795,11 @@ pub struct BoostCycleInfo {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BoostAvailabilityResponse {
     pub available_cards: Vec<u8>,
-    pub hand_state: std::collections::HashMap<String, bool>,
-    pub current_cycle: u32,
-    pub cycles_completed: u32,
+    /// Remaining count per boost card value (keys "1".."4").
+    pub hand_state: std::collections::HashMap<String, u32>,
+    pub tyre_type: TyreType,
+    pub pit_stops_completed: u32,
     pub cards_remaining: u32,
-    pub next_replenishment_at: Option<u32>,
 }
 
 // Lap History Endpoint Response Models
@@ -566,22 +849,17 @@ pub struct ErrorResponse {
 
 // Helper Functions
 
-/// Calculate movement probability based on performance value and sector thresholds
+/// Calculate movement probability based on performance value and sector thresholds.
+///
+/// Delegates to [`crate::domain::ai_player::classify_movement`] so the preview
+/// shares a single source of truth with lap resolution and the AI brain:
+/// `MoveUp` if `final > max`, `MoveDown` if `final < min`, otherwise `Stay`.
 ///
 /// # Arguments
 /// * `final_value` - The final performance value after boost
 /// * `sector` - The current sector with min/max thresholds
-///
-/// # Returns
-/// * `MovementProbability` - `MoveUp` if >= max, Stay if between min/max, `MoveDown` if < min
 fn calculate_movement_probability(final_value: u32, sector: &Sector) -> MovementProbability {
-    if final_value >= sector.max_value {
-        MovementProbability::MoveUp
-    } else if final_value < sector.min_value {
-        MovementProbability::MoveDown
-    } else {
-        MovementProbability::Stay
-    }
+    crate::domain::ai_player::classify_movement(final_value, sector)
 }
 
 /// Calculate visible sector IDs for local view (center Â±2 sectors)
@@ -631,14 +909,6 @@ pub fn routes() -> Router<Database> {
         .route("/races/:race_uuid/apply-lap", post(apply_lap_action))
         // New player-specific endpoints
         .route(
-            "/races/:race_uuid/players/:player_uuid/car-data",
-            get(get_car_data),
-        )
-        .route(
-            "/races/:race_uuid/players/:player_uuid/performance-preview",
-            get(get_performance_preview),
-        )
-        .route(
             "/races/:race_uuid/players/:player_uuid/local-view",
             get(get_local_view),
         )
@@ -667,8 +937,18 @@ pub fn routes() -> Router<Database> {
 /// (via AppState) to compute real movement from each car's stats.
 pub fn turn_routes() -> Router<RaceTurnState> {
     Router::new()
+        .route("/races/solo", post(create_solo_race))
         .route("/races/:race_uuid/submit-action", post(submit_turn_action))
+        .route("/races/:race_uuid/pit", post(pit_stop_action))
         .route("/races/:race_uuid/turn", post(process_turn))
+        .route(
+            "/races/:race_uuid/players/:player_uuid/car-data",
+            get(get_car_data),
+        )
+        .route(
+            "/races/:race_uuid/players/:player_uuid/performance-preview",
+            get(get_performance_preview),
+        )
 }
 
 // Helper Functions for Enhanced API
@@ -679,14 +959,15 @@ async fn register_player_in_race(
     player_uuid: Uuid,
     car_uuid: Uuid,
     pilot_uuid: Uuid,
+    tyre_type: TyreType,
 ) -> Result<Option<Race>, mongodb::error::Error> {
     // Get the race first
     let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
         return Ok(None);
     };
 
-    // Try to add participant
-    if let Err(e) = race.add_participant(player_uuid, car_uuid, pilot_uuid) {
+    // Try to add participant with their chosen starting tyre
+    if let Err(e) = race.add_participant_with_tyre(player_uuid, car_uuid, pilot_uuid, tyre_type) {
         return Err(mongodb::error::Error::custom(e));
     }
 
@@ -757,7 +1038,6 @@ fn build_race_progress_status(race: &Race) -> RaceProgressStatus {
 
 #[allow(clippy::unused_async)]
 async fn build_track_situation_data(
-    _database: &Database,
     race: &Race,
 ) -> Result<TrackSituationData, mongodb::error::Error> {
     let mut sectors = Vec::new();
@@ -884,7 +1164,6 @@ fn build_race_metadata(race: &Race) -> RaceMetadata {
 
 #[allow(clippy::unused_async)]
 async fn build_player_specific_data(
-    _database: &Database,
     race: &Race,
     player_uuid: Uuid,
 ) -> Result<PlayerSpecificData, mongodb::error::Error> {
@@ -1055,6 +1334,7 @@ pub async fn register_player(
         player_uuid,
         car_uuid,
         car_data.pilot.uuid,
+        payload.tyre_type,
     )
     .await
     {
@@ -1252,7 +1532,7 @@ pub async fn get_race_status_detailed(
 
     // Build comprehensive status response
     let race_progress = build_race_progress_status(&race);
-    let track_situation = match build_track_situation_data(&database, &race).await {
+    let track_situation = match build_track_situation_data(&race).await {
         Ok(data) => data,
         Err(e) => {
             tracing::error!("Failed to build track situation: {:?}", e);
@@ -1271,7 +1551,7 @@ pub async fn get_race_status_detailed(
             }
         };
 
-        match build_player_specific_data(&database, &race, player_uuid).await {
+        match build_player_specific_data(&race, player_uuid).await {
             Ok(data) => Some(data),
             Err(e) => {
                 tracing::error!("Failed to build player specific data: {:?}", e);
@@ -1299,7 +1579,7 @@ pub async fn get_race_status_detailed(
 /// - Players have 5 boost cards (values 0-4) available per cycle
 /// - Each card can only be used once per cycle
 /// - When all 5 cards are used, the hand automatically replenishes
-/// - Boost cards multiply performance: `base_value` * (1 + `boost_value` * 0.08)
+/// - Boost cards add to performance: `min(base_value, sector.max_value)` + `boost_value`
 ///
 /// # Boost Card Usage Flow
 /// 1. Player selects an available boost card (0-4)
@@ -1414,7 +1694,7 @@ pub async fn apply_lap_action(
                     error_code: "INVALID_UUID".to_string(),
                     message: format!("Invalid race UUID: {e}"),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1431,7 +1711,7 @@ pub async fn apply_lap_action(
                     error_code: "INVALID_UUID".to_string(),
                     message: format!("Invalid player UUID: {e}"),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1448,7 +1728,7 @@ pub async fn apply_lap_action(
                     error_code: "INVALID_UUID".to_string(),
                     message: format!("Invalid car UUID: {e}"),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1467,7 +1747,7 @@ pub async fn apply_lap_action(
                         error_code: "CAR_VALIDATION_FAILED".to_string(),
                         message: format!("Car validation failed: {e}"),
                         available_cards: vec![],
-                        current_cycle: 0,
+                        pit_stops_completed: 0,
                         cards_remaining: 0,
                     }),
                 ));
@@ -1485,7 +1765,7 @@ pub async fn apply_lap_action(
                     error_code: "RACE_NOT_FOUND".to_string(),
                     message: "Race not found".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1498,7 +1778,7 @@ pub async fn apply_lap_action(
                     error_code: "DATABASE_ERROR".to_string(),
                     message: "Failed to fetch race".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1545,7 +1825,7 @@ pub async fn apply_lap_action(
                     error_code: "RACE_NOT_FOUND".to_string(),
                     message: "Race not found".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1562,7 +1842,7 @@ pub async fn apply_lap_action(
                         error_code: "BOOST_CARD_ERROR".to_string(),
                         message: error_msg,
                         available_cards: vec![],
-                        current_cycle: 0,
+                        pit_stops_completed: 0,
                         cards_remaining: 0,
                     }),
                 ));
@@ -1575,7 +1855,7 @@ pub async fn apply_lap_action(
                         error_code: "RACE_STATE_ERROR".to_string(),
                         message: error_msg,
                         available_cards: vec![],
-                        current_cycle: 0,
+                        pit_stops_completed: 0,
                         cards_remaining: 0,
                     }),
                 ));
@@ -1587,7 +1867,7 @@ pub async fn apply_lap_action(
                     error_code: "INTERNAL_ERROR".to_string(),
                     message: "Failed to process lap action".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1596,7 +1876,7 @@ pub async fn apply_lap_action(
 
     // Return same format as status endpoint with updated boost hand state
     let race_progress = build_race_progress_status(&updated_race);
-    let track_situation = match build_track_situation_data(&database, &updated_race).await {
+    let track_situation = match build_track_situation_data(&updated_race).await {
         Ok(data) => data,
         Err(e) => {
             tracing::error!("Failed to build track situation: {:?}", e);
@@ -1606,15 +1886,14 @@ pub async fn apply_lap_action(
                     error_code: "INTERNAL_ERROR".to_string(),
                     message: "Failed to build track situation".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
         }
     };
     let race_metadata = build_race_metadata(&updated_race);
-    let player_data = match build_player_specific_data(&database, &updated_race, player_uuid).await
-    {
+    let player_data = match build_player_specific_data(&updated_race, player_uuid).await {
         Ok(data) => Some(data),
         Err(e) => {
             tracing::error!("Failed to build player specific data: {:?}", e);
@@ -1624,7 +1903,7 @@ pub async fn apply_lap_action(
                     error_code: "INTERNAL_ERROR".to_string(),
                     message: "Failed to build player specific data".to_string(),
                     available_cards: vec![],
-                    current_cycle: 0,
+                    pit_stops_completed: 0,
                     cards_remaining: 0,
                 }),
             ));
@@ -1633,6 +1912,140 @@ pub async fn apply_lap_action(
 
     tracing::info!(
         "Lap action processed for player {} in race {}",
+        player_uuid,
+        race_uuid
+    );
+
+    Ok(Json(DetailedRaceStatusResponse {
+        race_progress,
+        track_situation,
+        player_data,
+        race_metadata,
+    }))
+}
+
+/// Perform a pit stop for a player
+///
+/// Refills the player's boost card pool (optionally switching tyre) and
+/// consumes the turn as a free boost-0 lap.
+#[utoipa::path(
+    post,
+    path = "/api/v1/races/{race_uuid}/pit",
+    request_body = PitStopRequest,
+    params(("race_uuid" = String, Path, description = "Race UUID")),
+    responses(
+        (status = 200, description = "Pit stop applied", body = DetailedRaceStatusResponse),
+        (status = 400, description = "Invalid request", body = BoostCardErrorResponse),
+        (status = 404, description = "Race not found", body = BoostCardErrorResponse),
+        (status = 409, description = "Invalid race state", body = BoostCardErrorResponse)
+    ),
+    tag = "races"
+)]
+pub async fn pit_stop_action(
+    State(state): State<RaceTurnState>,
+    Path(race_uuid_str): Path<String>,
+    Json(payload): Json<PitStopRequest>,
+) -> Result<Json<DetailedRaceStatusResponse>, (StatusCode, Json<BoostCardErrorResponse>)> {
+    fn err(
+        status: StatusCode,
+        code: &str,
+        message: String,
+    ) -> (StatusCode, Json<BoostCardErrorResponse>) {
+        (
+            status,
+            Json(BoostCardErrorResponse {
+                error_code: code.to_string(),
+                message,
+                available_cards: vec![],
+                pit_stops_completed: 0,
+                cards_remaining: 0,
+            }),
+        )
+    }
+
+    let race_uuid = Uuid::parse_str(&race_uuid_str).map_err(|e| {
+        err(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UUID",
+            format!("Invalid race UUID: {e}"),
+        )
+    })?;
+    let player_uuid = Uuid::parse_str(&payload.player_uuid).map_err(|e| {
+        err(
+            StatusCode::BAD_REQUEST,
+            "INVALID_UUID",
+            format!("Invalid player UUID: {e}"),
+        )
+    })?;
+
+    // Build the car-data map for ALL participants from the in-memory player
+    // repository — the same source `/submit-action` uses. This lets the pit path
+    // enqueue the AI opponents (and resolve the human's car stats) without a DB
+    // round-trip. Previously the pit path never enqueued AI, so a solo turn
+    // deadlocked waiting on opponents that never submitted.
+    let car_data_map = match store_get(race_uuid) {
+        Some(race) => build_car_data_map(&state.player_repository, &race).await,
+        None => {
+            return Err(err(
+                StatusCode::NOT_FOUND,
+                "RACE_NOT_FOUND",
+                "Race not found".to_string(),
+            ))
+        }
+    };
+
+    let updated_race = match resolve_human_turn(
+        race_uuid,
+        player_uuid,
+        TurnIntent::Pit(payload.new_tyre),
+        &car_data_map,
+    )
+    .await
+    {
+        Ok(Some(race)) => race,
+        Ok(None) => {
+            return Err(err(
+                StatusCode::NOT_FOUND,
+                "RACE_NOT_FOUND",
+                "Race not found".to_string(),
+            ))
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("not in progress")
+                || error_msg.contains("already submitted")
+                || error_msg.contains("already finished")
+            {
+                return Err(err(StatusCode::CONFLICT, "RACE_STATE_ERROR", error_msg));
+            }
+            if error_msg.contains("not found") {
+                return Err(err(StatusCode::NOT_FOUND, "PLAYER_NOT_FOUND", error_msg));
+            }
+            return Err(err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Failed to process pit stop".to_string(),
+            ));
+        }
+    };
+
+    let race_progress = build_race_progress_status(&updated_race);
+    let track_situation = build_track_situation_data(&updated_race)
+        .await
+        .map_err(|e| {
+            err(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                format!("Failed to build track situation: {e}"),
+            )
+        })?;
+    let race_metadata = build_race_metadata(&updated_race);
+    let player_data = build_player_specific_data(&updated_race, player_uuid)
+        .await
+        .ok();
+
+    tracing::info!(
+        "Pit stop processed for player {} in race {}",
         player_uuid,
         race_uuid
     );
@@ -1741,14 +2154,14 @@ pub async fn apply_lap_action(
 )]
 #[tracing::instrument(
     name = "Getting car data for player in race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %player_uuid_str
     )
 )]
 pub async fn get_car_data(
-    State(database): State<Database>,
+    State(state): State<RaceTurnState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<CarDataResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -1781,9 +2194,9 @@ pub async fn get_car_data(
     };
 
     // 2. Fetch race and find participant
-    let race = match get_race_by_uuid(&database, race_uuid).await {
-        Ok(Some(race)) => race,
-        Ok(None) => {
+    let race = match store_get(race_uuid) {
+        Some(race) => race,
+        None => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
             return Err((
                 StatusCode::NOT_FOUND,
@@ -1791,17 +2204,6 @@ pub async fn get_car_data(
                     error: "RACE_NOT_FOUND".to_string(),
                     message: "Race not found".to_string(),
                     details: None,
-                }),
-            ));
-        }
-        Err(e) => {
-            tracing::error!("Failed to fetch race: {:?}", e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
-                    message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -1824,23 +2226,32 @@ pub async fn get_car_data(
             )
         })?;
 
-    // 4. Use CarValidationService to get car data
-    let car_data = match CarValidationService::validate_car_for_race(
-        &database,
-        player_uuid,
-        participant.car_uuid,
-    )
-    .await
-    {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!("Failed to validate car: {}", e);
+    // 4. Resolve car data from the in-memory player repository
+    let player = match state.player_repository.find_by_uuid(player_uuid).await {
+        Ok(Some(p)) => p,
+        _ => {
+            tracing::warn!("Player {} not found in repository", player_uuid);
             return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: "CAR_VALIDATION_ERROR".to_string(),
-                    message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to validate car: {e}")),
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            ));
+        }
+    };
+
+    let car_data = match resolve_car_data(&player, participant) {
+        Some(cd) => cd,
+        None => {
+            tracing::warn!("Car components not found for player {}", player_uuid);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "CAR_VALIDATION_FAILED".to_string(),
+                    message: "Car components not found".to_string(),
+                    details: None,
                 }),
             ));
         }
@@ -1902,12 +2313,12 @@ pub async fn get_car_data(
 /// - Movement probability for each boost option
 /// - Boost cycle information (available cards, cycle status)
 ///
-/// The performance calculation follows the boost multiplier formula:
-/// `final_value = base_value * (1.0 + boost_value * 0.08)`
+/// The performance calculation follows the additive model used by lap resolution:
+/// `final_value = min(base_value, sector.max_value) + boost_value`
 ///
 /// Movement probabilities are determined by comparing final values to sector thresholds:
-/// - `MoveUp`: `final_value` >= `sector.max_value`
-/// - Stay: `sector.min_value` <= `final_value` < `sector.max_value`
+/// - `MoveUp`: `final_value` > `sector.max_value`
+/// - Stay: `sector.min_value` <= `final_value` <= `sector.max_value`
 /// - `MoveDown`: `final_value` < `sector.min_value`
 #[utoipa::path(
     get,
@@ -2016,14 +2427,14 @@ pub async fn get_car_data(
 )]
 #[tracing::instrument(
     name = "Getting performance preview for player in race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %player_uuid_str
     )
 )]
 pub async fn get_performance_preview(
-    State(database): State<Database>,
+    State(state): State<RaceTurnState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PerformancePreviewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -2056,9 +2467,9 @@ pub async fn get_performance_preview(
     };
 
     // 2. Fetch race
-    let race = match get_race_by_uuid(&database, race_uuid).await {
-        Ok(Some(race)) => race,
-        Ok(None) => {
+    let race = match store_get(race_uuid) {
+        Some(race) => race,
+        None => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
             return Err((
                 StatusCode::NOT_FOUND,
@@ -2066,17 +2477,6 @@ pub async fn get_performance_preview(
                     error: "RACE_NOT_FOUND".to_string(),
                     message: "Race not found".to_string(),
                     details: None,
-                }),
-            ));
-        }
-        Err(e) => {
-            tracing::error!("Failed to fetch race: {:?}", e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "DATABASE_ERROR".to_string(),
-                    message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to fetch race: {e}")),
                 }),
             ));
         }
@@ -2125,23 +2525,32 @@ pub async fn get_performance_preview(
         ));
     }
 
-    // 6. Validate car data using CarValidationService
-    let car_data = match CarValidationService::validate_car_for_race(
-        &database,
-        player_uuid,
-        participant.car_uuid,
-    )
-    .await
-    {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!("Failed to validate car: {}", e);
+    // 6. Resolve car data from the in-memory player repository
+    let player = match state.player_repository.find_by_uuid(player_uuid).await {
+        Ok(Some(p)) => p,
+        _ => {
+            tracing::warn!("Player {} not found in repository", player_uuid);
             return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
-                    error: "CAR_VALIDATION_ERROR".to_string(),
-                    message: "Internal server error".to_string(),
-                    details: Some(format!("Failed to validate car: {e}")),
+                    error: "PLAYER_NOT_FOUND".to_string(),
+                    message: "Player not found in race".to_string(),
+                    details: None,
+                }),
+            ));
+        }
+    };
+
+    let car_data = match resolve_car_data(&player, participant) {
+        Some(cd) => cd,
+        None => {
+            tracing::warn!("Car components not found for player {}", player_uuid);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "CAR_VALIDATION_FAILED".to_string(),
+                    message: "Car components not found".to_string(),
+                    details: None,
                 }),
             ));
         }
@@ -2186,10 +2595,9 @@ pub async fn get_performance_preview(
     for boost_value in 0..=4 {
         let is_available = participant.boost_hand.is_card_available(boost_value);
 
-        // Calculate final value using boost multiplier formula: base * (1.0 + boost * 0.08)
-        let boost_multiplier = 1.0 + (f64::from(boost_value) * 0.08);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let final_value = (f64::from(capped_base_value) * boost_multiplier).round() as u32;
+        // Calculate final value using the additive model that lap resolution
+        // uses: final = min(base, max) + boost.
+        let final_value = capped_base_value + u32::from(boost_value);
 
         // Determine movement probability
         let movement_probability = calculate_movement_probability(final_value, current_sector);
@@ -2202,10 +2610,10 @@ pub async fn get_performance_preview(
         });
     }
 
-    // 10. Get boost cycle info from participant's boost_hand
+    // 10. Get boost pool info from participant's boost_hand
     let boost_cycle_info = BoostCycleInfo {
-        current_cycle: participant.boost_hand.current_cycle,
-        cycles_completed: participant.boost_hand.cycles_completed,
+        tyre_type: participant.boost_hand.tyre_type,
+        pit_stops_completed: participant.boost_hand.pit_stops_completed,
         cards_remaining: participant.boost_hand.cards_remaining,
         available_cards: participant.boost_hand.get_available_cards(),
     };
@@ -2381,6 +2789,7 @@ pub async fn get_turn_phase(
     let response = TurnPhaseResponse {
         turn_phase,
         current_lap: race.current_lap,
+        total_laps: race.total_laps,
         lap_characteristic: format!("{:?}", race.lap_characteristic),
         submitted_players,
         pending_players,
@@ -2674,8 +3083,11 @@ pub async fn get_local_view(
     });
 
     // 7. Return local view data with 5 sectors
+    #[allow(clippy::cast_possible_truncation)]
+    let total_sectors = race.track.sectors.len() as u32;
     let response = LocalViewResponse {
         center_sector,
+        total_sectors,
         visible_sectors,
         visible_participants,
     };
@@ -2894,22 +3306,13 @@ pub async fn get_boost_availability(
     let available_cards = boost_hand.get_available_cards();
     let hand_state = boost_hand.cards.clone();
 
-    // 8. Calculate next replenishment lap (current_lap + cards_remaining)
-    // When cards_remaining reaches 0, replenishment happens automatically
-    let next_replenishment_at = if boost_hand.cards_remaining > 0 {
-        Some(boost_hand.cards_remaining)
-    } else {
-        None
-    };
-
-    // 9. Return availability data
+    // 8. Return availability data (pool refills only via pit stop)
     let response = BoostAvailabilityResponse {
         available_cards,
         hand_state,
-        current_cycle: boost_hand.current_cycle,
-        cycles_completed: boost_hand.cycles_completed,
+        tyre_type: boost_hand.tyre_type,
+        pit_stops_completed: boost_hand.pit_stops_completed,
         cards_remaining: boost_hand.cards_remaining,
-        next_replenishment_at,
     };
 
     tracing::info!(
@@ -3663,9 +4066,11 @@ pub async fn start_race_in_db(
     race.lap_characteristic = LapCharacteristic::Straight; // Start with straight characteristic
     race.current_lap = 1;
 
-    // Sort participants in their starting sectors (simple position assignment)
+    // Sort participants in their starting sectors. Positions are 0-based to match
+    // `sort_participants_in_sectors` and the UI (slot 1 = position 0), so the
+    // front grid slot is occupied from the start.
     for (index, participant) in race.participants.iter_mut().enumerate() {
-        participant.current_position_in_sector = index as u32 + 1;
+        participant.current_position_in_sector = index as u32;
         tracing::debug!(
             "Participant {} positioned at sector {} position {}",
             participant.player_uuid,
@@ -3744,6 +4149,76 @@ pub async fn process_lap_in_db(
     Ok(Some((lap_result, race_status)))
 }
 
+/// Drive AI-only turns to completion.
+///
+/// In solo mode the human submission triggers a lap; if afterwards the only
+/// active (non-finished) participants are AI — e.g. the human has already
+/// finished — there is no one left to advance the race. This synthesizes and
+/// processes full AI turns until the race finishes or a human is again required.
+/// The loop is bounded as a safety net; the race's own safety cap also
+/// guarantees termination.
+/// Hard caps for the AI-only auto-advance loop, so it can never run forever or
+/// hold the request open indefinitely even if a turn somehow fails to make
+/// progress. The race's own safety bound finishes a stuck race long before
+/// either of these trips during normal play.
+const AI_AUTOADVANCE_MAX_TURNS: u32 = 1000;
+const AI_AUTOADVANCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+async fn drive_ai_only_turns(
+    race_uuid: Uuid,
+    car_data_map: &HashMap<Uuid, ValidatedCarData>,
+) -> Result<(), mongodb::error::Error> {
+    let deadline = std::time::Instant::now() + AI_AUTOADVANCE_TIMEOUT;
+
+    for turn in 0..AI_AUTOADVANCE_MAX_TURNS {
+        // Wall-clock timeout: bound request latency regardless of iteration count.
+        if std::time::Instant::now() >= deadline {
+            tracing::warn!(
+                "AI auto-advance for race {} hit the {}s timeout after {} turns; leaving it InProgress",
+                race_uuid,
+                AI_AUTOADVANCE_TIMEOUT.as_secs(),
+                turn
+            );
+            return Ok(());
+        }
+
+        let Some(mut race) = store_get(race_uuid) else {
+            return Ok(());
+        };
+
+        if race.status != RaceStatus::InProgress {
+            return Ok(());
+        }
+
+        let active: Vec<&RaceParticipant> = race
+            .participants
+            .iter()
+            .filter(|p| !p.is_finished)
+            .collect();
+
+        // Nothing to drive, or a human still needs to act this turn.
+        if active.is_empty() || active.iter().any(|p| !p.is_ai) {
+            return Ok(());
+        }
+
+        race.enqueue_ai_actions(car_data_map);
+        let actions = race.pending_actions.clone();
+        if actions.is_empty() {
+            return Ok(());
+        }
+        store_save(race);
+
+        process_lap_in_db(race_uuid, actions, car_data_map).await?;
+    }
+
+    tracing::warn!(
+        "AI auto-advance for race {} hit the {}-turn cap; leaving it InProgress",
+        race_uuid,
+        AI_AUTOADVANCE_MAX_TURNS
+    );
+    Ok(())
+}
+
 /// Submit a single player's turn action (boost selection)
 ///
 /// This endpoint allows individual players to submit their boost selection for the current turn.
@@ -3800,13 +4275,8 @@ pub async fn submit_turn_action(
         }
     };
 
-    match submit_player_action_in_db(
-        race_uuid,
-        player_uuid,
-        payload.boost_value,
-        &car_data_map,
-    )
-    .await
+    match submit_player_action_in_db(race_uuid, player_uuid, payload.boost_value, &car_data_map)
+        .await
     {
         Ok(Some(response)) => {
             tracing::info!(
@@ -3835,139 +4305,305 @@ pub async fn submit_turn_action(
     }
 }
 
-/// Submit a player's action to the database
+/// What a human player is doing this turn. Both `/submit-action` (boost) and
+/// `/pit` (pit stop) funnel through [`resolve_human_turn`] so the turn resolves
+/// identically: the human's card is consumed, every AI opponent is enqueued, the
+/// lap is processed once everyone has acted, and any AI-only continuation is
+/// driven to completion. Keeping this single path is what stops the two
+/// endpoints from drifting apart (the prior solo-pit deadlock + inert-pool bugs).
+#[derive(Debug, Clone, Copy)]
+enum TurnIntent {
+    /// Play a boost card of the given value (0-4; 0 is the free no-boost move).
+    Boost(u32),
+    /// Pit: refill the boost pool from `new_tyre` (or keep the current tyre when
+    /// `None`) and spend this turn as a free boost-0 move.
+    Pit(Option<TyreType>),
+}
+
+/// Resolve a single human turn against the in-memory race store.
+///
+/// 1. record the human's action via the card-consuming domain method
+///    (`record_player_action` / `record_pit_action`) — the human's pool depletes;
+/// 2. enqueue every active AI opponent so the turn isn't waiting on absent humans;
+/// 3. process the lap once all active participants have acted;
+/// 4. drive any AI-only turns to completion (e.g. after the human finishes).
+///
+/// Returns the updated race, or `Ok(None)` if the race no longer exists.
+async fn resolve_human_turn(
+    race_uuid: Uuid,
+    player_uuid: Uuid,
+    intent: TurnIntent,
+    car_data_map: &HashMap<Uuid, ValidatedCarData>,
+) -> Result<Option<Race>, mongodb::error::Error> {
+    let Some(mut race) = store_get(race_uuid) else {
+        return Ok(None);
+    };
+
+    if race.status != RaceStatus::InProgress {
+        return Err(mongodb::error::Error::custom("Race is not in progress"));
+    }
+
+    let Some(car_data) = car_data_map.get(&player_uuid) else {
+        return Err(mongodb::error::Error::custom(
+            "Car data not found for player",
+        ));
+    };
+
+    // 1. Record the human's card-consuming action. The domain method validates
+    //    participant / not-finished / not-already-acted / boost availability.
+    let record_result = match intent {
+        TurnIntent::Boost(boost_value) => {
+            race.record_player_action(player_uuid, boost_value, car_data)
+        }
+        TurnIntent::Pit(new_tyre) => race.record_pit_action(player_uuid, new_tyre, car_data),
+    };
+    if let Err(e) = record_result {
+        return Err(mongodb::error::Error::custom(e));
+    }
+
+    // 2. Solo mode: enqueue every AI opponent so the turn can resolve without
+    //    waiting on (non-existent) human opponents.
+    race.enqueue_ai_actions(car_data_map);
+    store_save(race.clone());
+
+    // 3. Process the lap once everyone active has acted.
+    if race.all_actions_submitted() {
+        let actions = race.pending_actions.clone();
+        if process_lap_in_db(race_uuid, actions, car_data_map)
+            .await?
+            .is_none()
+        {
+            return Err(mongodb::error::Error::custom(
+                "Race not found during processing",
+            ));
+        }
+
+        // 4. Keep driving AI-only turns so the race always reaches completion
+        //    instead of stalling (e.g. once the human has finished).
+        drive_ai_only_turns(race_uuid, car_data_map).await?;
+    }
+
+    Ok(store_get(race_uuid))
+}
+
+/// Submit a player's boost action and resolve the turn (solo mode).
 async fn submit_player_action_in_db(
     race_uuid: Uuid,
     player_uuid: Uuid,
     boost_value: u32,
     car_data_map: &HashMap<Uuid, ValidatedCarData>,
 ) -> Result<Option<SubmitTurnActionResponse>, mongodb::error::Error> {
-    // First, find the race and validate it exists and is in progress
-    let mut race = match store_get(race_uuid) {
-        Some(race) => race,
-        None => return Ok(None),
-    };
-
-    // Check if race is in progress
-    if race.status != RaceStatus::InProgress {
-        return Err(mongodb::error::Error::custom("Race is not in progress"));
-    }
-
-    // Check if player is a participant
-    let is_participant = race
-        .participants
-        .iter()
-        .any(|p| p.player_uuid == player_uuid);
-    if !is_participant {
-        return Err(mongodb::error::Error::custom("Player not found in race"));
-    }
-
-    // Log race state for debugging
-    tracing::info!(
-        "Race {} state: total_participants={}, finished_participants={}",
+    let Some(race) = resolve_human_turn(
         race_uuid,
-        race.participants.len(),
-        race.participants.iter().filter(|p| p.is_finished).count()
-    );
-
-    // Check if player has already submitted an action for this turn
-    let already_submitted = race
-        .pending_actions
-        .iter()
-        .any(|action| action.player_uuid == player_uuid);
-    if already_submitted {
-        return Err(mongodb::error::Error::custom(
-            "Action already submitted for this turn",
-        ));
-    }
-
-    // Validate boost value (0-4)
-    if boost_value > 4 {
-        return Err(mongodb::error::Error::custom(format!(
-            "Invalid boost value: {boost_value}. Must be between 0 and 4"
-        )));
-    }
-
-    // Create the lap action
-    let lap_action = LapAction {
         player_uuid,
-        boost_value,
+        TurnIntent::Boost(boost_value),
+        car_data_map,
+    )
+    .await?
+    else {
+        return Ok(None);
     };
 
-    // Add the action to pending_actions in memory
-    race.pending_actions.push(lap_action);
-
-    // Persist the mutated race to the in-memory store.
-    store_save(race.clone());
-
-    // Calculate response data
-    let players_submitted = race.pending_actions.len() as u32;
     let total_players = race.participants.iter().filter(|p| !p.is_finished).count() as u32;
 
-    tracing::info!(
-        "Race {}: players_submitted={}, total_players={}, condition_met={}",
-        race_uuid,
-        players_submitted,
-        total_players,
-        players_submitted >= total_players
-    );
+    // If the human's action is still pending, we are waiting on other (human)
+    // players; otherwise the turn was processed and pending was cleared.
+    let still_waiting = race
+        .pending_actions
+        .iter()
+        .any(|a| a.player_uuid == player_uuid);
 
-    // Handle edge case where all players are finished (shouldn't happen during active race)
-    if total_players == 0 {
-        tracing::warn!(
-            "Race {} has no active players, but received action submission",
-            race_uuid
-        );
-        return Err(mongodb::error::Error::custom("No active players in race"));
+    if still_waiting {
+        Ok(Some(SubmitTurnActionResponse {
+            success: true,
+            message: "Action submitted successfully".to_string(),
+            turn_phase: "WaitingForPlayers".to_string(),
+            players_submitted: race.pending_actions.len() as u32,
+            total_players,
+        }))
+    } else {
+        Ok(Some(SubmitTurnActionResponse {
+            success: true,
+            message: "Turn processed successfully. Ready for next turn.".to_string(),
+            turn_phase: "TurnProcessed".to_string(),
+            players_submitted: 0,
+            total_players,
+        }))
     }
+}
 
-    if players_submitted >= total_players {
-        // All players have submitted - auto-process the turn immediately
-        tracing::info!(
-            "All players submitted for race {}. Auto-processing turn...",
-            race_uuid
-        );
+#[cfg(test)]
+mod turn_resolution_tests {
+    use super::*;
+    use crate::domain::{
+        Body, BodyName, Car, CarName, ComponentRarity, Engine, EngineName, Pilot, PilotClass,
+        PilotName, PilotPerformance, PilotRarity, PilotSkills, Race, RaceStatus, Sector,
+        SectorType, Track,
+    };
+    use crate::services::car_validation::ValidatedCarData;
+    use std::collections::HashMap;
+    use uuid::Uuid;
 
-        // Get the pending actions for processing
-        let actions = race.pending_actions.clone();
-
-        // Process the turn using the existing game logic
-        match process_lap_in_db(race_uuid, actions, car_data_map).await {
-            Ok(Some((_lap_result, _race_status))) => {
-                tracing::info!(
-                    "Turn auto-processed successfully for race {}. Ready for next turn.",
-                    race_uuid
-                );
-
-                return Ok(Some(SubmitTurnActionResponse {
-                    success: true,
-                    message: "Turn processed successfully. Ready for next turn.".to_string(),
-                    turn_phase: "TurnProcessed".to_string(), // Clear signal that turn completed
-                    players_submitted: 0,                    // Reset counter for next turn
-                    total_players,
-                }));
-            }
-            Ok(None) => {
-                tracing::error!("Race not found during turn processing: {}", race_uuid);
-                return Err(mongodb::error::Error::custom(
-                    "Race not found during processing",
-                ));
-            }
-            Err(e) => {
-                tracing::error!("Turn processing failed for race {}: {:?}", race_uuid, e);
-                return Err(mongodb::error::Error::custom(format!(
-                    "Turn processing failed: {e}"
-                )));
-            }
+    fn make_car_data() -> ValidatedCarData {
+        let engine = Engine::new(
+            EngineName::parse("Test Engine").unwrap(),
+            ComponentRarity::Common,
+            7,
+            5,
+        )
+        .unwrap();
+        let body = Body::new(
+            BodyName::parse("Test Body").unwrap(),
+            ComponentRarity::Common,
+            5,
+            7,
+        )
+        .unwrap();
+        let pilot = Pilot::new(
+            PilotName::parse("Test Pilot").unwrap(),
+            PilotClass::AllRounder,
+            PilotRarity::Rookie,
+            PilotSkills::new(6, 6, 6, 6).unwrap(),
+            PilotPerformance::new(8, 5).unwrap(),
+        )
+        .unwrap();
+        let car = Car::new(CarName::parse("Test Car").unwrap()).unwrap();
+        ValidatedCarData {
+            car,
+            engine,
+            body,
+            pilot,
         }
     }
 
-    // Not all players have submitted yet
-    Ok(Some(SubmitTurnActionResponse {
-        success: true,
-        message: "Action submitted successfully".to_string(),
-        turn_phase: "WaitingForPlayers".to_string(),
-        players_submitted,
-        total_players,
-    }))
+    fn test_track() -> Track {
+        let sectors = vec![
+            Sector {
+                id: 0,
+                name: "Start".to_string(),
+                min_value: 0,
+                max_value: 10,
+                slot_capacity: None,
+                sector_type: SectorType::Start,
+            },
+            Sector {
+                id: 1,
+                name: "Straight".to_string(),
+                min_value: 5,
+                max_value: 14,
+                slot_capacity: None,
+                sector_type: SectorType::Straight,
+            },
+        ];
+        Track::new("Test Track".to_string(), sectors).unwrap()
+    }
+
+    /// Seed a solo race (1 human + 2 AI) into the in-memory store; return its
+    /// uuid, the human's uuid, and the full car-data map.
+    fn seed_solo_race() -> (Uuid, Uuid, HashMap<Uuid, ValidatedCarData>) {
+        let mut race = Race::new("Turn Resolution Test".to_string(), test_track(), 3);
+        race.status = RaceStatus::InProgress;
+
+        let human = Uuid::new_v4();
+        let ai1 = Uuid::new_v4();
+        let ai2 = Uuid::new_v4();
+        race.add_participant(human, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai1, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai2, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for p in &mut race.participants {
+            p.current_sector = 0;
+        }
+
+        let race_uuid = race.uuid;
+        store_save(race);
+
+        let mut map = HashMap::new();
+        map.insert(human, make_car_data());
+        map.insert(ai1, make_car_data());
+        map.insert(ai2, make_car_data());
+
+        (race_uuid, human, map)
+    }
+
+    fn human_cards_remaining(race_uuid: Uuid, human: Uuid) -> u32 {
+        store_get(race_uuid)
+            .unwrap()
+            .participants
+            .iter()
+            .find(|p| p.player_uuid == human)
+            .unwrap()
+            .boost_hand
+            .cards_remaining
+    }
+
+    /// Regression for the inert tyre-pool bug (#2): a boost submitted via
+    /// `/submit-action` MUST consume one of the human's boost cards. Before the
+    /// fix the submit path pushed a bare `LapAction` without `use_boost_card`,
+    /// so `cards_remaining` never changed and the pool was effectively infinite.
+    #[tokio::test]
+    async fn submit_action_consumes_human_boost_card() {
+        let (race_uuid, human, map) = seed_solo_race();
+        let before = human_cards_remaining(race_uuid, human);
+
+        let card = store_get(race_uuid)
+            .unwrap()
+            .participants
+            .iter()
+            .find(|p| p.player_uuid == human)
+            .unwrap()
+            .boost_hand
+            .get_available_cards()
+            .into_iter()
+            .find(|&c| c >= 1)
+            .expect("a fresh medium pool has at least one boost card");
+
+        submit_player_action_in_db(race_uuid, human, u32::from(card), &map)
+            .await
+            .expect("submit should succeed");
+
+        let after = human_cards_remaining(race_uuid, human);
+        assert_eq!(
+            after,
+            before - 1,
+            "submitting a boost must consume exactly one of the human's cards"
+        );
+    }
+
+    /// Regression for the solo pit deadlock (#1): a pit via `/pit` MUST resolve
+    /// the turn (enqueue AI, process the lap) rather than hang. Before the fix
+    /// the pit path never enqueued the AI opponents, so `all_actions_submitted()`
+    /// stayed false and the turn never processed.
+    #[tokio::test]
+    async fn pit_resolves_turn_in_solo_mode() {
+        let (race_uuid, human, map) = seed_solo_race();
+        assert_eq!(store_get(race_uuid).unwrap().turns_taken, 0);
+
+        resolve_human_turn(race_uuid, human, TurnIntent::Pit(None), &map)
+            .await
+            .expect("pit should succeed")
+            .expect("race should still exist");
+
+        let race = store_get(race_uuid).unwrap();
+        assert!(
+            race.pending_actions.is_empty(),
+            "the turn must resolve (pending actions cleared), not deadlock"
+        );
+        assert_eq!(
+            race.turns_taken, 1,
+            "exactly one turn should have been processed"
+        );
+        assert_eq!(
+            race.participants
+                .iter()
+                .find(|p| p.player_uuid == human)
+                .unwrap()
+                .boost_hand
+                .pit_stops_completed,
+            1,
+            "the pit must have refilled the pool"
+        );
+    }
 }

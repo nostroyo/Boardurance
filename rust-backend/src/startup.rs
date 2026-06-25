@@ -7,7 +7,7 @@ use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionR
 use crate::routes::{auth, health_check, players, races};
 use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
 use axum::{routing::get, Router};
-use mongodb::{Client, Database};
+use mongodb::{options::ClientOptions, Client, Database};
 use secrecy::ExposeSecret;
 use std::sync::Arc;
 
@@ -35,8 +35,10 @@ impl Application {
                     "Failed to connect to MongoDB: {}. Server will run in degraded mode.",
                     e
                 );
-                // Create a mock database for testing
-                let client = mongodb::Client::with_uri_str("mongodb://localhost:27017")
+                // Degraded mode: build a client with short timeouts so that
+                // database-touching endpoints (e.g. /health_check) fail fast
+                // instead of blocking on the 30s default server-selection timeout.
+                let client = build_mongo_client("mongodb://localhost:27017")
                     .await
                     .unwrap();
                 client.database("mock_database")
@@ -91,6 +93,7 @@ impl Application {
         crate::routes::races::register_player,
         crate::routes::races::get_race_status_detailed,
         crate::routes::races::apply_lap_action,
+        crate::routes::races::pit_stop_action,
         crate::routes::races::get_car_data,
         crate::routes::races::get_performance_preview,
         crate::routes::races::get_turn_phase,
@@ -119,6 +122,7 @@ impl Application {
             crate::domain::SectorType,
             crate::domain::RaceParticipant,
             crate::domain::RaceStatus,
+            crate::domain::TyreType,
             crate::domain::LapAction,
             crate::domain::LapResult,
             crate::domain::ParticipantMovement,
@@ -199,7 +203,15 @@ impl Application {
             crate::domain::boost_hand_manager::BoostUsageResult,
             crate::domain::boost_hand_manager::BoostAvailability,
             crate::domain::boost_hand_manager::BoostImpactOption,
-            crate::domain::boost_hand_manager::BoostCardErrorResponse
+            crate::domain::boost_hand_manager::BoostCardErrorResponse,
+            // Previously-unregistered schemas referenced by the types above.
+            // Without these the generated OpenAPI document had dangling $refs,
+            // which broke any strict consumer (e.g. frontend codegen).
+            crate::domain::UserRole,
+            crate::domain::LapCharacteristic,
+            crate::domain::MovementProbability,
+            crate::domain::PerformanceCalculation,
+            crate::routes::races::PitStopRequest
         )
     ),
     tags(
@@ -211,7 +223,7 @@ impl Application {
         (name = "Authentication", description = "User authentication endpoints")
     )
 )]
-struct ApiDoc;
+pub struct ApiDoc;
 
 #[allow(clippy::unused_async)]
 pub async fn run(
@@ -234,6 +246,9 @@ pub async fn run(
     let player_repository = Arc::new(MockPlayerRepository::new());
     let race_repository = Arc::new(MockRaceRepository::new());
     let session_repository = Arc::new(MockSessionRepository::new());
+
+    // Seed AI opponents for solo mode into the in-memory player repository.
+    crate::routes::races::seed_solo_bots(&player_repository).await;
 
     // Initialize session manager
     let session_config = SessionConfig::default();
@@ -274,8 +289,7 @@ pub async fn run(
     // Create main app with Database state for other routes
     let app = Router::new()
         .route("/health_check", get(health_check))
-        .nest("/api/v1", team_routes) // Player GET/PUT/DELETE backed by in-memory repo
-        .nest("/api/v1", players::routes())
+        .nest("/api/v1", team_routes) // Player team + asset routes backed by in-memory repo
         .nest("/api/v1", race_turn_routes) // Turn processing backed by in-memory repo
         .nest("/api/v1", races::routes())
         .nest("/api/v1", auth_routes) // Nest auth routes under /api/v1
@@ -348,7 +362,7 @@ pub async fn get_connection_pool(
         configuration.with_db()
     };
 
-    let client = Client::with_uri_str(&connection_string).await?;
+    let client = build_mongo_client(&connection_string).await?;
     let database = client.database(&configuration.database_name);
 
     // Test the connection
@@ -359,4 +373,47 @@ pub async fn get_connection_pool(
 
     tracing::info!("Successfully connected to MongoDB");
     Ok(database)
+}
+
+/// Build a MongoDB client with short connect and server-selection timeouts.
+///
+/// Without this, the driver's 30s default server-selection timeout makes the
+/// app block ~30s at startup (the connection ping) and on every Mongo-touching
+/// request (e.g. `/health_check`) when no MongoDB is reachable — which looks
+/// like the backend has hung. A 2s bound fails fast into degraded mode instead.
+async fn build_mongo_client(connection_string: &str) -> Result<Client, mongodb::error::Error> {
+    let mut options = ClientOptions::parse(connection_string).await?;
+    options.server_selection_timeout = Some(std::time::Duration::from_secs(2));
+    options.connect_timeout = Some(std::time::Duration::from_secs(2));
+    Client::with_options(options)
+}
+
+#[cfg(test)]
+mod openapi_schema_tests {
+    use super::ApiDoc;
+    use utoipa::OpenApi;
+
+    /// The committed `docs/openapi.json` is the contract the frontend generates
+    /// its TypeScript types from, so it must stay in lockstep with the live
+    /// `utoipa` schema. If this fails, the schema changed but the committed
+    /// contract wasn't regenerated — run:
+    ///
+    /// ```sh
+    /// cargo run --bin dump_openapi > ../docs/openapi.json
+    /// ```
+    #[test]
+    fn committed_openapi_schema_is_up_to_date() {
+        let current = ApiDoc::openapi()
+            .to_pretty_json()
+            .expect("OpenAPI schema should serialize to JSON");
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/openapi.json");
+        let committed = std::fs::read_to_string(path).expect(
+            "docs/openapi.json missing — run: cargo run --bin dump_openapi > ../docs/openapi.json",
+        );
+        assert_eq!(
+            current.trim(),
+            committed.trim(),
+            "docs/openapi.json is stale. Regenerate: cargo run --bin dump_openapi > ../docs/openapi.json"
+        );
+    }
 }
