@@ -22,7 +22,7 @@ impl TestApp {
     // Authentication helpers
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -32,7 +32,7 @@ impl TestApp {
 
     pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/login", &self.address))
+            .post(format!("{}/api/v1/auth/login", self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -42,7 +42,7 @@ impl TestApp {
 
     pub async fn post_logout(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/logout", &self.address))
+            .post(format!("{}/api/v1/auth/logout", self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -51,7 +51,7 @@ impl TestApp {
 
     pub async fn post_refresh(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/refresh", &self.address))
+            .post(format!("{}/api/v1/auth/refresh", self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -61,7 +61,7 @@ impl TestApp {
     // Protected endpoint helpers
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -70,7 +70,7 @@ impl TestApp {
 
     pub async fn get_player_with_auth_header(&self, uuid: &str, token: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Authorization", &format!("Bearer {token}"))
             .send()
             .await
@@ -84,7 +84,7 @@ impl TestApp {
         cookie_value: &str,
     ) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Cookie", &format!("{cookie_name}={cookie_value}"))
             .send()
             .await
@@ -521,7 +521,7 @@ async fn missing_cookie_rejected() {
     // Act - Try to access protected route without any cookies
     let response = app
         .client
-        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", app.address, user_uuid))
         .send()
         .await
         .expect("Failed to execute request.");

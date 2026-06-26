@@ -20,8 +20,8 @@ impl Default for JwtConfig {
     fn default() -> Self {
         Self {
             secret: "your-super-secret-key-here".to_string(),
-            access_token_expiry: StdDuration::from_secs(30 * 60), // 30 minutes
-            refresh_token_expiry: StdDuration::from_secs(30 * 24 * 60 * 60), // 30 days
+            access_token_expiry: StdDuration::from_mins(30), // 30 minutes
+            refresh_token_expiry: StdDuration::from_hours(720), // 30 days
             issuer: "racing-game-api".to_string(),
             audience: "racing-game-client".to_string(),
         }
@@ -352,8 +352,8 @@ mod tests {
     #[test]
     fn tokens_have_different_expiry_times() {
         let config = JwtConfig {
-            access_token_expiry: StdDuration::from_secs(60),
-            refresh_token_expiry: StdDuration::from_secs(3600),
+            access_token_expiry: StdDuration::from_mins(1),
+            refresh_token_expiry: StdDuration::from_hours(1),
             ..JwtConfig::default()
         };
         let jwt_service = JwtService::new(config);

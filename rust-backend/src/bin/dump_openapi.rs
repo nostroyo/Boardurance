@@ -1,4 +1,4 @@
-//! Print the backend's OpenAPI schema as pretty JSON to stdout.
+//! Print the backend's `OpenAPI` schema as pretty JSON to stdout.
 //!
 //! The schema is the single source of truth for the frontend's API types.
 //! Regenerate the committed contract with:

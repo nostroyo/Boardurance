@@ -48,7 +48,7 @@ use crate::repositories::{
     MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
 };
 
-/// Concrete AppState used by the turn-processing handlers (in-memory repos).
+/// Concrete `AppState` used by the turn-processing handlers (in-memory repos).
 type RaceTurnState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
 
 /// Resolve a participant's full car data (car + engine + body + pilot) from the
@@ -78,7 +78,7 @@ fn resolve_car_data(
     })
 }
 
-/// Build a map of player_uuid -> resolved car data for all non-finished
+/// Build a map of `player_uuid` -> resolved car data for all non-finished
 /// participants, reading from the in-memory player repository. Failures to
 /// resolve an individual participant are silently skipped.
 async fn build_car_data_map(
@@ -106,6 +106,8 @@ const SOLO_BOT_COUNT: usize = 2;
 
 /// A seeded AI opponent's racing identity (player + completed car + primary pilot).
 #[derive(Debug, Clone)]
+// The `_uuid` suffixes mirror the domain field names and read clearly here.
+#[allow(clippy::struct_field_names)]
 struct BotIdentity {
     player_uuid: Uuid,
     car_uuid: Uuid,
@@ -934,7 +936,7 @@ pub fn routes() -> Router<Database> {
 }
 
 /// Turn-processing routes that need access to the in-memory player repository
-/// (via AppState) to compute real movement from each car's stats.
+/// (via `AppState`) to compute real movement from each car's stats.
 pub fn turn_routes() -> Router<RaceTurnState> {
     Router::new()
         .route("/races/solo", post(create_solo_race))
@@ -2194,19 +2196,18 @@ pub async fn get_car_data(
     };
 
     // 2. Fetch race and find participant
-    let race = match store_get(race_uuid) {
-        Some(race) => race,
-        None => {
-            tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "RACE_NOT_FOUND".to_string(),
-                    message: "Race not found".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race = if let Some(race) = store_get(race_uuid) {
+        race
+    } else {
+        tracing::warn!("Race not found for UUID: {}", race_uuid);
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "RACE_NOT_FOUND".to_string(),
+                message: "Race not found".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 3. Find participant by player_uuid
@@ -2227,34 +2228,32 @@ pub async fn get_car_data(
         })?;
 
     // 4. Resolve car data from the in-memory player repository
-    let player = match state.player_repository.find_by_uuid(player_uuid).await {
-        Ok(Some(p)) => p,
-        _ => {
-            tracing::warn!("Player {} not found in repository", player_uuid);
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "PLAYER_NOT_FOUND".to_string(),
-                    message: "Player not found in race".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player = if let Ok(Some(p)) = state.player_repository.find_by_uuid(player_uuid).await {
+        p
+    } else {
+        tracing::warn!("Player {} not found in repository", player_uuid);
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "PLAYER_NOT_FOUND".to_string(),
+                message: "Player not found in race".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let car_data = match resolve_car_data(&player, participant) {
-        Some(cd) => cd,
-        None => {
-            tracing::warn!("Car components not found for player {}", player_uuid);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "CAR_VALIDATION_FAILED".to_string(),
-                    message: "Car components not found".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let car_data = if let Some(cd) = resolve_car_data(&player, participant) {
+        cd
+    } else {
+        tracing::warn!("Car components not found for player {}", player_uuid);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "CAR_VALIDATION_FAILED".to_string(),
+                message: "Car components not found".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 5. Transform domain models to API response models
@@ -2467,19 +2466,18 @@ pub async fn get_performance_preview(
     };
 
     // 2. Fetch race
-    let race = match store_get(race_uuid) {
-        Some(race) => race,
-        None => {
-            tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "RACE_NOT_FOUND".to_string(),
-                    message: "Race not found".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let race = if let Some(race) = store_get(race_uuid) {
+        race
+    } else {
+        tracing::warn!("Race not found for UUID: {}", race_uuid);
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "RACE_NOT_FOUND".to_string(),
+                message: "Race not found".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 3. Validate race is in progress
@@ -2526,34 +2524,32 @@ pub async fn get_performance_preview(
     }
 
     // 6. Resolve car data from the in-memory player repository
-    let player = match state.player_repository.find_by_uuid(player_uuid).await {
-        Ok(Some(p)) => p,
-        _ => {
-            tracing::warn!("Player {} not found in repository", player_uuid);
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "PLAYER_NOT_FOUND".to_string(),
-                    message: "Player not found in race".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let player = if let Ok(Some(p)) = state.player_repository.find_by_uuid(player_uuid).await {
+        p
+    } else {
+        tracing::warn!("Player {} not found in repository", player_uuid);
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "PLAYER_NOT_FOUND".to_string(),
+                message: "Player not found in race".to_string(),
+                details: None,
+            }),
+        ));
     };
 
-    let car_data = match resolve_car_data(&player, participant) {
-        Some(cd) => cd,
-        None => {
-            tracing::warn!("Car components not found for player {}", player_uuid);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "CAR_VALIDATION_FAILED".to_string(),
-                    message: "Car components not found".to_string(),
-                    details: None,
-                }),
-            ));
-        }
+    let car_data = if let Some(cd) = resolve_car_data(&player, participant) {
+        cd
+    } else {
+        tracing::warn!("Car components not found for player {}", player_uuid);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "CAR_VALIDATION_FAILED".to_string(),
+                message: "Car components not found".to_string(),
+                details: None,
+            }),
+        ));
     };
 
     // 7. Calculate base performance using Race::calculate_performance_with_car_data()
@@ -3905,12 +3901,11 @@ pub async fn process_turn(
     }
 
     // Build the real car-data map from the in-memory player repository.
-    let car_data_map = match store_get(race_uuid) {
-        Some(race) => build_car_data_map(&state.player_repository, &race).await,
-        None => {
-            tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let car_data_map = if let Some(race) = store_get(race_uuid) {
+        build_car_data_map(&state.player_repository, &race).await
+    } else {
+        tracing::warn!("Race not found for UUID: {}", race_uuid);
+        return Err(StatusCode::NOT_FOUND);
     };
 
     match process_lap_in_db(race_uuid, actions, &car_data_map).await {
@@ -4086,6 +4081,9 @@ pub async fn start_race_in_db(
     Ok(Some(race))
 }
 
+// Takes the default-hasher map the whole turn pipeline uses; generalizing over
+// the hasher would force the same on every domain method it calls downstream.
+#[allow(clippy::implicit_hasher)]
 #[tracing::instrument(name = "Processing turn in the database", skip(actions, car_data_map))]
 pub async fn process_lap_in_db(
     race_uuid: Uuid,
@@ -4267,12 +4265,11 @@ pub async fn submit_turn_action(
     }
 
     // Build the real car-data map from the in-memory player repository.
-    let car_data_map = match store_get(race_uuid) {
-        Some(race) => build_car_data_map(&state.player_repository, &race).await,
-        None => {
-            tracing::warn!("Race not found for UUID: {}", race_uuid);
-            return Err(StatusCode::NOT_FOUND);
-        }
+    let car_data_map = if let Some(race) = store_get(race_uuid) {
+        build_car_data_map(&state.player_repository, &race).await
+    } else {
+        tracing::warn!("Race not found for UUID: {}", race_uuid);
+        return Err(StatusCode::NOT_FOUND);
     };
 
     match submit_player_action_in_db(race_uuid, player_uuid, payload.boost_value, &car_data_map)

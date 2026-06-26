@@ -1146,7 +1146,7 @@ impl Race {
             .collect();
 
         // Sort by performance value (highest first) - this determines ranking
-        participants_in_sector.sort_by(|a, b| b.1.cmp(&a.1));
+        participants_in_sector.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // Process each participant, but only allow the first-ranked car to move up
         for (rank, &(participant_index, final_value)) in participants_in_sector.iter().enumerate() {
@@ -1360,7 +1360,7 @@ impl Race {
 
         // Sort each sector group by total_value (descending = better position)
         for participants in sector_groups.values_mut() {
-            participants.sort_by(|a, b| b.total_value.cmp(&a.total_value));
+            participants.sort_by_key(|b| std::cmp::Reverse(b.total_value));
 
             // Update position in sector
             for (index, participant) in participants.iter_mut().enumerate() {

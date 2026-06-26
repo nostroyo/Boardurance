@@ -235,8 +235,8 @@ pub async fn run(
     let jwt_config = JwtConfig {
         secret: std::env::var("JWT_SECRET")
             .unwrap_or_else(|_| "your-super-secret-jwt-key-change-this-in-production".to_string()),
-        access_token_expiry: std::time::Duration::from_secs(30 * 60), // 30 minutes
-        refresh_token_expiry: std::time::Duration::from_secs(30 * 24 * 60 * 60), // 30 days
+        access_token_expiry: std::time::Duration::from_mins(30), // 30 minutes
+        refresh_token_expiry: std::time::Duration::from_hours(720), // 30 days
         issuer: "racing-game-api".to_string(),
         audience: "racing-game-client".to_string(),
     };
@@ -338,9 +338,10 @@ fn allowed_origins() -> Vec<HeaderValue> {
 
     if let Ok(extra) = std::env::var("ALLOWED_ORIGINS") {
         for origin in extra.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-            match origin.parse::<HeaderValue>() {
-                Ok(value) => origins.push(value),
-                Err(_) => tracing::warn!("Ignoring invalid origin in ALLOWED_ORIGINS: {origin}"),
+            if let Ok(value) = origin.parse::<HeaderValue>() {
+                origins.push(value);
+            } else {
+                tracing::warn!("Ignoring invalid origin in ALLOWED_ORIGINS: {origin}");
             }
         }
     }
@@ -375,11 +376,11 @@ pub async fn get_connection_pool(
     Ok(database)
 }
 
-/// Build a MongoDB client with short connect and server-selection timeouts.
+/// Build a `MongoDB` client with short connect and server-selection timeouts.
 ///
 /// Without this, the driver's 30s default server-selection timeout makes the
 /// app block ~30s at startup (the connection ping) and on every Mongo-touching
-/// request (e.g. `/health_check`) when no MongoDB is reachable — which looks
+/// request (e.g. `/health_check`) when no `MongoDB` is reachable — which looks
 /// like the backend has hung. A 2s bound fails fast into degraded mode instead.
 async fn build_mongo_client(connection_string: &str) -> Result<Client, mongodb::error::Error> {
     let mut options = ClientOptions::parse(connection_string).await?;

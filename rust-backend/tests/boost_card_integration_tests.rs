@@ -34,7 +34,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", self.address))
             .header("Content-Type", "application/json")
             .json(&register_body)
             .send()
@@ -89,7 +89,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(format!("{}/api/v1/races", &self.address))
+            .post(format!("{}/api/v1/races", self.address))
             .header("Cookie", cookies)
             .json(&race_body)
             .send()
@@ -118,7 +118,7 @@ impl TestApp {
         self.client
             .post(format!(
                 "{}/api/v1/races/{}/register",
-                &self.address, race_uuid
+                self.address, race_uuid
             ))
             .header("Cookie", cookies)
             .json(&register_body)
@@ -130,10 +130,7 @@ impl TestApp {
     // Helper to start race
     pub async fn start_race(&self, race_uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!(
-                "{}/api/v1/races/{}/start",
-                &self.address, race_uuid
-            ))
+            .post(format!("{}/api/v1/races/{}/start", self.address, race_uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -158,7 +155,7 @@ impl TestApp {
         self.client
             .post(format!(
                 "{}/api/v1/races/{}/apply-lap",
-                &self.address, race_uuid
+                self.address, race_uuid
             ))
             .header("Cookie", cookies)
             .json(&lap_body)
@@ -185,7 +182,7 @@ impl TestApp {
         }
 
         self.client
-            .post(format!("{}/api/v1/races/{}/pit", &self.address, race_uuid))
+            .post(format!("{}/api/v1/races/{}/pit", self.address, race_uuid))
             .header("Cookie", cookies)
             .json(&pit_body)
             .send()
@@ -203,12 +200,12 @@ impl TestApp {
         let url = if let Some(player_uuid) = player_uuid {
             format!(
                 "{}/api/v1/races/{}/status-detailed?player_uuid={}",
-                &self.address, race_uuid, player_uuid
+                self.address, race_uuid, player_uuid
             )
         } else {
             format!(
                 "{}/api/v1/races/{}/status-detailed",
-                &self.address, race_uuid
+                self.address, race_uuid
             )
         };
 
@@ -224,7 +221,7 @@ impl TestApp {
     pub async fn get_player_first_car(&self, player_uuid: &str, cookies: &str) -> String {
         let response = self
             .client
-            .get(format!("{}/api/v1/players/{}", &self.address, player_uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, player_uuid))
             .header("Cookie", cookies)
             .send()
             .await

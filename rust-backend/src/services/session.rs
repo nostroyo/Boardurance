@@ -23,8 +23,8 @@ impl Default for SessionConfig {
     fn default() -> Self {
         Self {
             max_sessions_per_user: 5,
-            session_timeout: StdDuration::from_secs(24 * 60 * 60), // 24 hours
-            blacklist_cleanup_interval: StdDuration::from_secs(60 * 60), // 1 hour
+            session_timeout: StdDuration::from_hours(24), // 24 hours
+            blacklist_cleanup_interval: StdDuration::from_hours(1), // 1 hour
             cache_size_limit: 10000,
         }
     }
@@ -329,8 +329,7 @@ impl<R: SessionRepository> SessionManager<R> {
     fn is_token_blacklisted_cached(&self, token_id: &str) -> bool {
         self.cache
             .read()
-            .map(|cache| cache.blacklisted_tokens.contains(token_id))
-            .unwrap_or(false)
+            .is_ok_and(|cache| cache.blacklisted_tokens.contains(token_id))
     }
 
     fn clear_cache(&self) {
@@ -351,10 +350,10 @@ mod tests {
     fn session_config_default_works() {
         let config = SessionConfig::default();
         assert_eq!(config.max_sessions_per_user, 5);
-        assert_eq!(config.session_timeout, StdDuration::from_secs(24 * 60 * 60));
+        assert_eq!(config.session_timeout, StdDuration::from_hours(24));
         assert_eq!(
             config.blacklist_cleanup_interval,
-            StdDuration::from_secs(60 * 60)
+            StdDuration::from_hours(1)
         );
         assert_eq!(config.cache_size_limit, 10000);
     }
