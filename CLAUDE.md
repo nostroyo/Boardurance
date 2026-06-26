@@ -9,6 +9,7 @@ A turn-based racing tycoon game. Two parts:
 
 - OS: Windows 11. Shell is **PowerShell** — use `$env:VAR` (not `$VAR`), `$null` (not `/dev/null`), backtick for line continuation.
 - Process: feature work is specced under `.kiro/specs/<feature>/` (requirements → design → tasks). Bugfix/feature writeups land in `docs/bugfixes/` and `docs/features/`.
+- **Command wrappers** (set cwd + test env for you, instead of a fragile `Set-Location …; $env:…; cargo …` prefix): `.claude/scripts/be.ps1 <cargo args>` (e.g. `be.ps1 test-fast`, `be.ps1 check --all-targets --all-features`) and `.claude/scripts/fe.ps1 <npm/npx args>` (e.g. `fe.ps1 npx tsc --noEmit`). The PowerShell cwd persists between calls — cd into an area once rather than re-prefixing every command.
 
 ## Definition of "done" (local CI parity)
 
@@ -28,6 +29,13 @@ npx tsc --noEmit
 npm run test -- --run
 ```
 
+## Working efficiently (token & friction)
+
+Derived from self-analysis of past sessions (`docs/self-improvement/`):
+
+- Backend source files are large (`races.rs` ~4k lines, `race.rs` ~1.7k). **Locate with Grep/Glob, then Read specific ranges** (`offset`/`limit`) — don't Read whole large files, and don't re-Read a file you just edited (Edit/Write already confirm success). `Read` was the largest token sink *and* the top error source.
+- Default `Grep` to `files_with_matches` + `head_limit`; switch to `content` mode only when you actually need the matching lines.
+
 ## Always / Never (non-negotiable guardrails)
 
 These are hard rules, born from real incidents. They override convenience.
@@ -37,6 +45,7 @@ These are hard rules, born from real incidents. They override convenience.
 - **Always** enforce tenant isolation: every query that reads or writes user/org-scoped data must filter by the authenticated tenant. A passing test on a single tenant does **not** prove isolation — add a cross-tenant negative test for any new data-access path.
 - **Always** gate user-facing strings through i18n — no hardcoded display text. A literal in a component is a bug.
 - **Never** touch production data or run migrations against prod. Local/dev is freestyle; anything beyond that waits for explicit human approval.
+- **Always** funnel variants of one concept through a single shared path — one turn-resolution helper, one player store. Re-implementing per call-site is how the solo turn paths and the player stores drifted (see `docs/reviews/`).
 
 ## Loop discipline
 
@@ -44,3 +53,5 @@ These are hard rules, born from real incidents. They override convenience.
 - **Termination rule:** after **3 failed attempts** at the same error with no new information, stop and summarize the blocker rather than retrying the same strategy.
 - **Read the full error** (stack trace / clippy span / failing assertion) before revising — distinguish a recoverable error from a hard blocker.
 - **Review gate before shipping:** before opening a PR or merging to `main`, run `/review-gate` (spec-conformance + correctness + security judges) and resolve any **BLOCK**. The verdict is recorded under `docs/reviews/`.
+- **Record decisions (`/adr`):** for any non-trivial architecture/design tradeoff, write an Architecture Decision Record under `docs/adr/` — the decision, why, alternatives, and accepted debt.
+- **Postmortem on repeated failure (`/postmortem`):** when the 3-attempt termination rule trips, after a prod incident, or when a defect escapes to PR/prod, write a blameless postmortem under `docs/postmortems/` (root cause, detection gap, follow-ups). Feed the follow-ups back as rules/hooks — every problem improves the method.
