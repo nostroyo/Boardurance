@@ -68,7 +68,7 @@ mod tests {
         // Test that unauthenticated requests to admin routes are blocked
         // 1. Try to GET /api/v1/players without any token
         // 2. Should return 401 UNAUTHORIZED
-        // 3. Try to GET /api/v1/players/by-wallet/some-wallet without token
+        // 3. Try to GET /api/v1/players/by-email/test@example.com without token
         // 4. Should return 401 UNAUTHORIZED
     }
 
@@ -152,7 +152,7 @@ Integration Test Implementation Plan:
    - **Authentication Tests**: Valid/invalid/expired/blacklisted tokens
    - **Ownership Tests**: Own resources vs other's resources
    - **Role-based Tests**: Admin vs regular user access
-   - **Admin-only Routes**: GET /players, GET /players/by-email, GET /players/by-wallet
+   - **Admin-only Routes**: GET /players, GET /players/by-email
    - **Route-specific Tests**: Player routes, race routes, admin routes
 
 3. **Test Data:**

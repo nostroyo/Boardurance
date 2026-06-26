@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies the requirements for refining the backend race API to support a streamlined player-centric racing experience. The system will provide specific API endpoints for player registration to races, real-time race status tracking with detailed track situation data, and individual lap processing with boost selection. This refinement focuses on creating a smooth frontend-backend interaction pattern for the Web3 Racing Game.
+This document specifies the requirements for refining the backend race API to support a streamlined player-centric racing experience. The system will provide specific API endpoints for player registration to races, real-time race status tracking with detailed track situation data, and individual lap processing with boost selection. This refinement focuses on creating a smooth frontend-backend interaction pattern for the Racing Game.
 
 ## Glossary
 

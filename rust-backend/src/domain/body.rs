@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
@@ -11,7 +11,6 @@ pub struct Body {
     #[serde(with = "uuid_as_string")]
     #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
-    pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: BodyName,
     pub rarity: ComponentRarity,
     pub straight_value: u8, // 0-10
@@ -31,7 +30,6 @@ impl Body {
         rarity: ComponentRarity,
         straight_value: u8,
         curve_value: u8,
-        nft_mint_address: Option<String>,
     ) -> Result<Self, String> {
         if straight_value > 10 {
             return Err("Body straight value must be between 0 and 10".to_string());
@@ -43,7 +41,6 @@ impl Body {
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
-            nft_mint_address,
             name,
             rarity,
             straight_value,

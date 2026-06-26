@@ -1,0 +1,102 @@
+name: Deploy
+
+# Deploys on every push to main (after CI workflows pass on the PR).
+# Order matters for sync: the backend deploys first and must report healthy,
+# then the frontend is built from the same commit — the frontend never ships
+# against an older API.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push supersedes a queued one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'rust-backend/**'
+              - '.github/workflows/deploy.yml'
+            frontend:
+              - 'empty-project/**'
+              - '.github/workflows/deploy.yml'
+
+  deploy-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger Render deploy
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Wait for backend to be healthy
+        # Render builds the Docker image then rolls out; the first (uncached)
+        # Rust build can take a while, so poll generously (up to ~20 min).
+        run: |
+          set -e
+          URL="${{ vars.BACKEND_URL }}/health_check"
+          for i in $(seq 1 80); do
+            if curl -fsS "$URL" >/dev/null 2>&1; then
+              echo "✅ Backend healthy after $((i*15))s"
+              exit 0
+            fi
+            echo "Attempt $i/80: backend not ready, waiting 15s..."
+            sleep 15
+          done
+          echo "❌ Backend did not become healthy in time"
+          exit 1
+
+  deploy-frontend:
+    needs: [changes, deploy-backend]
+    # Runs when the frontend changed, but only after a successful (or skipped)
+    # backend deploy — never against a failed one.
+    if: >-
+      always() &&
+      needs.changes.outputs.frontend == 'true' &&
+      needs.deploy-backend.result != 'failure' &&
+      needs.deploy-backend.result != 'cancelled'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: ./empty-project
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: empty-project/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Repository variable pointing at the deployed backend,
+          # e.g. https://boardurance-api.onrender.com
+          VITE_API_BASE_URL: ${{ vars.BACKEND_URL }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: empty-project
+          command: pages deploy dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}

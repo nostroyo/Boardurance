@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+﻿use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
@@ -9,7 +9,6 @@ pub struct Car {
     #[serde(with = "uuid_as_string")]
     #[schema(value_type = String, format = "uuid")]
     pub uuid: Uuid,
-    pub nft_mint_address: Option<String>, // Solana NFT mint address
     pub name: CarName,
     #[schema(value_type = Vec<String>, format = "uuid")]
     pub pilot_uuids: Vec<Uuid>, // Assigned pilots (exactly 3 required)
@@ -28,11 +27,10 @@ pub struct Car {
 pub struct CarName(String);
 
 impl Car {
-    pub fn new(name: CarName, nft_mint_address: Option<String>) -> Result<Self, String> {
+    pub fn new(name: CarName) -> Result<Self, String> {
         let now = Utc::now();
         Ok(Self {
             uuid: Uuid::new_v4(),
-            nft_mint_address,
             name,
             pilot_uuids: Vec::new(),
             engine_uuid: None,

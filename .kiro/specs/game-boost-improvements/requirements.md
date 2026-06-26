@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document specifies the requirements for implementing a boost card management system in the Web3 Racing Game. The current system provides unlimited boost selection (0-4) per lap, which reduces strategic depth and decision-making. This feature will introduce a hand-based boost system where players have 5 specific boost cards (0, 1, 2, 3, 4) that become unavailable after use until all cards are exhausted, at which point the entire hand replenishes. This creates meaningful tactical decisions about boost timing and sequencing.
+This document specifies the requirements for implementing a boost card management system in the Racing Game. The current system provides unlimited boost selection (0-4) per lap, which reduces strategic depth and decision-making. This feature will introduce a hand-based boost system where players have 5 specific boost cards (0, 1, 2, 3, 4) that become unavailable after use until all cards are exhausted, at which point the entire hand replenishes. This creates meaningful tactical decisions about boost timing and sequencing.
 
 ## Glossary
 

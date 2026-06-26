@@ -27,8 +27,8 @@ impl TestAppState {
         // Initialize JWT service with test configuration
         let jwt_config = JwtConfig {
             secret: "test-secret-key-for-testing-only".to_string(),
-            access_token_expiry: std::time::Duration::from_secs(30 * 60), // 30 minutes
-            refresh_token_expiry: std::time::Duration::from_secs(30 * 24 * 60 * 60), // 30 days
+            access_token_expiry: std::time::Duration::from_mins(30), // 30 minutes
+            refresh_token_expiry: std::time::Duration::from_hours(720), // 30 days
             issuer: "racing-game-test".to_string(),
             audience: "racing-game-test-client".to_string(),
         };
@@ -60,8 +60,8 @@ impl TestAppState {
 
         let jwt_config = JwtConfig {
             secret: "test-secret-key-for-testing-only".to_string(),
-            access_token_expiry: std::time::Duration::from_secs(30 * 60),
-            refresh_token_expiry: std::time::Duration::from_secs(30 * 24 * 60 * 60),
+            access_token_expiry: std::time::Duration::from_mins(30),
+            refresh_token_expiry: std::time::Duration::from_hours(720),
             issuer: "racing-game-test".to_string(),
             audience: "racing-game-test-client".to_string(),
         };
@@ -154,7 +154,7 @@ impl TestApp {
     // Helper methods for common test operations
     pub async fn post_json(&self, path: &str, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}{}", &self.address, path))
+            .post(format!("{}{}", self.address, path))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -164,7 +164,7 @@ impl TestApp {
 
     pub async fn get(&self, path: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}{}", &self.address, path))
+            .get(format!("{}{}", self.address, path))
             .send()
             .await
             .expect("Failed to execute request")
@@ -172,7 +172,7 @@ impl TestApp {
 
     pub async fn get_with_cookies(&self, path: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}{}", &self.address, path))
+            .get(format!("{}{}", self.address, path))
             .header("Cookie", cookies)
             .send()
             .await

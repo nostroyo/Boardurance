@@ -37,14 +37,6 @@ Quick links to commonly accessed documentation after reorganization.
 | UI improvements | [features/10-frontend/UI_IMPROVEMENTS.md](features/10-frontend/UI_IMPROVEMENTS.md) |
 | Architecture | [features/08-architecture/FRONTEND_BACKEND_SEPARATION.md](features/08-architecture/FRONTEND_BACKEND_SEPARATION.md) |
 
-## ⛓️ Blockchain Development
-
-| What You Need | Where to Find It |
-|---------------|------------------|
-| Solana overview | [features/05-nft-blockchain/SOLANA_README.md](features/05-nft-blockchain/SOLANA_README.md) |
-| Deployment guide | [features/05-nft-blockchain/SOLANA_DEPLOYMENT.md](features/05-nft-blockchain/SOLANA_DEPLOYMENT.md) |
-| Quick deployment | [features/05-nft-blockchain/SOLANA_SIMPLE_DEPLOYMENT.md](features/05-nft-blockchain/SOLANA_SIMPLE_DEPLOYMENT.md) |
-
 ## 🧪 Testing
 
 | What You Need | Where to Find It |
@@ -81,12 +73,11 @@ Quick access to all feature folders:
 2. [02-racing-system](features/02-racing-system/) - Racing mechanics
 3. [03-boost-card-system](features/03-boost-card-system/) - Boost cards
 4. [04-authentication](features/04-authentication/) - Auth system
-5. [05-nft-blockchain](features/05-nft-blockchain/) - Solana & NFTs
-6. [06-player-car-management](features/06-player-car-management/) - Players & cars
-7. [07-testing](features/07-testing/) - Testing docs
-8. [08-architecture](features/08-architecture/) - Architecture
-9. [09-backend](features/09-backend/) - Backend docs
-10. [10-frontend](features/10-frontend/) - Frontend docs
+5. [06-player-car-management](features/06-player-car-management/) - Players & cars
+6. [07-testing](features/07-testing/) - Testing docs
+7. [08-architecture](features/08-architecture/) - Architecture
+8. [09-backend](features/09-backend/) - Backend docs
+9. [10-frontend](features/10-frontend/) - Frontend docs
 
 ## 🔍 Finding Documentation
 
@@ -98,9 +89,6 @@ Quick access to all feature folders:
 **Game Mechanics**
 - [features/02-racing-system/GAME_MECHANICS.md](features/02-racing-system/GAME_MECHANICS.md)
 - [features/03-boost-card-system/BOOST_CARD_API.md](features/03-boost-card-system/BOOST_CARD_API.md)
-
-**NFTs & Blockchain**
-- [features/05-nft-blockchain/](features/05-nft-blockchain/)
 
 **Performance & Optimization**
 - [features/06-player-car-management/implementation/PLAYER_CAR_PERFORMANCE_IMPLEMENTATION.md](features/06-player-car-management/implementation/PLAYER_CAR_PERFORMANCE_IMPLEMENTATION.md)

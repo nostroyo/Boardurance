@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { TurnPhase } from '../../types/race';
+import type { TyreType } from '../../types/race-api';
+
+const TYRE_CHOICES: TyreType[] = ['Soft', 'Medium', 'Hard'];
 
 export interface BoostControlPanelProps {
   selectedBoost: number | null;
@@ -9,6 +12,12 @@ export interface BoostControlPanelProps {
   isSubmitting: boolean;
   hasSubmitted: boolean;
   turnPhase: TurnPhase;
+  /** Remaining count per boost card value (keys "1".."4"). Boost 0 is always free. */
+  handState?: Record<string, number>;
+  /** Currently fitted tyre, shown as the pool header. */
+  tyreType?: string;
+  /** Pit stop: refill the pool (optionally switching tyre). Consumes the turn. */
+  onPitStop?: (newTyre?: TyreType) => void;
 }
 
 export interface BoostButtonState {
@@ -35,8 +44,19 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
   isSubmitting,
   hasSubmitted,
   turnPhase,
+  handState,
+  tyreType,
+  onPitStop,
 }) => {
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [pitTyre, setPitTyre] = useState<TyreType>((tyreType as TyreType) ?? 'Medium');
+
+  // Remaining count for a boost card value. Boost 0 is the free no-boost move
+  // (no card), so it has no count.
+  const remainingCount = (boost: number): number | null => {
+    if (boost === 0) return null;
+    return handState?.[String(boost)] ?? 0;
+  };
   const [selectionFeedback, setSelectionFeedback] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -148,6 +168,12 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
       <div className="text-center">
         <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">Boost Control</h3>
         <p className="text-xs sm:text-sm text-gray-400">Select your boost value for this turn</p>
+        {tyreType && (
+          <p className="text-xs text-gray-400 mt-1">
+            Tyre: <span className="font-semibold text-gray-200">{tyreType}</span> · 0 is always
+            free
+          </p>
+        )}
       </div>
 
       {/* Boost Value Buttons Grid - Mobile-first responsive */}
@@ -183,10 +209,18 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
                   {boost}
                 </button>
 
-                {/* "Used" indicator for unavailable boosts - Mobile responsive */}
-                {buttonState.used && (
-                  <div className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full font-medium shadow-lg">
-                    Used
+                {/* Free indicator for boost 0; remaining-count badge for 1-4 */}
+                {boost === 0 ? (
+                  <div className="absolute -top-1 -right-1 bg-green-600 text-white text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full font-medium shadow-lg">
+                    Free
+                  </div>
+                ) : (
+                  <div
+                    className={`absolute -top-1 -right-1 text-white text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full font-medium shadow-lg ${
+                      (remainingCount(boost) ?? 0) > 0 ? 'bg-indigo-600' : 'bg-red-600'
+                    }`}
+                  >
+                    ×{remainingCount(boost) ?? 0}
                   </div>
                 )}
 
@@ -307,6 +341,50 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
         </div>
       )}
 
+      {/* Pit Stop control */}
+      {onPitStop && !showConfirmation && !hasSubmitted && (
+        <div className="border-t border-gray-700 pt-3 sm:pt-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="pit-tyre" className="text-sm font-medium text-gray-200">
+              Pit stop
+            </label>
+            <select
+              id="pit-tyre"
+              value={pitTyre}
+              onChange={(e) => setPitTyre(e.target.value as TyreType)}
+              disabled={isInteractionDisabled}
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded px-2 py-1 disabled:opacity-50"
+              aria-label="New tyre for pit stop"
+            >
+              {TYRE_CHOICES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => onPitStop(pitTyre)}
+            disabled={isInteractionDisabled}
+            className={`
+              w-full px-4 py-2 sm:py-3 rounded-lg font-medium transition-all duration-200
+              touch-manipulation min-h-[44px]
+              ${
+                isInteractionDisabled
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-60'
+                  : 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white shadow-lg hover:shadow-amber-500/30'
+              }
+            `}
+            aria-label="Pit stop to refill boost pool"
+          >
+            🛞 Pit &amp; refill ({pitTyre})
+          </button>
+          <p className="text-xs text-gray-500">
+            Refills your boost pool; costs this lap (counts as boost 0).
+          </p>
+        </div>
+      )}
+
       {/* Turn Submitted State - Mobile responsive */}
       {hasSubmitted && (
         <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 sm:p-4 text-center">
@@ -353,7 +431,7 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
                   Invalid Selection
                 </p>
                 <p className="text-xs text-gray-400">
-                  This boost card has already been used in the current cycle
+                  No cards of this value left — pit to refill, or use boost 0 (free).
                 </p>
               </div>
             </div>

@@ -60,14 +60,31 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
       colors.accent = '#FFF8DC'; // Cornsilk
     }
 
-    // 8-bit car pixel pattern (8x6 pixels)
+    // Modern top-down Formula One (13x21). Pointing "up": front wing -> nose ->
+    // front tires -> sidepods/cockpit -> engine spine -> rear tires -> rear wing.
+    // Values 2-5 are the player's livery gradient; 1 and 6-10 are constant neutrals.
     const pixelPattern = [
-      [0, 0, 1, 1, 1, 1, 0, 0],
-      [0, 1, 2, 2, 2, 2, 1, 0],
-      [1, 2, 3, 2, 2, 3, 2, 1],
-      [1, 2, 2, 2, 2, 2, 2, 1],
-      [0, 1, 1, 1, 1, 1, 1, 0],
-      [0, 0, 4, 0, 0, 4, 0, 0],
+      [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+      [0, 0, 1, 4, 5, 6, 6, 6, 5, 4, 1, 0, 0],
+      [0, 0, 1, 1, 0, 1, 5, 1, 0, 1, 1, 0, 0],
+      [0, 0, 0, 0, 0, 1, 5, 1, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 1, 2, 5, 2, 1, 0, 0, 0, 0],
+      [8, 7, 0, 0, 1, 2, 4, 2, 1, 0, 0, 7, 8],
+      [7, 7, 10, 0, 1, 2, 5, 2, 1, 0, 10, 7, 7],
+      [7, 8, 0, 1, 2, 3, 5, 3, 2, 1, 0, 8, 7],
+      [0, 0, 0, 1, 2, 3, 4, 3, 2, 1, 0, 0, 0],
+      [0, 0, 1, 2, 3, 9, 9, 9, 3, 2, 1, 0, 0],
+      [0, 0, 1, 2, 3, 9, 6, 9, 3, 2, 1, 0, 0],
+      [0, 0, 1, 2, 3, 3, 9, 3, 3, 2, 1, 0, 0],
+      [0, 0, 0, 1, 2, 3, 5, 3, 2, 1, 0, 0, 0],
+      [0, 0, 0, 1, 2, 4, 6, 4, 2, 1, 0, 0, 0],
+      [7, 7, 10, 1, 2, 3, 5, 3, 2, 1, 10, 7, 7],
+      [7, 8, 0, 1, 2, 3, 5, 3, 2, 1, 0, 8, 7],
+      [8, 7, 0, 0, 1, 2, 5, 2, 1, 0, 0, 7, 8],
+      [0, 0, 0, 0, 1, 2, 5, 2, 1, 0, 0, 0, 0],
+      [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+      [0, 1, 3, 4, 5, 6, 6, 6, 5, 4, 3, 1, 0],
+      [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
     ];
 
     const animations = {
@@ -86,51 +103,61 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
   // Get size dimensions - Mobile responsive
   const getSizeDimensions = () => {
     switch (size) {
+      // Grid is 13 cols x 21 rows, so width = 13 * pixelSize, height = 21 * pixelSize.
       case 'small':
         return {
-          width: { base: 20, sm: 24 },
-          height: { base: 15, sm: 18 },
-          pixelSize: { base: 2.5, sm: 3 },
+          width: { base: 26, sm: 26 },
+          height: { base: 42, sm: 42 },
+          pixelSize: { base: 2, sm: 2 },
         };
       case 'large':
         return {
-          width: { base: 32, sm: 40 },
-          height: { base: 24, sm: 30 },
-          pixelSize: { base: 4, sm: 5 },
+          width: { base: 52, sm: 52 },
+          height: { base: 84, sm: 84 },
+          pixelSize: { base: 4, sm: 4 },
         };
       default: // medium
         return {
-          width: { base: 26, sm: 32 },
-          height: { base: 20, sm: 24 },
-          pixelSize: { base: 3.25, sm: 4 },
+          width: { base: 39, sm: 39 },
+          height: { base: 63, sm: 63 },
+          pixelSize: { base: 3, sm: 3 },
         };
     }
   };
 
   const dimensions = getSizeDimensions();
 
-  // Get pixel color based on pattern value
+  // Get pixel color based on pattern value.
+  // 2-5 use the player's livery gradient; 1 and 6-10 are constant neutrals chosen
+  // to stay readable on the dark race UI.
   const getPixelColor = (value: number): string => {
     switch (value) {
       case 0:
         return 'transparent';
       case 1:
-        return spriteStyle.colors.secondary;
+        return '#232838'; // silhouette / wing outline
       case 2:
-        return spriteStyle.colors.primary;
+        return spriteStyle.colors.secondary; // body shadow
       case 3:
-        return spriteStyle.colors.highlight;
+        return spriteStyle.colors.primary; // body mid
       case 4:
-        return spriteStyle.colors.accent;
+        return spriteStyle.colors.highlight; // body light
+      case 5:
+        return spriteStyle.colors.accent; // livery sheen stripe
+      case 6:
+        return '#ffffff'; // white specular shine
+      case 7:
+        return '#4b5563'; // tire
+      case 8:
+        return '#d1d5db'; // tire sidewall / rim
+      case 9:
+        return '#1f2937'; // halo / cockpit (dark accent)
+      case 10:
+        return '#e5e7eb'; // suspension / metal
       default:
         return 'transparent';
     }
   };
-
-  // Debug: Log colors to console in development
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    console.log(`[CarSprite] ${participant.player_name} colors:`, spriteStyle.colors);
-  }
 
   // Get container styling
   const getContainerStyle = (): string => {
@@ -145,7 +172,7 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
     return `${baseStyle} ${animationClass} ${playerStyle}`;
   };
 
-  // Render the 8-bit pixel pattern - Responsive sizing with better visibility
+  // Render the pixel pattern as a grid of colored cells
   const renderPixelPattern = () => {
     return spriteStyle.pixelPattern.map((row, rowIndex) => (
       <div key={rowIndex} className="flex">
@@ -159,16 +186,6 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
                 width: `${dimensions.pixelSize.base}px`,
                 height: `${dimensions.pixelSize.base}px`,
                 backgroundColor: pixelColor,
-                // Ensure minimum visibility
-                minWidth: '2px',
-                minHeight: '2px',
-                // Debug: Add a border to see if pixels are being rendered
-                border:
-                  typeof window !== 'undefined' &&
-                  window.location.hostname === 'localhost' &&
-                  pixel !== 0
-                    ? '1px solid rgba(255,255,255,0.1)'
-                    : 'none',
               }}
             />
           );
@@ -188,29 +205,9 @@ const CarSpriteComponent: React.FC<CarSpriteProps> = ({
       role="img"
       aria-label={`Car sprite for ${participant.player_name || 'Unknown Player'}`}
     >
-      {/* Debug info for development */}
-      {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
-        <div className="absolute -top-8 left-0 text-xs text-yellow-400 whitespace-nowrap z-10">
-          {participant.player_name} ({dimensions.width.base}x{dimensions.height.base})
-        </div>
-      )}
-
-      {/* 8-bit pixel car */}
+      {/* Pixel-art car */}
       <div className="relative">
         {renderPixelPattern()}
-
-        {/* Debug: Show a simple colored rectangle as fallback */}
-        {typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
-          <div
-            className="absolute top-0 left-0 opacity-50"
-            style={{
-              width: `${dimensions.width.base}px`,
-              height: `${dimensions.height.base}px`,
-              backgroundColor: spriteStyle.colors.primary,
-              border: '2px solid white',
-            }}
-          />
-        )}
 
         {/* Player indicator overlay - Mobile responsive */}
         {isPlayer && (

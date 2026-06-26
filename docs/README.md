@@ -1,6 +1,6 @@
-# Web3 Game Project Documentation
+# Racing Game Project Documentation
 
-This folder contains all documentation for the Web3 Game project with NFT integration on Solana blockchain.
+This folder contains all documentation for the racing management game project.
 
 ## 📁 Documentation Structure
 
@@ -18,11 +18,6 @@ This folder contains all documentation for the Web3 Game project with NFT integr
 - `BACKEND_README.md` - Rust backend API documentation
 - `BACKEND_DOCKER_SETUP.md` - Docker MongoDB setup guide
 - `API_ROUTES.md` - Complete API endpoint reference
-
-### Blockchain (Solana)
-- `SOLANA_README.md` - Solana smart contract documentation
-- `SOLANA_DEPLOYMENT.md` - Deployment guides and procedures
-- `SOLANA_SIMPLE_DEPLOYMENT.md` - Quick deployment steps
 
 ### Game Mechanics
 - `GAME_MECHANICS.md` - Core gameplay systems and rules
@@ -46,17 +41,15 @@ This folder contains all documentation for the Web3 Game project with NFT integr
 
 1. **Frontend**: React + TypeScript + Vite web application (port 5173)
 2. **Backend**: Rust + Axum + MongoDB API server (port 3000)
-3. **Blockchain**: Solana + Anchor smart contracts for NFTs
 
 See [QUICK_START.md](QUICK_START.md) for detailed setup instructions.
 
 ## 🏗️ Architecture
 
 ```
-Web3 Game Project
-├── Frontend (React)     # Game UI and wallet integration
-├── Backend (Rust)       # API server with MongoDB
-└── Blockchain (Solana)  # NFT smart contracts
+Racing Game Project
+├── Frontend (React)     # Game UI
+└── Backend (Rust)       # API server with MongoDB
 ```
 
 ## 📚 Learning Resources
@@ -64,8 +57,6 @@ Web3 Game Project
 This project demonstrates patterns from:
 - "Zero to Production in Rust" by Luca Palmieri (Backend)
 - Modern React development practices (Frontend)
-- Solana blockchain development patterns (Smart Contracts)
-- Web3 game development patterns
 
 ## 🤝 Contributing Documentation
 

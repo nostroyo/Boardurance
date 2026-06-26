@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design establishes a simple GitHub Actions-based CI pipeline for the Web3 motorsport racing game project. The system will automate code quality checks, testing, and building for both frontend (React/TypeScript) and backend (Rust) components while maintaining basic security practices and preventing secret exposure. No automatic deployment is included since this is a development project.
+This design establishes a simple GitHub Actions-based CI pipeline for the motorsport racing game project. The system will automate code quality checks, testing, and building for both frontend (React/TypeScript) and backend (Rust) components while maintaining basic security practices and preventing secret exposure. No automatic deployment is included since this is a development project.
 
 ## Architecture
 

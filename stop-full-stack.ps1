@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 
-# Full Stack Stop Script - Web3 Racing Game
+# Full Stack Stop Script - Racing Game
 # Stops React Frontend, Rust Backend, and optionally Docker containers
 
 param(
@@ -8,7 +8,7 @@ param(
     [switch]$Verbose
 )
 
-Write-Host "🛑 Stopping Web3 Racing Game Full Stack" -ForegroundColor Red
+Write-Host "🛑 Stopping Racing Game Full Stack" -ForegroundColor Red
 Write-Host "=======================================" -ForegroundColor Red
 
 $ErrorActionPreference = "Continue"

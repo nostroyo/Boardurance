@@ -27,7 +27,6 @@ db.test_items.createIndex({ "created_at": 1 });
 db.test_items.createIndex({ "name": 1 });
 
 // Players indexes
-db.players.createIndex({ "wallet_address": 1 }, { unique: true, sparse: true });
 db.players.createIndex({ "uuid": 1 }, { unique: true });
 db.players.createIndex({ "email": 1 }, { unique: true });
 db.players.createIndex({ "team_name": 1 });

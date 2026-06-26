@@ -18,11 +18,6 @@ This folder contains system architecture documentation, design patterns, and str
 - **Context providers** for state management
 - **Service layer** for API communication
 
-### Blockchain Architecture
-- **Anchor Framework** for smart contracts
-- **Metaplex standards** for NFT compatibility
-- **Web3 wallet integration**
-
 ## Related Documentation
 
 - [Core Project](../01-core-project/) - Overall project structure

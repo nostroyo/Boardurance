@@ -207,13 +207,6 @@ const EngineTab: React.FC<{ engine: CarData['engine'] }> = ({ engine }) => {
         </div>
       </div>
 
-      {/* NFT Info */}
-      {engine.nft_mint_address && (
-        <div className="bg-gray-700/50 rounded-lg p-3">
-          <div className="text-xs text-gray-400 mb-1">NFT Mint Address</div>
-          <div className="text-xs text-gray-300 font-mono break-all">{engine.nft_mint_address}</div>
-        </div>
-      )}
     </div>
   );
 };
@@ -269,13 +262,6 @@ const BodyTab: React.FC<{ body: CarData['body'] }> = ({ body }) => {
         </div>
       </div>
 
-      {/* NFT Info */}
-      {body.nft_mint_address && (
-        <div className="bg-gray-700/50 rounded-lg p-3">
-          <div className="text-xs text-gray-400 mb-1">NFT Mint Address</div>
-          <div className="text-xs text-gray-300 font-mono break-all">{body.nft_mint_address}</div>
-        </div>
-      )}
     </div>
   );
 };
@@ -423,13 +409,6 @@ const PilotTab: React.FC<{ pilot: CarData['pilot'] }> = ({ pilot }) => {
         </div>
       </div>
 
-      {/* NFT Info */}
-      {pilot.nft_mint_address && (
-        <div className="bg-gray-700/50 rounded-lg p-3">
-          <div className="text-xs text-gray-400 mb-1">NFT Mint Address</div>
-          <div className="text-xs text-gray-300 font-mono break-all">{pilot.nft_mint_address}</div>
-        </div>
-      )}
     </div>
   );
 };

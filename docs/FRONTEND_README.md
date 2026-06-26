@@ -1,6 +1,6 @@
 # Frontend - React + TypeScript + Vite
 
-Web3 Game frontend application built with modern React development practices.
+Racing game frontend application built with modern React development practices.
 
 ## 🚀 Technology Stack
 
@@ -60,12 +60,11 @@ npm run format       # Format code with Prettier
 npm run format:check # Check formatting without changes
 ```
 
-## 🎮 Web3 Game Features
+## 🎮 Game Features
 
-This frontend is designed for Web3 game integration:
+This frontend is designed for the racing game:
 
-- **Wallet Integration** - Connect to Solana wallets
-- **NFT Display** - Show game assets and collectibles
+- **Asset Display** - Show game assets and collectibles
 - **Game Interface** - Interactive game components
 - **Responsive Design** - Works on desktop and mobile
 
@@ -130,8 +129,6 @@ export default tseslint.config([
 
 This frontend integrates with:
 - **Rust Backend** - API calls for game data
-- **Solana Blockchain** - Wallet and NFT interactions
-- **Web3 Libraries** - Solana wallet adapters
 
 ## 📱 Responsive Design
 

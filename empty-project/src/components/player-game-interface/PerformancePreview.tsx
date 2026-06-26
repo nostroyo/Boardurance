@@ -177,46 +177,31 @@ const PerformancePreviewComponent: React.FC<PerformancePreviewProps> = ({
         </div>
       </div>
 
-      {/* Boost Cycle Information */}
+      {/* Boost Pool Information */}
       <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-gray-700">Boost Cycle Information</h3>
+        <h3 className="text-lg font-semibold text-gray-700">Boost Pool</h3>
 
         <div className="bg-indigo-50 rounded-lg p-4 space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-gray-700">Current Cycle:</span>
-            <span className="font-semibold text-indigo-700">{boost_cycle_info.current_cycle}</span>
+            <span className="text-gray-700">Tyre:</span>
+            <span className="font-semibold text-indigo-700">{boost_cycle_info.tyre_type}</span>
           </div>
 
           <div className="flex justify-between items-center">
             <span className="text-gray-700">Cards Remaining:</span>
+            <span className="font-semibold text-indigo-700">{boost_cycle_info.cards_remaining}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span className="text-gray-700">Pit Stops:</span>
             <span className="font-semibold text-indigo-700">
-              {boost_cycle_info.cards_remaining} / 5
+              {boost_cycle_info.pit_stops_completed}
             </span>
           </div>
 
-          {/* Progress Bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Cycle Progress</span>
-              <span>{5 - boost_cycle_info.cards_remaining} / 5 used</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div
-                className="bg-indigo-600 h-3 rounded-full transition-all duration-300"
-                style={{
-                  width: `${((5 - boost_cycle_info.cards_remaining) / 5) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Next Replenishment - Calculate based on cycle */}
           {boost_cycle_info.cards_remaining === 0 && (
-            <div className="pt-2 border-t border-indigo-200">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Next Replenishment:</span>
-                <span className="font-semibold text-indigo-700">Next Cycle</span>
-              </div>
+            <div className="pt-2 border-t border-indigo-200 text-sm text-gray-600">
+              Pool empty — only boost 0 (free) until you pit.
             </div>
           )}
         </div>

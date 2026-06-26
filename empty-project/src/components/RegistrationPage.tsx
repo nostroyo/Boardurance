@@ -63,7 +63,7 @@ function RegistrationPage() {
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Create Your Account</h1>
-          <p className="text-gray-600">Join the Web3 Racing Game community</p>
+          <p className="text-gray-600">Join the Racing Game community</p>
         </div>
 
         {error && (

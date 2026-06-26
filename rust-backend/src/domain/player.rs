@@ -16,8 +16,6 @@ pub struct Player {
     pub uuid: Uuid,
     pub email: Email,
     pub password_hash: HashedPassword,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub wallet_address: Option<WalletAddress>,
     pub team_name: TeamName,
     pub role: UserRole,
     pub cars: Vec<Car>,
@@ -50,9 +48,6 @@ mod uuid_as_string {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
-pub struct WalletAddress(String);
-
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq)]
 pub struct Email(String);
 
@@ -73,7 +68,6 @@ impl Player {
             uuid: Uuid::new_v4(),
             email,
             password_hash,
-            wallet_address: None,
             team_name,
             role: UserRole::default(),
             cars,
@@ -118,7 +112,6 @@ impl Player {
             uuid: Uuid::new_v4(),
             email,
             password_hash,
-            wallet_address: None,
             team_name,
             role: UserRole::default(),
             cars,
@@ -141,32 +134,6 @@ impl Player {
         }
 
         Ok(())
-    }
-
-    pub fn connect_wallet(&mut self, wallet_address: WalletAddress) -> Result<(), String> {
-        if self.wallet_address.is_some() {
-            return Err("Player already has a connected wallet".to_string());
-        }
-        self.wallet_address = Some(wallet_address);
-        self.updated_at = Utc::now();
-        Ok(())
-    }
-
-    pub fn disconnect_wallet(&mut self) {
-        self.wallet_address = None;
-        self.updated_at = Utc::now();
-    }
-
-    #[must_use]
-    pub fn is_wallet_connected(&self) -> bool {
-        self.wallet_address.is_some()
-    }
-
-    #[must_use]
-    pub fn get_wallet_address(&self) -> Option<&str> {
-        self.wallet_address
-            .as_ref()
-            .map(std::convert::AsRef::as_ref)
     }
 
     pub fn update_team_name(&mut self, new_team_name: TeamName) {
@@ -294,35 +261,6 @@ impl Player {
     pub fn update_role(&mut self, new_role: UserRole) {
         self.role = new_role;
         self.updated_at = Utc::now();
-    }
-}
-
-impl WalletAddress {
-    pub fn parse(s: &str) -> Result<WalletAddress, String> {
-        let trimmed = s.trim();
-
-        // Basic Solana wallet address validation
-        if trimmed.is_empty() {
-            return Err("Wallet address cannot be empty".to_string());
-        }
-
-        if trimmed.len() < 32 || trimmed.len() > 44 {
-            return Err("Invalid wallet address length".to_string());
-        }
-
-        // Check if it contains only valid base58 characters
-        let valid_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-        if !trimmed.chars().all(|c| valid_chars.contains(c)) {
-            return Err("Wallet address contains invalid characters".to_string());
-        }
-
-        Ok(Self(trimmed.to_string()))
-    }
-}
-
-impl AsRef<str> for WalletAddress {
-    fn as_ref(&self) -> &str {
-        &self.0
     }
 }
 

@@ -37,7 +37,6 @@ function Dashboard() {
           <div className="bg-gray-50 p-6 rounded-lg">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Next Steps</h3>
             <ul className="text-sm text-gray-600 space-y-2">
-              <li>• Connect your Solana wallet</li>
               <li>• Acquire your first racing cars</li>
               <li>• Hire skilled pilots</li>
               <li>• Join your first race</li>
@@ -47,8 +46,8 @@ function Dashboard() {
           <div className="bg-gray-50 p-6 rounded-lg">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Game Features</h3>
             <ul className="text-sm text-gray-600 space-y-2">
-              <li>• NFT-based cars and pilots</li>
-              <li>• Blockchain-verified races</li>
+              <li>• Collectible cars and pilots</li>
+              <li>• Live multiplayer races</li>
               <li>• Team management</li>
               <li>• Competitive tournaments</li>
             </ul>
@@ -56,9 +55,6 @@ function Dashboard() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200">
-            Connect Wallet
-          </button>
           <Link
             to="/team"
             className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 text-center"

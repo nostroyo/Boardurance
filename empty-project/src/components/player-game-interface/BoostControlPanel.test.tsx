@@ -131,15 +131,57 @@ describe('BoostControlPanel', () => {
     expect(screen.getByText('Current phase: Processing')).toBeInTheDocument();
   });
 
-  it('shows used indicator for unavailable boosts', () => {
+  it('shows a free badge for boost 0 and remaining-count badges for 1-4', () => {
     render(
       <BoostControlPanel
         {...defaultProps}
-        availableBoosts={[0, 1, 3, 4]} // 2 is not available
+        availableBoosts={[0, 3, 4]} // value 2 depleted
+        handState={{ '2': 0, '3': 2, '4': 1 }}
+        tyreType="Medium"
       />,
     );
 
-    // The "Used" badge should be visible for boost 2
-    expect(screen.getByText('Used')).toBeInTheDocument();
+    // Boost 0 is always the free no-boost move.
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    // Remaining counts are shown per value; the depleted value-2 card reads ×0.
+    expect(screen.getByText('×2')).toBeInTheDocument(); // value 3 has 2 left
+    expect(screen.getAllByText('×0').length).toBeGreaterThan(0); // value 2 depleted
+  });
+
+  it('does not render the pit control when onPitStop is not provided', () => {
+    render(<BoostControlPanel {...defaultProps} tyreType="Medium" />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Pit stop to refill boost pool' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('calls onPitStop with the selected tyre when the pit button is clicked', () => {
+    const onPitStop = vi.fn();
+    render(<BoostControlPanel {...defaultProps} tyreType="Medium" onPitStop={onPitStop} />);
+
+    // Switch the pit tyre to Soft, then pit.
+    fireEvent.change(screen.getByLabelText('New tyre for pit stop'), {
+      target: { value: 'Soft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Pit stop to refill boost pool' }));
+
+    expect(onPitStop).toHaveBeenCalledWith('Soft');
+  });
+
+  it('disables the pit button when it is not the player\'s turn to act', () => {
+    const onPitStop = vi.fn();
+    render(
+      <BoostControlPanel
+        {...defaultProps}
+        turnPhase={'Processing' as TurnPhase}
+        onPitStop={onPitStop}
+      />,
+    );
+
+    const pitButton = screen.getByRole('button', { name: 'Pit stop to refill boost pool' });
+    expect(pitButton).toBeDisabled();
+    fireEvent.click(pitButton);
+    expect(onPitStop).not.toHaveBeenCalled();
   });
 });

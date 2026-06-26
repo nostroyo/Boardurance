@@ -48,8 +48,7 @@ empty-project/
 ├── src/
 │   ├── components/         # Reusable UI components
 │   │   ├── common/        # Shared components
-│   │   ├── game/          # Game-specific components
-│   │   └── wallet/        # Web3 wallet components
+│   │   └── game/          # Game-specific components
 │   ├── pages/             # Application pages/routes
 │   ├── hooks/             # Custom React hooks
 │   ├── utils/             # Utility functions
@@ -75,16 +74,6 @@ rust-backend/
 └── tests/                # Integration tests
 ```
 
-### Blockchain (Solana) Organization
-```
-solana-smart-contract/
-├── programs/             # Smart contract source code
-├── tests/                # Contract tests and simulations
-├── assets/               # NFT metadata and images
-├── docs/                 # Blockchain-specific documentation
-└── scripts/              # Deployment and utility scripts
-```
-
 ## 📝 File Naming Conventions
 
 ### React Project
@@ -100,11 +89,6 @@ solana-smart-contract/
 - **Types**: PascalCase (e.g., `UserProfile`)
 - **Constants**: SCREAMING_SNAKE_CASE (e.g., `MAX_RETRY_ATTEMPTS`)
 
-### Solana Project
-- **Programs**: snake_case (e.g., `car_nft_program.rs`)
-- **Instructions**: snake_case (e.g., `mint_car_nft.rs`)
-- **Tests**: snake_case (e.g., `test_car_minting.ts`)
-
 ## 🔄 Git Workflow
 
 ### Branch Strategy
@@ -112,8 +96,7 @@ solana-smart-contract/
 main                    # Production-ready code
 ├── develop            # Integration branch
 ├── feature/           # Feature development
-│   ├── feature/wallet-integration
-│   ├── feature/nft-display
+│   ├── feature/boost-cards
 │   └── feature/racing-mechanics
 ├── hotfix/            # Critical production fixes
 └── release/           # Release preparation
@@ -129,13 +112,13 @@ main                    # Production-ready code
 ```
 
 **Types**: feat, fix, docs, style, refactor, test, chore
-**Scopes**: frontend, backend, blockchain, docs, config
+**Scopes**: frontend, backend, docs, config
 
 **Examples**:
 ```
-feat(frontend): add wallet connection component
+feat(frontend): add race lobby component
 fix(backend): resolve database connection timeout
-docs(blockchain): update deployment guide
+docs(backend): update deployment guide
 test(frontend): add unit tests for game components
 ```
 
@@ -177,18 +160,6 @@ cargo tarpaulin --out html
 
 # Performance tests
 cargo bench
-```
-
-### Blockchain Testing
-```bash
-# Smart contract tests
-anchor test
-
-# Local validator tests
-anchor test --skip-local-validator
-
-# Deployment simulation
-anchor test --provider.cluster devnet
 ```
 
 ## 🔍 Quality Gates
@@ -247,23 +218,6 @@ cargo clippy
 cargo fmt
 ```
 
-### Blockchain Development
-```bash
-cd solana-smart-contract
-
-# Build contracts
-anchor build
-
-# Run tests
-anchor test
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
-
-# Generate metadata
-node generate-metadata.js
-```
-
 ## 📊 Performance Standards
 
 ### Frontend Performance
@@ -277,12 +231,6 @@ node generate-metadata.js
 - **Database Query Time**: <50ms (average)
 - **Memory Usage**: <512MB per instance
 - **CPU Usage**: <70% under normal load
-
-### Blockchain Performance
-- **Transaction Confirmation**: <30s on devnet
-- **Smart Contract Execution**: <400ms (Solana block time)
-- **NFT Minting**: <60s end-to-end
-- **Metadata Upload**: <5 minutes for 100 items
 
 ## 🔒 Security Standards
 

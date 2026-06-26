@@ -21,7 +21,7 @@ impl TestApp {
     // Authentication helpers
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -32,7 +32,7 @@ impl TestApp {
     // Player endpoint helpers
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -41,7 +41,7 @@ impl TestApp {
 
     pub async fn get_player_with_auth_header(&self, uuid: &str, token: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Authorization", &format!("Bearer {token}"))
             .send()
             .await
@@ -50,7 +50,7 @@ impl TestApp {
 
     pub async fn get_all_players(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players", &self.address))
+            .get(format!("{}/api/v1/players", self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -293,7 +293,7 @@ async fn unauthenticated_access_to_protected_routes_blocked() {
     // Act - Try to access protected route without authentication
     let response = app
         .client
-        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", app.address, user_uuid))
         .send()
         .await
         .expect("Failed to execute request.");

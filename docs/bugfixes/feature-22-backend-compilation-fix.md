@@ -94,4 +94,4 @@ Updated authentication routes to use repository pattern:
 - `src/repositories/mocks.rs`
 
 ## Impact
-This fix enables the backend to compile and run successfully, unblocking development and testing of the Web3 racing game application.
+This fix enables the backend to compile and run successfully, unblocking development and testing of the racing game application.

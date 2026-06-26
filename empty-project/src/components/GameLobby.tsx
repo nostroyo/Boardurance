@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../contexts/AuthContext';
+import { API_V1_URL } from '../config/api';
+import { raceAPIService } from '../services/raceAPI';
+import type { TyreType } from '../types/race-api';
+
+const TYRE_OPTIONS: Array<{ value: TyreType; label: string }> = [
+  { value: 'Soft', label: 'Soft — few, powerful (3)' },
+  { value: 'Medium', label: 'Medium — balanced (5)' },
+  { value: 'Hard', label: 'Hard — many, weaker (6)' },
+];
 
 interface Race {
   uuid: string;
@@ -13,12 +22,47 @@ interface Race {
 }
 
 function GameLobby() {
-  const { user } = useAuthContext();
+  const { user, logout } = useAuthContext();
   const location = useLocation();
+  const navigate = useNavigate();
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [startingSolo, setStartingSolo] = useState(false);
+  const [soloTyre, setSoloTyre] = useState<TyreType>('Medium');
+
+  const startSoloRace = async () => {
+    if (!user?.uuid) {
+      setError('User not authenticated');
+      return;
+    }
+    setStartingSolo(true);
+    setError(null);
+    try {
+      const { race } = await raceAPIService.createSoloRace(user.uuid, soloTyre);
+      navigate(`/races/${race.uuid}/play`);
+    } catch (err) {
+      // A 404 here means the backend doesn't know this player — typically a
+      // stale session after the (in-memory) backend restarted. Clear the dead
+      // session and send the user to register/log in fresh instead of
+      // dead-ending on an unstartable race.
+      const status = (err as { status?: number })?.status;
+      if (status === 404 || status === 401) {
+        await logout().catch(() => {});
+        navigate('/login', {
+          state: {
+            message: 'Your session expired (the server restarted). Please sign in again.',
+            type: 'error',
+          },
+        });
+        return;
+      }
+      setError(`Failed to start solo race: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setStartingSolo(false);
+    }
+  };
 
   // Handle navigation state messages
   useEffect(() => {
@@ -39,7 +83,7 @@ function GameLobby() {
     // Fetch available races
     const fetchRaces = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/v1/races');
+        const response = await fetch(`${API_V1_URL}/races`);
         if (response.ok) {
           const racesData = await response.json();
           setRaces(racesData || []);
@@ -66,7 +110,7 @@ function GameLobby() {
       console.log('Fetching player data for:', user.uuid);
 
       // Get player's cars to select one for the race
-      const playerResponse = await fetch(`http://localhost:3000/api/v1/players/${user.uuid}`, {
+      const playerResponse = await fetch(`${API_V1_URL}/players/${user.uuid}`, {
         credentials: 'include',
       });
 
@@ -104,7 +148,7 @@ function GameLobby() {
 
       console.log('Joining race with data:', joinData);
 
-      const response = await fetch(`http://localhost:3000/api/v1/races/${raceUuid}/join`, {
+      const response = await fetch(`${API_V1_URL}/races/${raceUuid}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,48 +183,50 @@ function GameLobby() {
 
   const createTestRace = async () => {
     try {
+      // Sector max_values are kept below a starter car's base performance
+      // (~17-20) so cars can clear each sector and actually complete laps.
       const testRaceData = {
         name: `Test Race ${Date.now()}`,
         track_name: 'Test Track',
-        total_laps: 3,
+        total_laps: 2,
         sectors: [
           {
             id: 0,
             name: 'Start',
             min_value: 0,
-            max_value: 10,
+            max_value: 5,
             slot_capacity: null,
             sector_type: 'Start',
           },
           {
             id: 1,
             name: 'Sector 1',
-            min_value: 5,
-            max_value: 15,
+            min_value: 0,
+            max_value: 7,
             slot_capacity: 5,
             sector_type: 'Straight',
           },
           {
             id: 2,
             name: 'Sector 2',
-            min_value: 10,
-            max_value: 20,
+            min_value: 0,
+            max_value: 9,
             slot_capacity: 5,
             sector_type: 'Curve',
           },
           {
             id: 3,
             name: 'Sector 3',
-            min_value: 15,
-            max_value: 25,
+            min_value: 0,
+            max_value: 11,
             slot_capacity: 5,
             sector_type: 'Straight',
           },
           {
             id: 4,
             name: 'Finish',
-            min_value: 20,
-            max_value: 30,
+            min_value: 0,
+            max_value: 13,
             slot_capacity: null,
             sector_type: 'Finish',
           },
@@ -188,7 +234,7 @@ function GameLobby() {
       };
 
       // Step 1: Create the race (auto-starts due to Feature #9)
-      const createResponse = await fetch('http://localhost:3000/api/v1/races', {
+      const createResponse = await fetch(`${API_V1_URL}/races`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -206,7 +252,7 @@ function GameLobby() {
       const raceUuid = createResult.race.uuid;
 
       // Step 2: Get player's cars and pilots from API
-      const playerResponse = await fetch(`http://localhost:3000/api/v1/players/${user?.uuid}`, {
+      const playerResponse = await fetch(`${API_V1_URL}/players/${user?.uuid}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -239,7 +285,7 @@ function GameLobby() {
         pilot_uuid: playerData.pilots[0].uuid, // Use first available pilot
       };
 
-      const joinResponse = await fetch(`http://localhost:3000/api/v1/races/${raceUuid}/join`, {
+      const joinResponse = await fetch(`${API_V1_URL}/races/${raceUuid}/join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -429,8 +475,34 @@ function GameLobby() {
                   Create Test Race
                 </button>
 
-                <button className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-3 rounded-lg font-medium transition-colors">
-                  Quick Match
+                <div>
+                  <label
+                    htmlFor="solo-tyre"
+                    className="block text-sm font-medium text-gray-300 mb-1"
+                  >
+                    Starting tyre
+                  </label>
+                  <select
+                    id="solo-tyre"
+                    value={soloTyre}
+                    onChange={(e) => setSoloTyre(e.target.value as TyreType)}
+                    disabled={startingSolo}
+                    className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 mb-2 disabled:opacity-50"
+                  >
+                    {TYRE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={startSoloRace}
+                  disabled={startingSolo}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 rounded-lg font-medium transition-colors"
+                >
+                  {startingSolo ? 'Starting…' : '🤖 Race vs AI (Solo)'}
                 </button>
 
                 <Link

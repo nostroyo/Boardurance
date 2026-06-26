@@ -23,6 +23,7 @@ import type {
   LocalView,
   BoostAvailability,
   LapHistory,
+  TyreType,
 } from '../../types/race-api';
 import { raceAPIService } from '../../services/raceAPI';
 import type { ErrorState } from '../../services/errorHandling';
@@ -449,18 +450,54 @@ export function RaceContainer({
   const handleTurnComplete = useCallback(async () => {
     console.log('[RaceContainer] Turn complete, fetching updated race state...');
 
+    // Detect race completion up front. Once the race is no longer InProgress,
+    // the performance-preview and boost-availability endpoints return 409 and
+    // local-view drops finished participants, so a batch fetch would fail (and
+    // be retried). Consult the race object directly and, if the player has
+    // finished, transition straight to the results view.
     try {
-      // Use batched API call for better performance
-      const batchResult = await withErrorHandling(
-        () =>
-          raceAPIService.batchRaceData(raceUuid, playerUuid, {
-            includeLocalView: true,
-            includeBoostAvailability: true,
-            includeLapHistory: true,
-            includePerformancePreview: true, // Fetch for next turn
-          }),
-        'fetching updated race state',
-      );
+      const race = await raceAPIService.getRace(raceUuid);
+      const playerParticipant = race.participants.find((p) => p.player_uuid === playerUuid);
+      if (race.status === 'Finished' || playerParticipant?.is_finished) {
+        const finalPosition = playerParticipant?.finish_position ?? null;
+
+        setState((prev) => ({
+          ...prev,
+          hasSubmittedThisTurn: false,
+          selectedBoost: null,
+          isPolling: false,
+          isRaceComplete: true,
+          finalPosition,
+          error: null,
+        }));
+        stopLoading(LOADING_KEYS.POLLING);
+
+        if (onRaceComplete && finalPosition !== null) {
+          onRaceComplete(finalPosition);
+        }
+        return;
+      }
+    } catch (completionCheckError) {
+      console.warn('[RaceContainer] Completion check failed, continuing:', completionCheckError);
+    }
+
+    try {
+      // Use batched API call for better performance. Also refresh the turn
+      // phase so the lap counter / characteristic update after every turn
+      // (the batch does not include turn-phase).
+      const [batchResult, turnPhase] = await Promise.all([
+        withErrorHandling(
+          () =>
+            raceAPIService.batchRaceData(raceUuid, playerUuid, {
+              includeLocalView: true,
+              includeBoostAvailability: true,
+              includeLapHistory: true,
+              includePerformancePreview: true, // Fetch for next turn
+            }),
+          'fetching updated race state',
+        ),
+        raceAPIService.getTurnPhase(raceUuid).catch(() => null),
+      ]);
 
       const { localView, boostAvailability, lapHistory, performancePreview } = batchResult;
 
@@ -485,6 +522,7 @@ export function RaceContainer({
         boostAvailability: boostAvailability || prev.boostAvailability,
         lapHistory: lapHistory || prev.lapHistory,
         performancePreview: performancePreview || prev.performancePreview,
+        turnPhase: turnPhase || prev.turnPhase, // Refresh lap / characteristic
         hasSubmittedThisTurn: false, // Reset for next turn
         selectedBoost: null, // Clear selection for next turn
         isPolling: false, // Stop polling
@@ -695,6 +733,71 @@ export function RaceContainer({
   ]);
 
   /**
+   * Perform a pit stop: refill the boost pool (optionally switching tyre).
+   * Consumes the turn as a free boost-0 lap. In solo races the turn resolves
+   * server-side immediately, so we refresh all data via `handleTurnComplete`.
+   */
+  const pitStopAction = useCallback(
+    async (newTyre?: TyreType) => {
+      if (state.hasSubmittedThisTurn || state.isSubmitting) {
+        return;
+      }
+
+      const carUuid = state.carData?.car?.uuid;
+      if (!carUuid) {
+        handleError(new Error('Car data not loaded yet — cannot pit.'), 'pit stop');
+        return;
+      }
+
+      startLoading(LOADING_KEYS.SUBMIT_ACTION, 'action', { message: 'Pitting in…' });
+      setState((prev) => ({ ...prev, isSubmitting: true, error: null }));
+
+      try {
+        await withErrorHandling(
+          () => raceAPIService.pitStop(raceUuid, playerUuid, carUuid, newTyre),
+          'performing pit stop',
+          undefined,
+          (errorState) => {
+            updateLoading(LOADING_KEYS.SUBMIT_ACTION, {
+              message: `Retrying… ${errorState.message}`,
+            });
+          },
+        );
+
+        // The pit consumes the turn (a free boost-0 lap). Clear local selection
+        // and refresh all race data so the refilled pool / new tyre is shown.
+        setState((prev) => ({
+          ...prev,
+          isSubmitting: false,
+          hasSubmittedThisTurn: false,
+          selectedBoost: null,
+          error: null,
+        }));
+        stopLoading(LOADING_KEYS.SUBMIT_ACTION);
+
+        await handleTurnComplete();
+      } catch (error) {
+        const errorObj = error instanceof Error ? error : new Error(String(error));
+        setState((prev) => ({ ...prev, isSubmitting: false }));
+        stopLoading(LOADING_KEYS.SUBMIT_ACTION);
+        handleError(errorObj, 'performing pit stop');
+      }
+    },
+    [
+      raceUuid,
+      playerUuid,
+      state.carData,
+      state.hasSubmittedThisTurn,
+      state.isSubmitting,
+      handleError,
+      startLoading,
+      updateLoading,
+      stopLoading,
+      handleTurnComplete,
+    ],
+  );
+
+  /**
    * Initialize race on component mount
    */
   useEffect(() => {
@@ -821,6 +924,7 @@ export function RaceContainer({
           // Event handlers
           onBoostSelect={handleBoostSelection}
           onSubmitAction={submitTurnAction}
+          onPitStop={pitStopAction}
           // Player info
           raceUuid={raceUuid}
           playerUuid={playerUuid}

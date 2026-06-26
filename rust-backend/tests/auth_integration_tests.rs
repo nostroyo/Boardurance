@@ -21,7 +21,7 @@ struct TestApp {
 impl TestApp {
     pub async fn post_register(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -31,7 +31,7 @@ impl TestApp {
 
     pub async fn post_login(&self, body: &serde_json::Value) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/login", &self.address))
+            .post(format!("{}/api/v1/auth/login", self.address))
             .header("Content-Type", "application/json")
             .json(body)
             .send()
@@ -41,7 +41,7 @@ impl TestApp {
 
     pub async fn post_logout(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/logout", &self.address))
+            .post(format!("{}/api/v1/auth/logout", self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -50,7 +50,7 @@ impl TestApp {
 
     pub async fn post_refresh(&self, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!("{}/api/v1/auth/refresh", &self.address))
+            .post(format!("{}/api/v1/auth/refresh", self.address))
             .header("Cookie", cookies)
             .send()
             .await
@@ -59,7 +59,7 @@ impl TestApp {
 
     pub async fn get_player(&self, uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .get(format!("{}/api/v1/players/{}", &self.address, uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -489,7 +489,7 @@ async fn session_management_prevents_token_reuse_after_logout() {
     let auth_header = format!("Bearer {access_token}");
     let protected_response = app
         .client
-        .get(format!("{}/api/v1/players/{}", &app.address, user_uuid))
+        .get(format!("{}/api/v1/players/{}", app.address, user_uuid))
         .header("Authorization", &auth_header)
         .send()
         .await

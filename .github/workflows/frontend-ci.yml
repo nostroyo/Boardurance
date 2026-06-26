@@ -5,11 +5,13 @@ on:
     branches: [ main, develop ]
     paths:
       - 'empty-project/**'
+      - 'docs/openapi.json'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'empty-project/**'
+      - 'docs/openapi.json'
       - '.github/workflows/frontend-ci.yml'
 
 jobs:
@@ -33,6 +35,12 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Check API types match the OpenAPI contract
+      # Regenerate src/types/api-generated.ts from docs/openapi.json and fail if
+      # it differs from the committed file — i.e. the backend contract changed
+      # but the frontend types weren't regenerated (run `npm run gen:api`).
+      run: npm run gen:api:check
 
     - name: Run TypeScript compilation check
       run: npx tsc --noEmit

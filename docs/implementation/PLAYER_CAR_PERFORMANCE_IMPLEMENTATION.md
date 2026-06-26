@@ -80,20 +80,17 @@ This document summarizes the implementation of task 5 from the player-game-inter
 - Engine name and rarity badge
 - Straight and curve value bars
 - Visual performance indicators
-- NFT mint address (if applicable)
 
 #### Body Tab
 - Body name and rarity badge
 - Straight and curve value bars
 - Visual performance indicators
-- NFT mint address (if applicable)
 
 #### Pilot Tab
 - Pilot name, class icon, and rarity
 - Skill breakdown (reaction time, precision, focus, stamina)
 - Visual skill bars with gradients
 - Performance values (straight/curve)
-- NFT mint address (if applicable)
 
 #### History Tab
 - Best lap highlight with trophy icon

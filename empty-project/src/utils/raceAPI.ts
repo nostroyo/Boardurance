@@ -1,5 +1,7 @@
 // Race API utility functions
 
+import { API_V1_URL } from '../config/api';
+
 interface CreateSectorRequest {
   id: number;
   name: string;
@@ -85,7 +87,7 @@ export const DEFAULT_POLLING_CONFIG: RacePollingConfig = {
 
 export const raceAPI = {
   // Base API URL
-  baseUrl: 'http://localhost:3000/api/v1',
+  baseUrl: API_V1_URL,
 
   // Default fetch options for authenticated requests
   getAuthenticatedFetchOptions(options: RequestInit = {}): RequestInit {

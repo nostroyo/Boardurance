@@ -1,5 +1,7 @@
 // Authentication utility functions
 
+import { API_BASE_URL } from '../config/api';
+
 export interface User {
   uuid: string;
   email: string;
@@ -139,7 +141,7 @@ export const authUtils = {
 // API utility functions with cookie-based authentication
 export const apiUtils = {
   // Base API URL
-  baseUrl: 'http://localhost:3000',
+  baseUrl: API_BASE_URL,
 
   // Default fetch options for authenticated requests
   getAuthenticatedFetchOptions(options: RequestInit = {}): RequestInit {
@@ -223,9 +225,9 @@ export const apiUtils = {
     password: string,
     teamName: string,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
-    console.log('Attempting registration with URL:', `${this.baseUrl}/auth/register`);
+    console.log('Attempting registration with URL:', `${this.baseUrl}/api/v1/auth/register`);
     try {
-      const response = await fetch(`${this.baseUrl}/auth/register`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/register`, {
         method: 'POST',
         // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
@@ -260,7 +262,7 @@ export const apiUtils = {
     password: string,
   ): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/auth/login`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/login`, {
         method: 'POST',
         // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
@@ -289,7 +291,7 @@ export const apiUtils = {
   // Logout user
   async logout(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/auth/logout`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/logout`, {
         method: 'POST',
         // credentials: 'include', // Include cookies for auth tokens - temporarily disabled for CORS testing
         headers: {
@@ -311,7 +313,7 @@ export const apiUtils = {
   // Refresh authentication token
   async refreshToken(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
         method: 'POST',
         // credentials: 'include', // Include cookies for refresh token - temporarily disabled for CORS testing
         headers: {

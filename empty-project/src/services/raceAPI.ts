@@ -12,7 +12,11 @@ import type {
   LapHistory,
   SubmitActionRequest,
   SubmitActionResponse,
+  CreateSoloRaceResponse,
+  TyreType,
 } from '../types/race-api';
+import type { Race } from '../types/race';
+import { API_V1_URL } from '../config/api';
 
 /**
  * RaceAPIService class for interacting with backend race endpoints
@@ -20,7 +24,7 @@ import type {
 export class RaceAPIService {
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:3000/api/v1') {
+  constructor(baseUrl: string = API_V1_URL) {
     this.baseUrl = baseUrl;
   }
 
@@ -282,6 +286,85 @@ export class RaceAPIService {
     );
 
     return this.handleResponse<SubmitActionResponse>(response);
+  }
+
+  /**
+   * POST /api/v1/races/{race_uuid}/pit
+   * Perform a pit stop: refill the boost pool (optionally switching tyre) and
+   * consume the turn as a free boost-0 lap.
+   */
+  async pitStop(
+    raceUuid: string,
+    playerUuid: string,
+    carUuid: string,
+    newTyre?: TyreType,
+  ): Promise<unknown> {
+    const url = `${this.baseUrl}/races/${raceUuid}/pit`;
+
+    const requestBody = {
+      player_uuid: playerUuid,
+      car_uuid: carUuid,
+      new_tyre: newTyre ?? null,
+    };
+
+    const response = await this.fetchWithErrorHandling(
+      url,
+      this.getAuthenticatedFetchOptions({
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      }),
+      15000,
+    );
+
+    return this.handleResponse<unknown>(response);
+  }
+
+  /**
+   * GET /api/v1/races/{race_uuid}
+   * Fetch the full race object (status, participants, laps). Used to detect
+   * race completion reliably — unlike local-view, this still reports finished
+   * participants once the race is no longer in progress.
+   */
+  async getRace(raceUuid: string): Promise<Race> {
+    const url = `${this.baseUrl}/races/${raceUuid}`;
+
+    const response = await this.fetchWithErrorHandling(
+      url,
+      this.getAuthenticatedFetchOptions({ method: 'GET' }),
+    );
+
+    return this.handleResponse<Race>(response);
+  }
+
+  /**
+   * POST /api/v1/races/solo
+   * Start a solo race: the human player plus seeded AI opponents. The backend
+   * picks the player's first complete car and fills the grid with AI bots.
+   * Returns the created (already started) race.
+   */
+  async createSoloRace(
+    playerUuid: string,
+    tyreType?: TyreType,
+  ): Promise<CreateSoloRaceResponse> {
+    const url = `${this.baseUrl}/races/solo`;
+
+    const requestBody: { player_uuid: string; tyre_type?: TyreType } = {
+      player_uuid: playerUuid,
+    };
+    if (tyreType) {
+      requestBody.tyre_type = tyreType;
+    }
+
+    const response = await this.fetchWithErrorHandling(
+      url,
+      this.getAuthenticatedFetchOptions({
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      }),
+      15000,
+    );
+
+    return this.handleResponse<CreateSoloRaceResponse>(response);
   }
 
   /**

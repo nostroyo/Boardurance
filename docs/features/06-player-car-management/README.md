@@ -26,5 +26,4 @@ See `implementation/` subfolder for:
 ## Related Features
 
 - [Racing System](../02-racing-system/) - How cars perform in races
-- [NFT & Blockchain](../05-nft-blockchain/) - NFT car attributes
 - [Testing](../07-testing/) - Player creation tests

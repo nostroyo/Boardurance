@@ -1,36 +1,32 @@
 # Product Overview
 
-## Web3 Motorsport Racing Game
+## Online Motorsport Racing Management Game
 
-A complete Web3 gaming ecosystem featuring NFT integration on Solana blockchain where players own unique racing car NFTs with real performance attributes and compete in races.
+An online racing management game where players own unique racing cars with real performance attributes, hire pilots, and compete in races.
 
 ### Core Value Proposition
-- **Own unique racing car NFTs** with performance stats that directly affect gameplay
-- **Compete in races** using NFT car attributes (Speed, Acceleration, Handling, Durability)
-- **Trade and upgrade** vehicles on secondary markets
+- **Own unique racing cars** with performance stats that directly affect gameplay
+- **Compete in races** using car attributes (Speed, Acceleration, Handling, Durability)
+- **Trade and upgrade** vehicles
 - **Earn rewards** through gameplay and tournaments
 
 ### Key Features
-- **100 Unique Car NFTs** across 8 categories (Formula One, Rally, Electric GT, etc.)
-- **Performance-Based Racing** where NFT stats determine race outcomes
+- **100 Unique Cars** across 8 categories (Formula One, Rally, Electric GT, etc.)
+- **Performance-Based Racing** where car stats determine race outcomes
 - **Rarity System** with Common to Legendary tiers and performance multipliers
 - **Tournament System** with entry fees and prize distribution
-- **Wallet Integration** for seamless Solana blockchain interaction
 
 ### Target Users
-- Web3 gaming enthusiasts
-- NFT collectors interested in utility-driven assets
 - Motorsport fans seeking digital racing experiences
-- Players looking for play-to-earn gaming opportunities
+- Players who enjoy management and strategy games
+- Collectors interested in building and optimizing a team
 
 ### Business Model
-- NFT minting revenue (0.01 SOL per car)
 - Tournament entry fees
-- Marketplace transaction fees (2.5% royalties)
-- Secondary market trading commissions
+- Marketplace transaction fees
+- In-game purchases
 
 ### Success Metrics
-- 100% NFT collection minted
 - 1,000+ active players
 - Daily tournament participation
-- Secondary market trading volume
+- Marketplace trading activity

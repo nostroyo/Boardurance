@@ -26,7 +26,6 @@ db.test_items.createIndex({ "uuid": 1 }, { unique: true });
 db.test_items.createIndex({ "created_at": 1 });
 
 // Players indexes
-db.players.createIndex({ "wallet_address": 1 }, { unique: true });
 db.players.createIndex({ "uuid": 1 }, { unique: true });
 db.players.createIndex({ "team_name": 1 });
 db.players.createIndex({ "created_at": 1 });

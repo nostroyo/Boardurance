@@ -1,13 +1,12 @@
 # Technology Stack Overview
 
-Comprehensive overview of all technologies used across the Web3 Game project components.
+Comprehensive overview of all technologies used across the racing game project components.
 
 ## 🎯 Stack Philosophy
 
 This project follows modern best practices for each layer:
 - **Frontend**: Developer experience with type safety
 - **Backend**: Production-ready patterns with observability
-- **Blockchain**: Solana ecosystem standards
 - **DevOps**: Containerized development with CI/CD
 
 ## 🖥️ Frontend Stack (React Application)
@@ -26,11 +25,6 @@ This project follows modern best practices for each layer:
 - **ESLint 9.33.0** - Code linting with TypeScript rules
 - **Prettier 3.6.2** - Code formatting and consistency
 - **Vite Dev Server** - Hot module replacement
-
-### Web3 Integration
-- **@solana/wallet-adapter** - Solana wallet integration
-- **@solana/web3.js** - Solana blockchain interaction
-- **@metaplex-foundation/js** - NFT metadata handling
 
 ### Build & Deployment
 - **Vite Build** - Optimized production builds
@@ -72,31 +66,6 @@ This project follows modern best practices for each layer:
 - **CQRS** - Command Query Responsibility Segregation
 - **Event Sourcing** - Audit trail and state reconstruction
 
-## ⛓️ Blockchain Stack (Solana Smart Contracts)
-
-### Core Platform
-- **Solana** - High-performance blockchain (400ms blocks)
-- **Anchor Framework** - Rust-based smart contract framework
-- **Rust** - Smart contract programming language
-
-### NFT Infrastructure
-- **Metaplex** - NFT standard and marketplace protocol
-- **Candy Machine** - NFT minting and distribution
-- **Sugar CLI** - Candy Machine deployment tool
-- **Token Metadata Program** - NFT metadata standard
-
-### Development Tools
-- **Solana CLI** - Blockchain interaction and deployment
-- **Anchor CLI** - Smart contract development lifecycle
-- **Solana Test Validator** - Local blockchain for testing
-- **Mocha/Chai** - JavaScript testing framework
-
-### Deployment & Monitoring
-- **Devnet** - Solana test network
-- **Mainnet-Beta** - Solana production network
-- **Solana Explorer** - Transaction and account monitoring
-- **Metaplex Studio** - Visual NFT collection management
-
 ## 🐳 DevOps & Infrastructure
 
 ### Containerization
@@ -134,13 +103,11 @@ This project follows modern best practices for each layer:
 ### Testing Frameworks
 - **Vitest** - Fast unit testing for frontend
 - **Rust Test** - Built-in testing for backend
-- **Anchor Test** - Smart contract testing
 - **Integration Tests** - End-to-end testing
 
 ### Package Management
 - **npm/yarn** - Node.js package management
 - **Cargo** - Rust package management
-- **Anchor** - Solana program management
 
 ## 📊 Performance & Scalability
 
@@ -156,18 +123,11 @@ This project follows modern best practices for each layer:
 - **Caching** - Redis for session and data caching
 - **Load Balancing** - Horizontal scaling support
 
-### Blockchain Performance
-- **Solana Speed** - 65,000 TPS capability
-- **Low Fees** - Fraction of penny transaction costs
-- **Parallel Processing** - Concurrent transaction execution
-- **Proof of History** - Efficient consensus mechanism
-
 ## 🔒 Security Stack
 
 ### Frontend Security
 - **Content Security Policy** - XSS protection
 - **HTTPS Enforcement** - Encrypted communication
-- **Wallet Security** - Secure key management
 - **Input Validation** - Client-side validation
 
 ### Backend Security
@@ -175,12 +135,6 @@ This project follows modern best practices for each layer:
 - **Rate Limiting** - DDoS protection
 - **Input Sanitization** - SQL injection prevention
 - **Authentication** - JWT token management
-
-### Blockchain Security
-- **Program Derived Addresses** - Secure account management
-- **Access Control** - Permission-based operations
-- **Audit Trail** - Immutable transaction history
-- **Multi-signature** - Shared control mechanisms
 
 ## 🌐 Deployment Platforms
 
@@ -201,11 +155,6 @@ This project follows modern best practices for each layer:
 - **AWS DocumentDB** - MongoDB-compatible service
 - **Self-hosted** - Docker containers
 
-### Blockchain Networks
-- **Solana Devnet** - Development and testing
-- **Solana Mainnet** - Production deployment
-- **Local Validator** - Development environment
-
 ## 📈 Monitoring & Analytics
 
 ### Application Monitoring
@@ -216,7 +165,6 @@ This project follows modern best practices for each layer:
 
 ### Business Analytics
 - **User Analytics** - Player behavior tracking
-- **NFT Analytics** - Collection performance
 - **Game Metrics** - Engagement tracking
 - **Revenue Analytics** - Financial performance
 
@@ -228,12 +176,6 @@ This project follows modern best practices for each layer:
 - **Authentication** - JWT token validation
 - **Error Handling** - Graceful error responses
 
-### Backend ↔ Blockchain
-- **RPC Calls** - Solana program interaction
-- **Transaction Monitoring** - Blockchain event tracking
-- **Wallet Integration** - Account management
-- **NFT Metadata** - Token information retrieval
-
 ### Cross-Component
 - **Shared Types** - TypeScript interfaces
 - **API Contracts** - OpenAPI specifications
@@ -242,4 +184,4 @@ This project follows modern best practices for each layer:
 
 ---
 
-**This technology stack provides a robust, scalable, and secure foundation for Web3 gaming applications! 🚀**
+**This technology stack provides a robust, scalable, and secure foundation for online gaming applications! 🚀**

@@ -26,6 +26,12 @@ pub struct DatabaseSettings {
     pub host: String,
     pub database_name: String,
     pub require_ssl: bool,
+    /// Full connection URI override (e.g. a `mongodb+srv://...` string from a
+    /// managed provider). When set (typically via the `APP_DATABASE__URI`
+    /// environment variable), it takes precedence over the individual
+    /// host/port/username/password fields below.
+    #[serde(default)]
+    pub uri: Option<Secret<String>>,
 }
 
 impl DatabaseSettings {
@@ -109,7 +115,18 @@ pub fn get_configuration() -> Result<Settings, ConfigError> {
         )
         .build()?;
 
-    settings.try_deserialize::<Settings>()
+    let mut settings = settings.try_deserialize::<Settings>()?;
+
+    // Many free hosts (Render, Railway, etc.) inject the port to bind to via a
+    // `PORT` environment variable. Honor it so the app listens where the
+    // platform expects, overriding the value from the YAML config.
+    if let Ok(port) = std::env::var("PORT") {
+        if let Ok(port) = port.parse::<u16>() {
+            settings.application.port = port;
+        }
+    }
+
+    Ok(settings)
 }
 
 /// The possible runtime environment for our application.

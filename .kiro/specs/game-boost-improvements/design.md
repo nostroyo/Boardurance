@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Boost Card System introduces a hand-based resource management mechanic to the Web3 Racing Game. Players receive 5 specific boost cards (values 0, 1, 2, 3, 4) at race start. Each card can be used once per cycle, and when all cards are exhausted, the entire hand replenishes automatically. This design integrates seamlessly with the existing race domain model and API structure while adding strategic depth to boost selection.
+The Boost Card System introduces a hand-based resource management mechanic to the Racing Game. Players receive 5 specific boost cards (values 0, 1, 2, 3, 4) at race start. Each card can be used once per cycle, and when all cards are exhausted, the entire hand replenishes automatically. This design integrates seamlessly with the existing race domain model and API structure while adding strategic depth to boost selection.
 
 ## Architecture
 

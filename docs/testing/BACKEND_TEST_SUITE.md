@@ -89,8 +89,7 @@ rust-backend/tests/
 ### Updated for Authentication System
 - ✅ **Email/Password Registration**: Secure user creation with Argon2 hashing
 - ✅ **Login Validation**: Password verification and user authentication
-- ✅ **UUID-based Identification**: Primary keys use UUIDs, not wallet addresses
-- ✅ **Optional Wallet Connection**: Users can connect wallets after registration
+- ✅ **UUID-based Identification**: Primary keys use UUIDs
 - ✅ **Backward Compatibility**: Legacy endpoints still work for existing tests
 
 ### Error Handling

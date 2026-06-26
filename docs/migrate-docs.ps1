@@ -42,11 +42,6 @@ $migrations = @(
     @{Source="implementation/BOOST_AVAILABILITY_ENDPOINT_IMPLEMENTATION.md"; Dest="features/03-boost-card-system/implementation/BOOST_AVAILABILITY_ENDPOINT_IMPLEMENTATION.md"},
     @{Source="implementation/BOOST_CALCULATION_SIMPLIFICATION.md"; Dest="features/03-boost-card-system/implementation/BOOST_CALCULATION_SIMPLIFICATION.md"},
     
-    # NFT & Blockchain
-    @{Source="SOLANA_README.md"; Dest="features/05-nft-blockchain/SOLANA_README.md"},
-    @{Source="SOLANA_DEPLOYMENT.md"; Dest="features/05-nft-blockchain/SOLANA_DEPLOYMENT.md"},
-    @{Source="SOLANA_SIMPLE_DEPLOYMENT.md"; Dest="features/05-nft-blockchain/SOLANA_SIMPLE_DEPLOYMENT.md"},
-    
     # Player & Car Management
     @{Source="implementation/CAR_PILOTS_UPDATE_SUMMARY.md"; Dest="features/06-player-car-management/implementation/CAR_PILOTS_UPDATE_SUMMARY.md"},
     @{Source="implementation/PILOT_CREATION_IMPLEMENTATION.md"; Dest="features/06-player-car-management/implementation/PILOT_CREATION_IMPLEMENTATION.md"},

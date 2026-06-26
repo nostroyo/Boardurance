@@ -15,6 +15,7 @@ import type {
   LocalView,
   BoostAvailability,
   LapHistory,
+  TyreType,
 } from '../../types/race-api';
 import { TrackDisplayRedesign } from './TrackDisplayRedesign';
 import { RaceStatusPanel } from './RaceStatusPanel';
@@ -44,6 +45,7 @@ export interface RaceInterfaceProps {
   // Event handlers
   onBoostSelect: (boost: number) => void;
   onSubmitAction: () => void;
+  onPitStop?: (newTyre?: TyreType) => void;
 
   // Player info
   raceUuid: string;
@@ -67,6 +69,7 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
     // isAnyLoading, // Currently unused but available for future enhancements
     onBoostSelect,
     onSubmitAction,
+    onPitStop,
     raceUuid,
     playerUuid,
   }) => {
@@ -83,7 +86,7 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
           {turnPhase && (
             <RaceStatusPanel
               currentLap={turnPhase.current_lap}
-              totalLaps={10} // TODO: Get from race config
+              totalLaps={turnPhase.total_laps}
               lapCharacteristic={turnPhase.lap_characteristic}
               turnPhase={turnPhase}
               raceStatus="InProgress"
@@ -166,6 +169,9 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
                       isSubmitting={isSubmitting}
                       hasSubmitted={hasSubmittedThisTurn}
                       turnPhase={turnPhase.turn_phase}
+                      handState={boostAvailability.hand_state}
+                      tyreType={boostAvailability.tyre_type}
+                      onPitStop={onPitStop}
                     />
                   )
                 )}

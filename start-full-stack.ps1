@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 
-# Full Stack Startup Script - Web3 Racing Game
+# Full Stack Startup Script - Racing Game
 # Starts Docker, MongoDB, Rust Backend, and React Frontend
 
 param(
@@ -10,7 +10,7 @@ param(
     [switch]$Verbose
 )
 
-Write-Host "🏁 Starting Web3 Racing Game Full Stack" -ForegroundColor Cyan
+Write-Host "🏁 Starting Racing Game Full Stack" -ForegroundColor Cyan
 Write-Host "=======================================" -ForegroundColor Cyan
 
 $ErrorActionPreference = "Stop"

@@ -20,8 +20,8 @@ impl Default for JwtConfig {
     fn default() -> Self {
         Self {
             secret: "your-super-secret-key-here".to_string(),
-            access_token_expiry: StdDuration::from_secs(30 * 60), // 30 minutes
-            refresh_token_expiry: StdDuration::from_secs(30 * 24 * 60 * 60), // 30 days
+            access_token_expiry: StdDuration::from_mins(30), // 30 minutes
+            refresh_token_expiry: StdDuration::from_hours(720), // 30 days
             issuer: "racing-game-api".to_string(),
             audience: "racing-game-client".to_string(),
         }
@@ -188,7 +188,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills.clone(),
                 performance.clone(),
-                None,
             )
             .unwrap();
 
@@ -198,7 +197,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills.clone(),
                 performance.clone(),
-                None,
             )
             .unwrap();
 
@@ -208,7 +206,6 @@ mod tests {
                 PilotRarity::Professional,
                 skills,
                 performance,
-                None,
             )
             .unwrap();
 
@@ -217,7 +214,6 @@ mod tests {
                 ComponentRarity::Common,
                 5,
                 4,
-                None,
             )
             .unwrap();
 
@@ -226,11 +222,10 @@ mod tests {
                 ComponentRarity::Common,
                 4,
                 5,
-                None,
             )
             .unwrap();
 
-            let mut car = Car::new(CarName::parse("Test Car").unwrap(), None).unwrap();
+            let mut car = Car::new(CarName::parse("Test Car").unwrap()).unwrap();
             car.assign_pilots(vec![pilot1.uuid, pilot2.uuid, pilot3.uuid])
                 .unwrap();
             car.assign_engine(engine.uuid);
@@ -357,8 +352,8 @@ mod tests {
     #[test]
     fn tokens_have_different_expiry_times() {
         let config = JwtConfig {
-            access_token_expiry: StdDuration::from_secs(60),
-            refresh_token_expiry: StdDuration::from_secs(3600),
+            access_token_expiry: StdDuration::from_mins(1),
+            refresh_token_expiry: StdDuration::from_hours(1),
             ..JwtConfig::default()
         };
         let jwt_service = JwtService::new(config);

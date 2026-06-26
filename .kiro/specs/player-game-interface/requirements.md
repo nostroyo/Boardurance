@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Player Game Interface is the main gameplay UI for the Web3 Racing Game, providing players with an interactive interface to participate in simultaneous turn-based racing competitions using their single NFT car and pilot. This MVP interface focuses on the player's immediate racing environment, showing only their current sector and nearby sectors (±2) to create an immersive, focused racing experience where all players submit boost actions simultaneously before lap resolution.
+The Player Game Interface is the main gameplay UI for the Racing Game, providing players with an interactive interface to participate in simultaneous turn-based racing competitions using their single car and pilot. This MVP interface focuses on the player's immediate racing environment, showing only their current sector and nearby sectors (±2) to create an immersive, focused racing experience where all players submit boost actions simultaneously before lap resolution.
 
 ## Glossary
 

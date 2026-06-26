@@ -22,10 +22,6 @@ This folder contains all testing documentation, strategies, and test suite infor
 - **Integration tests** - User flow testing
 - **E2E tests** - Full stack testing
 
-### Blockchain Testing
-- **Contract tests** - Smart contract functionality
-- **Simulation tests** - NFT minting and trading
-
 ## Test Execution
 
 ```powershell

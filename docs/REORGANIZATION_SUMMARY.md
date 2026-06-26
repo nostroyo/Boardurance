@@ -11,12 +11,11 @@ The docs folder has been reorganized from a flat structure into a feature-based 
 2. **02-racing-system** - Racing mechanics and gameplay
 3. **03-boost-card-system** - Boost card mechanics and API
 4. **04-authentication** - Auth and user management
-5. **05-nft-blockchain** - Solana and NFT integration
-6. **06-player-car-management** - Player, car, and pilot systems
-7. **07-testing** - All testing documentation
-8. **08-architecture** - System architecture and patterns
-9. **09-backend** - Rust backend documentation
-10. **10-frontend** - React frontend documentation
+5. **06-player-car-management** - Player, car, and pilot systems
+6. **07-testing** - All testing documentation
+7. **08-architecture** - System architecture and patterns
+8. **09-backend** - Rust backend documentation
+9. **10-frontend** - React frontend documentation
 
 ## Files Created
 
@@ -126,11 +125,6 @@ Remove-Item REORGANIZATION_SUMMARY.md  # Optional - keep for reference
 - openapi-boost-cards.yaml
 - implementation/BOOST_AVAILABILITY_ENDPOINT_IMPLEMENTATION.md
 - implementation/BOOST_CALCULATION_SIMPLIFICATION.md
-
-### NFT & Blockchain (05)
-- SOLANA_README.md
-- SOLANA_DEPLOYMENT.md
-- SOLANA_SIMPLE_DEPLOYMENT.md
 
 ### Player & Car Management (06)
 - implementation/CAR_PILOTS_UPDATE_SUMMARY.md

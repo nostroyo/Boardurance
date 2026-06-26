@@ -13,5 +13,4 @@ This folder contains general project documentation, setup guides, and overview m
 ## Related Features
 
 - [Racing System](../02-racing-system/) - Core gameplay mechanics
-- [NFT & Blockchain](../05-nft-blockchain/) - Solana integration
 - [Testing](../07-testing/) - Testing strategies

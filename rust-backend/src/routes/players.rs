@@ -13,15 +13,16 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::app_state::AppState;
 use crate::domain::{
     Car, CarName, Pilot, PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName,
-    WalletAddress,
+};
+use crate::repositories::{
+    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
 };
 
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct ConnectWalletRequest {
-    pub wallet_address: String,
-}
+/// Concrete in-memory application state used by the mock-backed player routes.
+type MockAppState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTeamNameRequest {
@@ -37,7 +38,6 @@ pub struct UpdatePlayerConfigurationRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AddCarRequest {
     pub name: String,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -46,7 +46,6 @@ pub struct AddPilotRequest {
     pub pilot_class: PilotClass,
     pub rarity: PilotRarity,
     pub skills: PilotSkillsRequest,
-    pub nft_mint_address: Option<String>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -63,22 +62,26 @@ pub struct PlayerResponse {
     pub message: String,
 }
 
-pub fn routes() -> Router<Database> {
+/// Player routes backed by the in-memory `MockPlayerRepository` from `AppState`.
+///
+/// Registration (in `auth.rs`) stores new players in this same repository, so
+/// these routes serve real registered players without needing a database —
+/// which is what the frontend Team page relies on. This also covers the asset
+/// mutators (cars / pilots / configuration): they previously queried a Mongo
+/// `players` collection that registered players never populated, so they 404'd
+/// for every real player. They now operate on the same store as registration.
+///
+/// TODO: protect these with `AuthMiddleware` + an ownership check — the routes
+/// currently trust the path `player_uuid`.
+pub fn team_routes() -> Router<MockAppState> {
     Router::new()
-        // Protected routes - These should be protected with AuthMiddleware + RequireOwnership
-        // TODO: Apply middleware layers in startup.rs:
-        // 1. AuthMiddleware to validate JWT tokens and extract UserContext
-        // 2. RequireOwnership::player("player_uuid") to validate ownership
-        // Routes that require player ownership or admin role:
-        .route("/players/:player_uuid", get(get_player_by_uuid))
-        .route("/players/:player_uuid", put(update_player_team_name))
+        .route("/players/:player_uuid", get(get_player_by_uuid_mock))
+        .route("/players/:player_uuid", put(update_team_name_mock))
+        .route("/players/:player_uuid", delete(delete_player_mock))
         .route(
             "/players/:player_uuid/configuration",
             put(update_player_configuration),
         )
-        .route("/players/:player_uuid", delete(delete_player))
-        .route("/players/:player_uuid/wallet", post(connect_wallet))
-        .route("/players/:player_uuid/wallet", delete(disconnect_wallet))
         .route("/players/:player_uuid/cars", post(add_car_to_player))
         .route(
             "/players/:player_uuid/cars/:car_uuid",
@@ -89,6 +92,82 @@ pub fn routes() -> Router<Database> {
             "/players/:player_uuid/pilots/:pilot_uuid",
             delete(remove_pilot_from_player),
         )
+}
+
+/// Get a player by UUID from the in-memory repository.
+#[tracing::instrument(name = "Fetching player by UUID (mock)", skip(state))]
+pub async fn get_player_by_uuid_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+) -> Result<Json<Player>, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state.player_repository.find_by_uuid(player_uuid).await {
+        Ok(Some(player)) => Ok(Json(player)),
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to fetch player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Update a player's team name in the in-memory repository.
+#[tracing::instrument(name = "Updating team name (mock)", skip(state, payload))]
+pub async fn update_team_name_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+    Json(payload): Json<UpdateTeamNameRequest>,
+) -> Result<Json<PlayerResponse>, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    let new_team_name = TeamName::parse(&payload.team_name).map_err(|e| {
+        tracing::warn!("Invalid team name: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state
+        .player_repository
+        .update_team_name_by_uuid(player_uuid, new_team_name)
+        .await
+    {
+        Ok(Some(player)) => Ok(Json(PlayerResponse {
+            player,
+            message: "Team name updated successfully".to_string(),
+        })),
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to update team name: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Delete a player from the in-memory repository.
+#[tracing::instrument(name = "Deleting player (mock)", skip(state))]
+pub async fn delete_player_mock(
+    State(state): State<MockAppState>,
+    Path(player_uuid_str): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
+        tracing::warn!("Invalid player UUID: {}", e);
+        StatusCode::BAD_REQUEST
+    })?;
+
+    match state.player_repository.delete_by_uuid(player_uuid).await {
+        Ok(true) => Ok(StatusCode::OK),
+        Ok(false) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to delete player: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// Admin-only routes that require authentication and admin role
@@ -103,7 +182,6 @@ pub fn admin_routes() -> Router<
     Router::new()
     // TODO: Re-enable admin routes after fixing tracing format issues
     // .route("/players", get(get_all_players_admin))
-    // .route("/players/by-wallet/:wallet_address", get(get_player_by_wallet_admin))
     // .route("/players/by-email/:email", get(get_player_by_email_admin))
 }
 
@@ -176,41 +254,6 @@ pub async fn get_player_by_uuid(
     }
 }
 
-/// Get player by wallet address
-#[utoipa::path(
-    get,
-    path = "/api/v1/players/by-wallet/{wallet_address}",
-    params(
-        ("wallet_address" = String, Path, description = "Player's wallet address")
-    ),
-    responses(
-        (status = 200, description = "Player found", body = Player),
-        (status = 404, description = "Player not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Fetching player by wallet address", skip(database))]
-pub async fn get_player_by_wallet(
-    State(database): State<Database>,
-    Path(wallet_address): Path<String>,
-) -> Result<Json<Player>, StatusCode> {
-    match get_player_by_wallet_address(&database, &wallet_address).await {
-        Ok(Some(player)) => {
-            tracing::info!("Player found for wallet address: {}", wallet_address);
-            Ok(Json(player))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for wallet address: {}", wallet_address);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to fetch player: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
 /// Get player by email address
 #[utoipa::path(
     get,
@@ -246,124 +289,6 @@ pub async fn get_player_by_email(
     }
 }
 
-/// Connect wallet to player
-#[utoipa::path(
-    post,
-    path = "/api/v1/players/{player_uuid}/wallet",
-    params(
-        ("player_uuid" = String, Path, description = "Player's UUID")
-    ),
-    request_body = ConnectWalletRequest,
-    responses(
-        (status = 200, description = "Wallet connected successfully", body = PlayerResponse),
-        (status = 400, description = "Bad request"),
-        (status = 404, description = "Player not found"),
-        (status = 409, description = "Wallet already connected"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Connecting wallet to player", skip(database, payload))]
-pub async fn connect_wallet(
-    State(database): State<Database>,
-    Path(player_uuid_str): Path<String>,
-    Json(payload): Json<ConnectWalletRequest>,
-) -> Result<Json<PlayerResponse>, StatusCode> {
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    let wallet_address = match WalletAddress::parse(&payload.wallet_address) {
-        Ok(addr) => addr,
-        Err(e) => {
-            tracing::warn!("Invalid wallet address: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    // Check if wallet is already connected to another player
-    if let Ok(existing) = get_player_by_wallet_address(&database, wallet_address.as_ref()).await {
-        if existing.is_some() {
-            tracing::warn!(
-                "Wallet address {} is already connected to another player",
-                wallet_address.as_ref()
-            );
-            return Err(StatusCode::CONFLICT);
-        }
-    }
-
-    match connect_wallet_to_player(&database, player_uuid, wallet_address).await {
-        Ok(Some(updated_player)) => {
-            tracing::info!("Wallet connected successfully to player: {}", player_uuid);
-            Ok(Json(PlayerResponse {
-                player: updated_player,
-                message: "Wallet connected successfully".to_string(),
-            }))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for UUID: {}", player_uuid);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to connect wallet: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
-/// Disconnect wallet from player
-#[utoipa::path(
-    delete,
-    path = "/api/v1/players/{player_uuid}/wallet",
-    params(
-        ("player_uuid" = String, Path, description = "Player's UUID")
-    ),
-    responses(
-        (status = 200, description = "Wallet disconnected successfully", body = PlayerResponse),
-        (status = 404, description = "Player not found"),
-        (status = 500, description = "Internal server error")
-    ),
-    tag = "players"
-)]
-#[tracing::instrument(name = "Disconnecting wallet from player", skip(database))]
-pub async fn disconnect_wallet(
-    State(database): State<Database>,
-    Path(player_uuid_str): Path<String>,
-) -> Result<Json<PlayerResponse>, StatusCode> {
-    let player_uuid = match Uuid::parse_str(&player_uuid_str) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            tracing::warn!("Invalid player UUID: {}", e);
-            return Err(StatusCode::BAD_REQUEST);
-        }
-    };
-
-    match disconnect_wallet_from_player(&database, player_uuid).await {
-        Ok(Some(updated_player)) => {
-            tracing::info!(
-                "Wallet disconnected successfully from player: {}",
-                player_uuid
-            );
-            Ok(Json(PlayerResponse {
-                player: updated_player,
-                message: "Wallet disconnected successfully".to_string(),
-            }))
-        }
-        Ok(None) => {
-            tracing::warn!("Player not found for UUID: {}", player_uuid);
-            Err(StatusCode::NOT_FOUND)
-        }
-        Err(e) => {
-            tracing::error!("Failed to disconnect wallet: {:?}", e);
-            Err(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    }
-}
-
 /// Update player configuration (cars and inventory)
 #[utoipa::path(
     put,
@@ -380,9 +305,9 @@ pub async fn disconnect_wallet(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Updating player configuration", skip(database, payload))]
+#[tracing::instrument(name = "Updating player configuration", skip(state, payload))]
 pub async fn update_player_configuration(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<UpdatePlayerConfigurationRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -402,7 +327,29 @@ pub async fn update_player_configuration(
         }
     };
 
-    match update_player_configuration_by_uuid(&database, player_uuid, new_team_name, payload.cars)
+    // Replace the player's cars, then update the team name. Both operate on the
+    // in-memory repository where registration stores players (the same store the
+    // GET/PUT/DELETE team routes use), so configuration changes target the player
+    // that actually exists instead of an empty Mongo collection.
+    match state
+        .player_repository
+        .set_cars_by_uuid(player_uuid, payload.cars)
+        .await
+    {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            tracing::warn!("Player not found for UUID: {}", player_uuid);
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Err(e) => {
+            tracing::error!("Failed to update cars: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    match state
+        .player_repository
+        .update_team_name_by_uuid(player_uuid, new_team_name)
         .await
     {
         Ok(Some(updated_player)) => {
@@ -542,9 +489,9 @@ pub async fn delete_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Adding car to player", skip(database, payload))]
+#[tracing::instrument(name = "Adding car to player", skip(state, payload))]
 pub async fn add_car_to_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddCarRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -563,7 +510,7 @@ pub async fn add_car_to_player(
         }
     };
 
-    let car = match Car::new(car_name, payload.nft_mint_address) {
+    let car = match Car::new(car_name) {
         Ok(car) => car,
         Err(e) => {
             tracing::warn!("Failed to create car: {}", e);
@@ -571,7 +518,11 @@ pub async fn add_car_to_player(
         }
     };
 
-    match add_car_to_player_by_uuid(&database, player_uuid, car).await {
+    match state
+        .player_repository
+        .add_car_by_uuid(player_uuid, car)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Car added successfully to player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -606,9 +557,9 @@ pub async fn add_car_to_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Removing car from player", skip(database))]
+#[tracing::instrument(name = "Removing car from player", skip(state))]
 pub async fn remove_car_from_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path((player_uuid_str, car_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -627,7 +578,11 @@ pub async fn remove_car_from_player(
         }
     };
 
-    match remove_car_from_player_by_uuid(&database, player_uuid, car_uuid).await {
+    match state
+        .player_repository
+        .remove_car_by_uuid(player_uuid, car_uuid)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Car removed successfully from player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -662,9 +617,9 @@ pub async fn remove_car_from_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Adding pilot to player", skip(database, payload))]
+#[tracing::instrument(name = "Adding pilot to player", skip(state, payload))]
 pub async fn add_pilot_to_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddPilotRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -714,7 +669,6 @@ pub async fn add_pilot_to_player(
         payload.rarity,
         pilot_skills,
         pilot_performance,
-        payload.nft_mint_address,
     ) {
         Ok(pilot) => pilot,
         Err(e) => {
@@ -723,7 +677,11 @@ pub async fn add_pilot_to_player(
         }
     };
 
-    match add_pilot_to_player_by_uuid(&database, player_uuid, pilot).await {
+    match state
+        .player_repository
+        .add_pilot_by_uuid(player_uuid, pilot)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Pilot added successfully to player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -758,9 +716,9 @@ pub async fn add_pilot_to_player(
     ),
     tag = "players"
 )]
-#[tracing::instrument(name = "Removing pilot from player", skip(database))]
+#[tracing::instrument(name = "Removing pilot from player", skip(state))]
 pub async fn remove_pilot_from_player(
-    State(database): State<Database>,
+    State(state): State<MockAppState>,
     Path((player_uuid_str, pilot_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -779,7 +737,11 @@ pub async fn remove_pilot_from_player(
         }
     };
 
-    match remove_pilot_from_player_by_uuid(&database, player_uuid, pilot_uuid).await {
+    match state
+        .player_repository
+        .remove_pilot_by_uuid(player_uuid, pilot_uuid)
+        .await
+    {
         Ok(Some(updated_player)) => {
             tracing::info!("Pilot removed successfully from player: {}", player_uuid);
             Ok(Json(PlayerResponse {
@@ -829,19 +791,6 @@ pub async fn get_all_players_from_db(
 }
 
 #[tracing::instrument(
-    name = "Getting player by wallet address from the database",
-    skip(database)
-)]
-pub async fn get_player_by_wallet_address(
-    database: &Database,
-    wallet_address: &str,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    collection.find_one(filter, None).await
-}
-
-#[tracing::instrument(
     name = "Getting player by email address from the database",
     skip(database)
 )]
@@ -854,101 +803,6 @@ pub async fn get_player_by_email_address(
     collection.find_one(filter, None).await
 }
 
-#[tracing::instrument(
-    name = "Updating player team name in the database",
-    skip(database, new_team_name)
-)]
-pub async fn update_player_team_name_in_db(
-    database: &Database,
-    wallet_address: &str,
-    new_team_name: TeamName,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$set": {
-            "team_name": new_team_name.as_ref(),
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Deleting player from the database", skip(database))]
-pub async fn delete_player_from_db(
-    database: &Database,
-    wallet_address: &str,
-) -> Result<bool, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let result = collection.delete_one(filter, None).await?;
-    Ok(result.deleted_count > 0)
-}
-
-#[tracing::instrument(name = "Adding car to player in the database", skip(database, car))]
-pub async fn add_car_to_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    car: Car,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Removing car from player in the database", skip(database))]
-pub async fn remove_car_from_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    car_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$pull": { "cars": { "uuid": car_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Adding pilot to player in the database", skip(database, pilot))]
-pub async fn add_pilot_to_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    pilot: Pilot,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(name = "Removing pilot from player in the database", skip(database))]
-pub async fn remove_pilot_from_player_in_db(
-    database: &Database,
-    wallet_address: &str,
-    pilot_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "wallet_address": wallet_address };
-    let update = doc! {
-        "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
 #[tracing::instrument(name = "Getting player by UUID from the database", skip(database))]
 pub async fn get_player_by_uuid_from_db(
     database: &Database,
@@ -957,45 +811,6 @@ pub async fn get_player_by_uuid_from_db(
     let collection = database.collection::<Player>("players");
     let filter = doc! { "uuid": player_uuid.to_string() };
     collection.find_one(filter, None).await
-}
-
-#[tracing::instrument(
-    name = "Connecting wallet to player in the database",
-    skip(database, wallet_address)
-)]
-pub async fn connect_wallet_to_player(
-    database: &Database,
-    player_uuid: Uuid,
-    wallet_address: WalletAddress,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "wallet_address": wallet_address.as_ref(),
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Disconnecting wallet from player in the database",
-    skip(database)
-)]
-pub async fn disconnect_wallet_from_player(
-    database: &Database,
-    player_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$unset": { "wallet_address": "" },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
 }
 
 #[tracing::instrument(
@@ -1030,110 +845,6 @@ pub async fn delete_player_by_uuid(
     Ok(result.deleted_count > 0)
 }
 
-#[tracing::instrument(
-    name = "Adding car to player by UUID in the database",
-    skip(database, car)
-)]
-pub async fn add_car_to_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    car: Car,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$push": { "cars": mongodb::bson::to_bson(&car).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Removing car from player by UUID in the database",
-    skip(database)
-)]
-pub async fn remove_car_from_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    car_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$pull": { "cars": { "uuid": car_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Adding pilot to player by UUID in the database",
-    skip(database, pilot)
-)]
-pub async fn add_pilot_to_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    pilot: Pilot,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$push": { "pilots": mongodb::bson::to_bson(&pilot).unwrap() },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-
-#[tracing::instrument(
-    name = "Removing pilot from player by UUID in the database",
-    skip(database)
-)]
-pub async fn remove_pilot_from_player_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    pilot_uuid: Uuid,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$pull": { "pilots": { "uuid": pilot_uuid.to_string() } },
-        "$set": { "updated_at": BsonDateTime::now() }
-    };
-
-    collection.find_one_and_update(filter, update, None).await
-}
-#[tracing::instrument(
-    name = "Updating player configuration by UUID in the database",
-    skip(database, new_team_name, cars)
-)]
-pub async fn update_player_configuration_by_uuid(
-    database: &Database,
-    player_uuid: Uuid,
-    new_team_name: TeamName,
-    cars: Vec<Car>,
-) -> Result<Option<Player>, mongodb::error::Error> {
-    let collection = database.collection::<Player>("players");
-    let filter = doc! { "uuid": player_uuid.to_string() };
-    let update = doc! {
-        "$set": {
-            "team_name": new_team_name.as_ref(),
-            "cars": mongodb::bson::to_bson(&cars)?,
-            "updated_at": BsonDateTime::now()
-        }
-    };
-
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
-    collection
-        .find_one_and_update(filter, update, options)
-        .await
-}
-
 /* TEMPORARILY COMMENTED OUT - ADMIN FUNCTIONS HAVE TRACING FORMAT ISSUES
 // Admin-only handler functions that work with AppState
 #[utoipa::path(
@@ -1152,29 +863,6 @@ pub async fn get_all_players_admin(
 ) -> Result<Json<Vec<PlayerResponse>>, (StatusCode, Json<serde_json::Value>)> {
     let db = &app_state.database;
     get_all_players_impl(db).await
-}
-
-#[utoipa::path(
-    get,
-    path = "/api/v1/admin/players/by-wallet/{wallet_address}",
-    responses(
-        (status = 200, description = "Player found", body = PlayerResponse),
-        (status = 404, description = "Player not found")
-    ),
-    params(
-        ("wallet_address" = String, Path, description = "Wallet address to search for")
-    ),
-    security(
-        ("bearer_auth" = [])
-    ),
-    tag = "admin"
-)]
-pub async fn get_player_by_wallet_admin(
-    Path(wallet_address): Path<String>,
-    State(app_state): State<crate::app_state::AppState>,
-) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
-    let db = &app_state.database;
-    get_player_by_wallet_impl(db, wallet_address).await
 }
 
 #[utoipa::path(
@@ -1237,55 +925,6 @@ async fn get_all_players_impl(
     }
 }
 
-async fn get_player_by_wallet_impl(
-    db: &mongodb::Database,
-    wallet_address: String,
-) -> Result<Json<PlayerResponse>, (StatusCode, Json<serde_json::Value>)> {
-    tracing::info!("[FETCHING PLAYER BY WALLET - START] wallet_address={}", wallet_address);
-    let start_time = std::time::Instant::now();
-
-    match get_player_by_wallet_address(db, &wallet_address).await {
-        Ok(Some(player)) => {
-            let response = PlayerResponse {
-                player,
-                message: "Player retrieved successfully".to_string(),
-            };
-
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Ok(Json(response))
-        }
-        Ok(None) => {
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Player not found wallet_address={}",\n                wallet_address
-            );
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Err((
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({"error": "Player not found"})),
-            ))
-        }
-        Err(e) => {
-            tracing::error!(
-                "[FETCHING PLAYER BY WALLET - EVENT] Failed to fetch player: {} wallet_address={}",\n                e,\n                wallet_address
-            );
-            tracing::info!(
-                "[FETCHING PLAYER BY WALLET - END] wallet_address={}",\n                wallet_address,
-                elapsed_milliseconds = start_time.elapsed().as_millis() as u64
-            );
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Failed to fetch player"})),
-            ))
-        }
-    }
-}
-
 async fn get_player_by_email_impl(
     db: &mongodb::Database,
     email: String,
@@ -1334,3 +973,71 @@ async fn get_player_by_email_impl(
         }
     }
 }*/
+
+#[cfg(test)]
+mod player_asset_tests {
+    use super::*;
+    use crate::app_state::AppState;
+    use crate::domain::{Email, Password, Player, TeamName};
+    use crate::test_utils::TestAppState;
+    use axum::extract::{Path, State};
+    use axum::Json;
+
+    /// Build a `MockAppState` whose in-memory repository holds a single player
+    /// (mirroring the post-registration state), returning that player's uuid.
+    fn seeded_state_with_player() -> (MockAppState, uuid::Uuid) {
+        let email = Email::parse("driver@example.com").unwrap();
+        let password_hash = Password::new("Sup3rSecret!".to_string())
+            .unwrap()
+            .hash()
+            .unwrap();
+        let team_name = TeamName::parse("Test Team").unwrap();
+        let player = Player::new(email, password_hash, team_name, vec![], vec![]).unwrap();
+        let player_uuid = player.uuid;
+
+        let parts = TestAppState::with_test_data(vec![player], vec![], vec![]);
+        let state = AppState::new(
+            parts.player_repo,
+            parts.race_repo,
+            parts.session_repo,
+            parts.jwt_service,
+            parts.session_manager,
+        );
+        (state, player_uuid)
+    }
+
+    /// Regression for the two-store split (#3): `add_car` MUST act on the same
+    /// in-memory repository where registration stores players. Previously the
+    /// handler queried a Mongo `players` collection that registered players never
+    /// populated, so every real player got a 404. Here the player exists only in
+    /// the mock repo (as after registration); the car must be added, not 404'd.
+    #[tokio::test]
+    async fn add_car_targets_the_registration_store() {
+        let (state, player_uuid) = seeded_state_with_player();
+
+        let response = add_car_to_player(
+            State(state.clone()),
+            Path(player_uuid.to_string()),
+            Json(AddCarRequest {
+                name: "Test Car".to_string(),
+            }),
+        )
+        .await
+        .expect("adding a car to a registered player must succeed (not 404)");
+
+        assert_eq!(
+            response.0.player.cars.len(),
+            1,
+            "the car must be persisted to the player in the in-memory store"
+        );
+
+        // And it is observable on the same store the team routes read from.
+        let stored = state
+            .player_repository
+            .find_by_uuid(player_uuid)
+            .await
+            .unwrap()
+            .expect("player should still be present");
+        assert_eq!(stored.cars.len(), 1);
+    }
+}

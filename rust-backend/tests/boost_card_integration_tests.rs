@@ -34,7 +34,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(format!("{}/api/v1/auth/register", &self.address))
+            .post(format!("{}/api/v1/auth/register", self.address))
             .header("Content-Type", "application/json")
             .json(&register_body)
             .send()
@@ -89,7 +89,7 @@ impl TestApp {
 
         let response = self
             .client
-            .post(format!("{}/api/v1/races", &self.address))
+            .post(format!("{}/api/v1/races", self.address))
             .header("Cookie", cookies)
             .json(&race_body)
             .send()
@@ -118,7 +118,7 @@ impl TestApp {
         self.client
             .post(format!(
                 "{}/api/v1/races/{}/register",
-                &self.address, race_uuid
+                self.address, race_uuid
             ))
             .header("Cookie", cookies)
             .json(&register_body)
@@ -130,10 +130,7 @@ impl TestApp {
     // Helper to start race
     pub async fn start_race(&self, race_uuid: &str, cookies: &str) -> reqwest::Response {
         self.client
-            .post(format!(
-                "{}/api/v1/races/{}/start",
-                &self.address, race_uuid
-            ))
+            .post(format!("{}/api/v1/races/{}/start", self.address, race_uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -158,13 +155,39 @@ impl TestApp {
         self.client
             .post(format!(
                 "{}/api/v1/races/{}/apply-lap",
-                &self.address, race_uuid
+                self.address, race_uuid
             ))
             .header("Cookie", cookies)
             .json(&lap_body)
             .send()
             .await
             .expect("Failed to apply lap action")
+    }
+
+    // Helper to perform a pit stop (refills the boost pool, optionally swaps tyre)
+    pub async fn apply_pit_action(
+        &self,
+        race_uuid: &str,
+        player_uuid: &str,
+        car_uuid: &str,
+        new_tyre: Option<&str>,
+        cookies: &str,
+    ) -> reqwest::Response {
+        let mut pit_body = json!({
+            "player_uuid": player_uuid,
+            "car_uuid": car_uuid,
+        });
+        if let Some(tyre) = new_tyre {
+            pit_body["new_tyre"] = json!(tyre);
+        }
+
+        self.client
+            .post(format!("{}/api/v1/races/{}/pit", self.address, race_uuid))
+            .header("Cookie", cookies)
+            .json(&pit_body)
+            .send()
+            .await
+            .expect("Failed to apply pit action")
     }
 
     // Helper to get detailed race status
@@ -177,12 +200,12 @@ impl TestApp {
         let url = if let Some(player_uuid) = player_uuid {
             format!(
                 "{}/api/v1/races/{}/status-detailed?player_uuid={}",
-                &self.address, race_uuid, player_uuid
+                self.address, race_uuid, player_uuid
             )
         } else {
             format!(
                 "{}/api/v1/races/{}/status-detailed",
-                &self.address, race_uuid
+                self.address, race_uuid
             )
         };
 
@@ -198,7 +221,7 @@ impl TestApp {
     pub async fn get_player_first_car(&self, player_uuid: &str, cookies: &str) -> String {
         let response = self
             .client
-            .get(format!("{}/api/v1/players/{}", &self.address, player_uuid))
+            .get(format!("{}/api/v1/players/{}", self.address, player_uuid))
             .header("Cookie", cookies)
             .send()
             .await
@@ -298,19 +321,21 @@ async fn test_boost_hand_initializes_with_all_cards_available() {
         .await
         .expect("Failed to parse status");
 
-    // Assert - Verify boost hand is initialized correctly
+    // Assert - Verify boost hand is initialized correctly (default Medium pool
+    // [2, 2, 3, 3, 4] -> 5 cards; available distinct values are 0, 2, 3, 4).
     let boost_availability = &status_data["player_data"]["boost_availability"];
     assert_eq!(boost_availability["cards_remaining"], 5);
-    assert_eq!(boost_availability["current_cycle"], 1);
-    assert_eq!(boost_availability["cycles_completed"], 0);
+    assert_eq!(boost_availability["tyre_type"], "Medium");
+    assert_eq!(boost_availability["pit_stops_completed"], 0);
 
     let available_cards = boost_availability["available_cards"].as_array().unwrap();
-    assert_eq!(available_cards.len(), 5);
+    assert_eq!(available_cards.len(), 4);
 
-    // Verify all cards 0-4 are available
-    for i in 0..=4 {
+    // Free move 0 plus the Medium-pool values 2, 3, 4 are available; 1 is not.
+    for i in [0, 2, 3, 4] {
         assert!(available_cards.contains(&json!(i)));
     }
+    assert!(!available_cards.contains(&json!(1)));
 }
 
 #[tokio::test]
@@ -327,9 +352,9 @@ async fn test_using_boost_card_marks_it_unavailable() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Use boost card 2
+    // Act - Use boost card 4 (the single value-4 card in the Medium pool)
     let lap_response = app
-        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 2, &cookies)
+        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
         .await;
     assert_eq!(200, lap_response.status().as_u16());
 
@@ -343,12 +368,13 @@ async fn test_using_boost_card_marks_it_unavailable() {
     assert_eq!(boost_availability["cards_remaining"], 4);
 
     let available_cards = boost_availability["available_cards"].as_array().unwrap();
-    assert_eq!(available_cards.len(), 4);
-    assert!(!available_cards.contains(&json!(2)));
+    // 0, 2, 3 remain (the lone 4 is spent).
+    assert_eq!(available_cards.len(), 3);
+    assert!(!available_cards.contains(&json!(4)));
 
-    // Verify hand state shows card 2 as unavailable
+    // hand_state now holds remaining counts per value: the value-4 count is 0.
     let hand_state = &boost_availability["hand_state"];
-    assert_eq!(hand_state["2"], false);
+    assert_eq!(hand_state["4"], 0);
 }
 
 #[tokio::test]
@@ -365,15 +391,15 @@ async fn test_cannot_use_same_boost_card_twice() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Use boost card 3
+    // Act - Use boost card 4 (single copy in the Medium pool)
     let lap1_response = app
-        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 3, &cookies)
+        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
         .await;
     assert_eq!(200, lap1_response.status().as_u16());
 
-    // Try to use boost card 3 again
+    // Try to use boost card 4 again (now depleted)
     let lap2_response = app
-        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 3, &cookies)
+        .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
         .await;
 
     // Assert - Should return 400 with boost card error
@@ -390,11 +416,11 @@ async fn test_cannot_use_same_boost_card_twice() {
         .contains("not available"));
 
     let available_cards = error_data["available_cards"].as_array().unwrap();
-    assert!(!available_cards.contains(&json!(3)));
+    assert!(!available_cards.contains(&json!(4)));
 }
 
 #[tokio::test]
-async fn test_boost_hand_replenishes_after_all_cards_used() {
+async fn test_pit_stop_refills_boost_pool() {
     // Arrange
     let app = spawn_app().await;
     let (player_uuid, cookies) = app
@@ -407,8 +433,9 @@ async fn test_boost_hand_replenishes_after_all_cards_used() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Use all 5 boost cards
-    for boost_value in 0..=4 {
+    // Act - Spend the entire Medium pool [2, 2, 3, 3, 4]. There is NO
+    // auto-replenish: once spent, only the free boost 0 remains.
+    for boost_value in [2, 2, 3, 3, 4] {
         let lap_response = app
             .apply_lap_action(&race_uuid, &player_uuid, &car_uuid, boost_value, &cookies)
             .await;
@@ -419,28 +446,36 @@ async fn test_boost_hand_replenishes_after_all_cards_used() {
         );
     }
 
-    // Get status after using all cards
+    // Confirm the pool is empty (only the free 0 remains, no refill yet).
     let status_response = app
         .get_race_status_detailed(&race_uuid, Some(&player_uuid), &cookies)
         .await;
-    assert_eq!(200, status_response.status().as_u16());
-
-    let status_data: Value = status_response
-        .json()
-        .await
-        .expect("Failed to parse status");
-
-    // Assert - Verify replenishment occurred
+    let status_data: Value = status_response.json().await.expect("Failed to parse");
     let boost_availability = &status_data["player_data"]["boost_availability"];
-    assert_eq!(boost_availability["cards_remaining"], 5);
-    assert_eq!(boost_availability["current_cycle"], 2);
-    assert_eq!(boost_availability["cycles_completed"], 1);
+    assert_eq!(boost_availability["cards_remaining"], 0);
+    assert_eq!(boost_availability["pit_stops_completed"], 0);
+    let available_cards = boost_availability["available_cards"].as_array().unwrap();
+    assert_eq!(available_cards, &[json!(0)]);
+
+    // Pit-stop onto Soft tyres refills the pool ([3, 4, 4] -> 3 cards).
+    let pit_response = app
+        .apply_pit_action(&race_uuid, &player_uuid, &car_uuid, Some("Soft"), &cookies)
+        .await;
+    assert_eq!(200, pit_response.status().as_u16());
+
+    // Assert - Verify the pool was refilled from the new tyre.
+    let status_response = app
+        .get_race_status_detailed(&race_uuid, Some(&player_uuid), &cookies)
+        .await;
+    let status_data: Value = status_response.json().await.expect("Failed to parse");
+    let boost_availability = &status_data["player_data"]["boost_availability"];
+    assert_eq!(boost_availability["cards_remaining"], 3);
+    assert_eq!(boost_availability["tyre_type"], "Soft");
+    assert_eq!(boost_availability["pit_stops_completed"], 1);
 
     let available_cards = boost_availability["available_cards"].as_array().unwrap();
-    assert_eq!(available_cards.len(), 5);
-
-    // All cards should be available again
-    for i in 0..=4 {
+    // Soft pool [3, 4, 4] -> distinct available values 0, 3, 4.
+    for i in [0, 3, 4] {
         assert!(available_cards.contains(&json!(i)));
     }
 }
@@ -459,10 +494,11 @@ async fn test_boost_hand_state_persists_in_database() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Use some boost cards
-    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 1, &cookies)
+    // Act - Use some boost cards. Medium pool is [2, 2, 3, 3, 4]; spend one 2
+    // and the lone 4, leaving one 2 and two 3s (3 cards).
+    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 2, &cookies)
         .await;
-    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 3, &cookies)
+    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
         .await;
 
     // Get status (which reads from database)
@@ -481,12 +517,13 @@ async fn test_boost_hand_state_persists_in_database() {
     assert_eq!(boost_availability["cards_remaining"], 3);
 
     let available_cards = boost_availability["available_cards"].as_array().unwrap();
+    // 0 (free), 2 (one left), 3 (two left) available; 4 spent; 1 never in pool.
     assert_eq!(available_cards.len(), 3);
     assert!(available_cards.contains(&json!(0)));
     assert!(available_cards.contains(&json!(2)));
-    assert!(available_cards.contains(&json!(4)));
+    assert!(available_cards.contains(&json!(3)));
+    assert!(!available_cards.contains(&json!(4)));
     assert!(!available_cards.contains(&json!(1)));
-    assert!(!available_cards.contains(&json!(3)));
 }
 
 #[tokio::test]
@@ -527,7 +564,8 @@ async fn test_boost_usage_history_tracks_all_usages() {
 
     for (i, boost_value) in boost_sequence.iter().enumerate() {
         assert_eq!(usage_history[i]["boost_value"], *boost_value);
-        assert_eq!(usage_history[i]["cycle_number"], 1);
+        // cycle_number is the pit segment: 0 before any pit stop.
+        assert_eq!(usage_history[i]["cycle_number"], 0);
         assert_eq!(usage_history[i]["lap_number"], (i + 1) as u64);
     }
 }
@@ -579,8 +617,11 @@ async fn test_boost_impact_preview_shows_only_available_cards() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Use some cards
-    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 0, &cookies)
+    // Act - Spend the lone value-4 card and both value-2 cards. Boost 0 is the
+    // free no-op (it never depletes); boost 1 is not in the Medium pool at all.
+    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
+        .await;
+    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 2, &cookies)
         .await;
     app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 2, &cookies)
         .await;
@@ -594,7 +635,7 @@ async fn test_boost_impact_preview_shows_only_available_cards() {
         .await
         .expect("Failed to parse status");
 
-    // Assert - Verify boost impact preview
+    // Assert - Verify boost impact preview always covers 0-4.
     let boost_impact_preview = status_data["player_data"]["boost_availability"]
         ["boost_impact_preview"]
         .as_array()
@@ -605,16 +646,18 @@ async fn test_boost_impact_preview_shows_only_available_cards() {
         let boost_value = option["boost_value"].as_u64().unwrap();
         let is_available = option["is_available"].as_bool().unwrap();
 
-        if boost_value == 0 || boost_value == 2 {
-            assert!(!is_available, "Used cards should not be available");
-        } else {
-            assert!(is_available, "Unused cards should be available");
+        match boost_value {
+            // 0 is always free/available; 3 still has both copies left.
+            0 | 3 => assert!(is_available, "boost {boost_value} should be available"),
+            // 1 never in Medium pool; 2 and 4 are now depleted.
+            1 | 2 | 4 => assert!(!is_available, "boost {boost_value} should be unavailable"),
+            _ => unreachable!(),
         }
     }
 }
 
 #[tokio::test]
-async fn test_multiple_cycles_track_correctly() {
+async fn test_pit_segments_track_correctly() {
     // Arrange
     let app = spawn_app().await;
     let (player_uuid, cookies) = app
@@ -627,14 +670,23 @@ async fn test_multiple_cycles_track_correctly() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Complete first cycle
-    for boost_value in 0..=4 {
+    // Act - Spend the whole Medium pool (pit segment 0).
+    for boost_value in [2, 2, 3, 3, 4] {
         app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, boost_value, &cookies)
             .await;
     }
 
-    // Use some cards from second cycle
-    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 1, &cookies)
+    // Pit-stop (consumes a turn as a free boost-0 lap and refills the pool onto
+    // a fresh Medium tyre), then use a couple of cards in pit segment 1.
+    app.apply_pit_action(
+        &race_uuid,
+        &player_uuid,
+        &car_uuid,
+        Some("Medium"),
+        &cookies,
+    )
+    .await;
+    app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 2, &cookies)
         .await;
     app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, 4, &cookies)
         .await;
@@ -648,26 +700,27 @@ async fn test_multiple_cycles_track_correctly() {
         .await
         .expect("Failed to parse status");
 
-    // Assert - Verify cycle tracking
+    // Assert - Verify pit/segment tracking. After the refill, the new pool of 5
+    // had its free pit-0 lap, then a 2 and a 4 spent -> 3 cards remaining.
     let boost_availability = &status_data["player_data"]["boost_availability"];
-    assert_eq!(boost_availability["current_cycle"], 2);
-    assert_eq!(boost_availability["cycles_completed"], 1);
+    assert_eq!(boost_availability["pit_stops_completed"], 1);
     assert_eq!(boost_availability["cards_remaining"], 3);
 
-    // Verify usage history spans both cycles
+    // Verify usage history spans both segments. 5 (segment 0) + 1 free pit-0
+    // lap + 2 (segment 1) = 8 records.
     let usage_history = status_data["player_data"]["boost_usage_history"]
         .as_array()
         .unwrap();
-    assert_eq!(usage_history.len(), 7); // 5 from first cycle + 2 from second
+    assert_eq!(usage_history.len(), 8);
 
-    // First 5 should be cycle 1
+    // First 5 are in pit segment 0.
     for i in 0..5 {
-        assert_eq!(usage_history[i]["cycle_number"], 1);
+        assert_eq!(usage_history[i]["cycle_number"], 0);
     }
 
-    // Last 2 should be cycle 2
-    for i in 5..7 {
-        assert_eq!(usage_history[i]["cycle_number"], 2);
+    // The pit's free boost-0 lap and the two subsequent uses are in segment 1.
+    for i in 5..8 {
+        assert_eq!(usage_history[i]["cycle_number"], 1);
     }
 }
 
@@ -685,8 +738,9 @@ async fn test_boost_cycle_summaries_calculated_correctly() {
         .await;
     app.start_race(&race_uuid, &cookies).await;
 
-    // Act - Complete first cycle with specific sequence
-    let boost_sequence = vec![2, 0, 4, 1, 3];
+    // Act - Spend the whole Medium pool in a specific order, plus a free 0 move.
+    // All uses are in pit segment 0 (no pit stop), so they form one summary.
+    let boost_sequence = vec![2, 0, 4, 3, 2, 3];
     for boost_value in &boost_sequence {
         app.apply_lap_action(&race_uuid, &player_uuid, &car_uuid, *boost_value, &cookies)
             .await;
@@ -701,21 +755,21 @@ async fn test_boost_cycle_summaries_calculated_correctly() {
         .await
         .expect("Failed to parse status");
 
-    // Assert - Verify cycle summary
+    // Assert - Verify cycle summary (now grouped by pit segment).
     let cycle_summaries = status_data["player_data"]["boost_cycle_summaries"]
         .as_array()
         .unwrap();
     assert_eq!(cycle_summaries.len(), 1);
 
     let cycle1 = &cycle_summaries[0];
-    assert_eq!(cycle1["cycle_number"], 1);
+    assert_eq!(cycle1["cycle_number"], 0);
 
     let cards_used = cycle1["cards_used"].as_array().unwrap();
-    assert_eq!(cards_used.len(), 5);
+    assert_eq!(cards_used.len(), 6);
 
     // Verify average boost
     let average_boost = cycle1["average_boost"].as_f64().unwrap();
-    let expected_average = (2.0 + 0.0 + 4.0 + 1.0 + 3.0) / 5.0;
+    let expected_average = (2.0 + 0.0 + 4.0 + 3.0 + 2.0 + 3.0) / 6.0;
     assert!((average_boost - expected_average).abs() < 0.01);
 }
 
