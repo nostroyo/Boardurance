@@ -1,12 +1,30 @@
-# Render Blueprint for the Boardurance backend API (free tier, no credit card).
+# Render Blueprint for Boardurance — everything on Render (free tier, no card).
 # Import via: Render dashboard -> New -> Blueprint -> point at this repo.
-# Secrets (APP_DATABASE__URI, ALLOWED_ORIGINS) are set in the dashboard, not here.
+# Secrets (APP_DATABASE__URI, ALLOWED_ORIGINS, VITE_API_BASE_URL) are set in the
+# dashboard, not here.
+#
+# Four services, two environments:
+#   boardurance-api          (web, docker)  prod backend   — branch main
+#   boardurance-api-preprod  (web, docker)  preprod backend — branch develop
+#   boardurance-web          (static)       prod frontend  — branch main
+#   boardurance-web-preprod  (static)       preprod frontend — branch develop
+#
+# The two backends share the SAME OVH cluster but MUST use different databases.
+# The app picks the database from APP_DATABASE__DATABASE_NAME, NOT from the URI
+# path (see rust-backend/src/startup.rs: client.database(&database_name)). So
+# the DB name is set explicitly on each service below — without it both would
+# write to the same `rust_backend` database and preprod would corrupt prod.
+#
+# Static sites are free, have no cold start, and do NOT consume the web-service
+# 750 instance-hrs/month budget.
 services:
+  # ── Backend: Production ────────────────────────────────────────────────────
   - type: web
     name: boardurance-api
     runtime: docker
     plan: free
     region: frankfurt
+    branch: main
     rootDir: rust-backend
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -20,10 +38,91 @@ services:
       # OVH managed MongoDB connection string — set in the dashboard (secret).
       - key: APP_DATABASE__URI
         sync: false
-      # Comma-separated frontend origin(s) allowed through CORS — set in the
-      # dashboard once the Cloudflare Pages URL is known.
+      # Production database name on the shared OVH cluster. Set explicitly so
+      # prod and preprod can never resolve to the same database.
+      - key: APP_DATABASE__DATABASE_NAME
+        sync: false
+      # Comma-separated frontend origin(s) allowed through CORS — the prod
+      # frontend URL, e.g. https://boardurance-web.onrender.com
       - key: ALLOWED_ORIGINS
         sync: false
       # JWT signing key — generated once by Render and kept stable.
       - key: JWT_SECRET
         generateValue: true
+
+  # ── Backend: Preprod (staging) ───────────────────────────────────────────────
+  # Identical image; runs as APP_ENVIRONMENT=production and differs from prod
+  # ONLY by the dashboard secrets below (preprod URI/DB name/origins, its own
+  # JWT secret). Deployed from `develop` via deploy-preprod.yml.
+  - type: web
+    name: boardurance-api-preprod
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: develop
+    rootDir: rust-backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health_check
+    autoDeploy: false
+    envVars:
+      - key: APP_ENVIRONMENT
+        value: production
+      # Same OVH cluster URI as prod — set in the dashboard (secret).
+      - key: APP_DATABASE__URI
+        sync: false
+      # Preprod database name — MUST differ from prod (e.g. boardurance_preprod).
+      - key: APP_DATABASE__DATABASE_NAME
+        sync: false
+      # Preprod frontend origin — e.g. https://boardurance-web-preprod.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Separate signing key so a preprod token is never valid in prod.
+      - key: JWT_SECRET
+        generateValue: true
+
+  # ── Frontend: Production ───────────────────────────────────────────────────
+  # Static site (free, global CDN, no cold start). Built by Render; deployed
+  # from GitHub Actions after the prod backend is healthy.
+  - type: web
+    name: boardurance-web
+    runtime: static
+    branch: main
+    rootDir: empty-project
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeploy: false
+    # SPA fallback so client-side routes (React Router) resolve to index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Pin Node to match CI; Render otherwise picks its own default.
+      - key: NODE_VERSION
+        value: "20"
+      # Baked into the bundle at build time (empty-project/src/config/api.ts).
+      # Set to the PROD backend URL, e.g. https://boardurance-api.onrender.com
+      - key: VITE_API_BASE_URL
+        sync: false
+
+  # ── Frontend: Preprod (staging) ──────────────────────────────────────────────
+  - type: web
+    name: boardurance-web-preprod
+    runtime: static
+    branch: develop
+    rootDir: empty-project
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeploy: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Set to the PREPROD backend URL, e.g.
+      # https://boardurance-api-preprod.onrender.com
+      - key: VITE_API_BASE_URL
+        sync: false

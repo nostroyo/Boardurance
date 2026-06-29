@@ -1,17 +1,21 @@
-name: Deploy
+name: Deploy (preprod)
 
-# Deploys on every push to main (after CI workflows pass on the PR).
-# Order matters for sync: the backend deploys first and must report healthy,
-# then the frontend is built from the same commit — the frontend never ships
-# against an older API.
+# Deploys on every push to develop (after CI passes on the PR).
+# Preprod is your manual verification checkpoint: it auto-deploys with NO
+# approval gate, runs against the real OVH cluster (a separate preprod
+# database), and gives you a stable URL to test before promoting to main.
+#
+# Order matters for sync: the backend deploys first and must report healthy
+# (with the DB actually connected), then the frontend is built from the same
+# commit — the frontend never ships against an older API.
 on:
   push:
-    branches: [main]
+    branches: [develop]
   workflow_dispatch:
 
-# Never run two deploys at once; a newer push supersedes a queued one.
+# Never run two preprod deploys at once; a newer push supersedes a queued one.
 concurrency:
-  group: deploy-production
+  group: deploy-preprod
   cancel-in-progress: false
 
 jobs:
@@ -28,19 +32,23 @@ jobs:
           filters: |
             backend:
               - 'rust-backend/**'
-              - '.github/workflows/deploy.yml'
+              - '.github/workflows/deploy-preprod.yml'
             frontend:
               - 'empty-project/**'
-              - '.github/workflows/deploy.yml'
+              - '.github/workflows/deploy-preprod.yml'
 
   deploy-backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    environment: production
+    # The `preprod` GitHub Environment has NO required reviewers — preprod is
+    # meant to deploy automatically. Its secrets/vars (preprod Render hook,
+    # preprod BACKEND_URL) are scoped to this environment so the preprod job
+    # physically cannot read prod's deploy hook.
+    environment: preprod
     steps:
-      - name: Trigger Render deploy
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+      - name: Trigger Render deploy (preprod)
+        run: curl -fsS -X POST "${{ secrets.RENDER_PREPROD_DEPLOY_HOOK_URL }}"
 
       - name: Wait for backend to be healthy
         # Render builds the Docker image then rolls out; the first (uncached)
@@ -55,13 +63,13 @@ jobs:
           URL="${{ vars.BACKEND_URL }}/health_check"
           for i in $(seq 1 80); do
             if curl -fsS "$URL" 2>/dev/null | grep -q '"status":"ok"'; then
-              echo "✅ Backend healthy (DB connected) after $((i*15))s"
+              echo "✅ Preprod backend healthy (DB connected) after $((i*15))s"
               exit 0
             fi
             echo "Attempt $i/80: backend not ready (or DB not connected), waiting 15s..."
             sleep 15
           done
-          echo "❌ Backend did not report status:ok in time"
+          echo "❌ Preprod backend did not report status:ok in time"
           exit 1
 
   deploy-frontend:
@@ -74,13 +82,13 @@ jobs:
       needs.deploy-backend.result != 'failure' &&
       needs.deploy-backend.result != 'cancelled'
     runs-on: ubuntu-latest
-    environment: production
+    environment: preprod
     steps:
-      # The frontend is a Render Static Site (boardurance-web). Render builds it
-      # from the `main` branch with VITE_API_BASE_URL set in its dashboard; here
-      # we just trigger the build, ordered after the backend is healthy.
-      - name: Trigger Render static-site deploy
-        run: curl -fsS -X POST "${{ secrets.RENDER_WEB_DEPLOY_HOOK_URL }}"
+      # The preprod frontend is a Render Static Site (boardurance-web-preprod),
+      # built from `develop` with the preprod VITE_API_BASE_URL set in its
+      # dashboard. Trigger it after the preprod backend is healthy.
+      - name: Trigger Render static-site deploy (preprod)
+        run: curl -fsS -X POST "${{ secrets.RENDER_PREPROD_WEB_DEPLOY_HOOK_URL }}"
 
       - name: Wait for frontend to be live
         # Static builds are quick (~1-2 min). Poll the public URL until it serves.
@@ -89,11 +97,11 @@ jobs:
           URL="${{ vars.FRONTEND_URL }}"
           for i in $(seq 1 40); do
             if curl -fsS "$URL" >/dev/null 2>&1; then
-              echo "✅ Frontend live after $((i*15))s"
+              echo "✅ Preprod frontend live after $((i*15))s"
               exit 0
             fi
             echo "Attempt $i/40: frontend not ready, waiting 15s..."
             sleep 15
           done
-          echo "❌ Frontend did not come up in time"
+          echo "❌ Preprod frontend did not come up in time"
           exit 1

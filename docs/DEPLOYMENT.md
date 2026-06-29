@@ -1,112 +1,179 @@
 # Deployment
 
-100% free, **no credit card required** on any service.
+100% free, **no credit card required**. Everything runs on **Render** (backend + frontend) plus
+your existing **OVH MongoDB**.
 
-Automatic CI/CD via GitHub Actions:
+## Environments
 
-- **CI** ([backend-ci.yml](../.github/workflows/backend-ci.yml), [frontend-ci.yml](../.github/workflows/frontend-ci.yml)) runs on every PR and push to `main`/`develop`: format, lint, type-check, tests, build.
-- **Deploy** ([deploy.yml](../.github/workflows/deploy.yml)) runs on every push to `main`:
-  1. Detects whether the backend and/or frontend changed.
-  2. Triggers the **Render** backend deploy, then polls `/health_check` until it's live.
-  3. Builds & deploys the frontend to **Cloudflare Pages** from the same commit — so the frontend is never released against an older API.
+| Env | Trigger | Backend | Frontend | Database | Gate |
+|-----|---------|---------|----------|----------|------|
+| **test** | every PR + push to `main`/`develop` | CI only — no deploy | CI only (vitest) | **mock** (degraded mode, `APP_ENVIRONMENT=test`) | — |
+| **preprod** | push to `develop` | Render web `boardurance-api-preprod` | Render static `boardurance-web-preprod` | OVH cluster, `boardurance_preprod` DB | none (auto) |
+| **prod** | push to `main` | Render web `boardurance-api` | Render static `boardurance-web` | OVH cluster, `boardurance_prod` DB | **manual approval** |
+
+Preprod is your **manual verification checkpoint**: `develop` deploys automatically with no gate so
+you can test against real OVH data, then promoting `develop` → `main` pauses on a one-click approval
+before prod is touched.
 
 ```
-push to main ──► changes? ──► trigger Render deploy ──► poll /health_check
-                     │                                        │ (healthy)
-                     └──────────► build + deploy frontend ◄────┘
-                                  (Cloudflare Pages)
+feature/* ─PR─► [test]    CI only: fmt, clippy, test-fast (MOCK Mongo) · tsc, vitest · no deploy
+                            │ merge
+develop ──push─► [preprod] backend → Render web (preprod) ─┐ OVH cluster, DB: boardurance_preprod
+                            (auto, no gate)                 └ frontend → Render static (preprod)
+                            │ PR develop→main
+main ────push─► [prod]     ⏸ approval ─► backend → Render web (prod) ─┐ OVH cluster, DB: boardurance_prod
+                                                                       └ frontend → Render static (prod)
 ```
+
+CI/CD via GitHub Actions:
+
+- **CI** ([backend-ci.yml](../.github/workflows/backend-ci.yml), [frontend-ci.yml](../.github/workflows/frontend-ci.yml)) runs on every PR and push to `main`/`develop`: format, lint, type-check, tests, build. No DB, no secrets.
+- **Deploy preprod** ([deploy-preprod.yml](../.github/workflows/deploy-preprod.yml)) runs on push to `develop`.
+- **Deploy prod** ([deploy.yml](../.github/workflows/deploy.yml)) runs on push to `main`, behind the `production` environment approval gate.
+
+Both deploy workflows: (1) detect whether backend/frontend changed, (2) trigger the Render **backend**
+deploy and poll `/health_check` **until it reports `status:"ok"`** (DB connected — see below), then
+(3) trigger the Render **static-site** build and poll its URL until it serves — so the frontend never
+ships before the backend is healthy.
 
 ## Architecture
 
 | Component | Service | Free? | Why |
 |-----------|---------|-------|-----|
-| Backend (Rust/Axum) | **Render** (Docker web service) | Free, no card | Builds the Dockerfile, gives an HTTPS URL. Free instances cold-start (~30–60s) after 15 min idle |
-| Database | **OVH managed MongoDB** (yours) | Already have it | Connection string passed to the backend as a secret |
-| Frontend (Vite/React) | **Cloudflare Pages** | Free, no card | Global CDN static hosting, instant rollbacks |
+| Backend (Rust/Axum) | **Render** web service ×2 (`docker`) | Free, no card | Builds the Dockerfile, HTTPS URL. Free instances cold-start (~30–60s) after 15 min idle |
+| Frontend (Vite/React) | **Render** static site ×2 | Free, no card | Global CDN, **no cold start**, doesn't consume the web-service hour budget |
+| Database | **OVH managed MongoDB** (yours) | Already have it | One cluster, two databases (`boardurance_preprod` / `boardurance_prod`); URI passed to each backend as a secret |
+
+> Why static sites for the frontend (not a web service)? They're free with no cold start and are
+> **separate from the 750 web-service instance-hrs/month** budget — so the two backends keep the full
+> budget to themselves. Four services total, but the two static ones are free and zero-maintenance.
+
+## ⚠️ Two things that make the workflow correct
+
+These are not optional — the design relies on them.
+
+### 1. Database isolation is by env var, not by URI
+The app selects the database from `APP_DATABASE__DATABASE_NAME` (defaulting to `rust_backend`), **not**
+from the path in the connection URI — see `client.database(&configuration.database_name)` in
+[startup.rs](../rust-backend/src/startup.rs). Both backends point at the same OVH cluster, so **each
+must set `APP_DATABASE__DATABASE_NAME` explicitly** (`boardurance_prod` / `boardurance_preprod`).
+Forget it on either and they both write to `rust_backend` — preprod would corrupt prod.
+
+### 2. Health gate requires `status:"ok"`, not just HTTP 200
+`/health_check` returns **HTTP 200 even when Mongo is unreachable** (body `{"status":"degraded"}` — see
+[health_check.rs](../rust-backend/src/routes/health_check.rs)). The deploy workflows therefore grep for
+`"status":"ok"` so a deploy with a broken DB connection fails the gate instead of looking healthy.
+
+> On first preprod boot, check the Render logs for `Successfully connected to MongoDB`. The connection
+> is proven with a `ping` against the `admin` database; if your OVH user lacks `admin` access the app
+> silently falls into degraded mode (and the health gate will correctly fail).
 
 ## One-time setup
 
 ### 1. OVH MongoDB
 
-You already have this. Grab the connection URI from the OVH dashboard — it looks like:
+You already have the cluster. Grab the connection URI from the OVH dashboard — it looks like:
 
 ```
-mongodb://<user>:<password>@<host>:<port>/<db>?...&tls=true
+mongodb://<user>:<password>@<host>:<port>/?...&tls=true
 ```
 
-In OVH's *Authorized IPs / ACLs*, allow access from anywhere (`0.0.0.0/0`) — Render's free instances don't have a fixed outbound IP.
+In OVH's *Authorized IPs / ACLs*, allow access from anywhere (`0.0.0.0/0`) — Render's free instances
+don't have a fixed outbound IP. No need to pre-create the two databases; Mongo creates them on first
+write. Use database names `boardurance_prod` and `boardurance_preprod`.
 
-### 2. Render (backend) — no credit card
+### 2. Render — one Blueprint creates all four services
 
 1. Sign up at https://render.com with your GitHub account (no card asked).
-2. **New → Blueprint**, select this repo. Render reads [render.yaml](../render.yaml) and creates the `boardurance-api` web service.
-3. Open the service → **Environment** and set:
-   - `APP_DATABASE__URI` → your OVH MongoDB URI from step 1
-   - `APP_DATABASE__DATABASE_NAME` → your database name (optional, defaults to `rust_backend`)
-   - `ALLOWED_ORIGINS` → your frontend URL (fill in after step 3, e.g. `https://boardurance.pages.dev`)
-   - `JWT_SECRET` is auto-generated by the blueprint — leave it.
-4. **Settings → Deploy Hook**: copy the URL (used by GitHub Actions below).
-5. Note the public URL, e.g. `https://boardurance-api.onrender.com`.
+2. **New → Blueprint**, select this repo. Render reads [render.yaml](../render.yaml) and creates the
+   four services: `boardurance-api`, `boardurance-api-preprod`, `boardurance-web`,
+   `boardurance-web-preprod`. The `rootDir` keys scope each one (backends → `rust-backend`, frontends
+   → `empty-project`), so the two halves never build each other.
+3. **Backend services** → each one → **Environment** tab:
+   - `APP_DATABASE__URI` → your OVH URI (the **same** cluster URI for both)
+   - `APP_DATABASE__DATABASE_NAME` → `boardurance_prod` (prod) / `boardurance_preprod` (preprod) — **required, see ⚠️**
+   - `ALLOWED_ORIGINS` → that env's frontend URL (fill in after the static sites get URLs, step 4)
+   - `JWT_SECRET` is auto-generated per service — leave it.
+4. **Static sites** → each one → **Environment** tab:
+   - `VITE_API_BASE_URL` → the matching backend URL (prod static → prod backend URL; preprod static → preprod backend URL). Baked into the bundle at build time.
+   - Note each static site's public URL (top of the service page, e.g. `https://boardurance-web.onrender.com`) and put it into the matching backend's `ALLOWED_ORIGINS` (step 3).
+5. **Deploy Hooks** — for **each** of the four services, **Settings → Deploy Hook**, copy the URL (used by GitHub Actions, step 4 below).
 
-> First build compiles all Rust dependencies and can take ~10–20 min; later builds are cached by `cargo-chef` and are much faster.
+> First backend build compiles all Rust deps and can take ~10–20 min; later builds are cached by
+> `cargo-chef`. Static-site builds take ~1–2 min.
 
-### 3. Cloudflare Pages (frontend) — no credit card
+### 3. (No Cloudflare needed)
 
-1. Sign up at https://dash.cloudflare.com (no card for the free plan).
-2. Create the project once (so Actions can deploy to it):
-   ```bash
-   cd empty-project
-   npx wrangler pages project create boardurance --production-branch main
-   ```
-3. Create an API token at https://dash.cloudflare.com/profile/api-tokens using the **"Cloudflare Pages — Edit"** template, and copy your **Account ID** (dashboard sidebar / URL).
-4. Your site will be at `https://boardurance.pages.dev` — put that in Render's `ALLOWED_ORIGINS` (step 2.3).
+The frontend is hosted on Render static sites — there is no separate Cloudflare account, API token,
+or `wrangler` step anymore.
 
-### 4. GitHub repository configuration
+### 4. GitHub Environments + secrets/variables
 
-Settings → Secrets and variables → Actions:
+Create **two GitHub Environments** under Settings → Environments:
 
-**Secrets**
+- **`preprod`** — no protection rules (deploys automatically).
+- **`production`** — add a **Required reviewers** rule (yourself). This is the one-click gate before
+  prod deploys; it was previously only a TODO in [BRANCH_PROTECTION_SETUP.md](../.github/BRANCH_PROTECTION_SETUP.md).
 
-| Name | Value |
-|------|-------|
-| `RENDER_DEPLOY_HOOK_URL` | The deploy hook URL from step 2.4 |
-| `CLOUDFLARE_API_TOKEN` | The Pages API token from step 3.3 |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
+Set these **per environment** (Settings → Environments → *env* → secrets / variables), so the preprod
+job physically cannot reach prod's resources:
+
+**Secrets** (the four Render deploy-hook URLs from step 2.5)
+
+| Name | `preprod` | `production` |
+|------|-----------|--------------|
+| `RENDER_DEPLOY_HOOK_URL` | — | prod **backend** hook |
+| `RENDER_PREPROD_DEPLOY_HOOK_URL` | preprod **backend** hook | — |
+| `RENDER_WEB_DEPLOY_HOOK_URL` | — | prod **static-site** hook |
+| `RENDER_PREPROD_WEB_DEPLOY_HOOK_URL` | preprod **static-site** hook | — |
 
 **Variables**
 
-| Name | Value |
-|------|-------|
-| `BACKEND_URL` | `https://boardurance-api.onrender.com` (your Render URL) |
-| `CLOUDFLARE_PAGES_PROJECT` | `boardurance` |
+| Name | `preprod` | `production` |
+|------|-----------|--------------|
+| `BACKEND_URL` | `https://boardurance-api-preprod.onrender.com` | `https://boardurance-api.onrender.com` |
+| `FRONTEND_URL` | `https://boardurance-web-preprod.onrender.com` | `https://boardurance-web.onrender.com` |
 
-> The workflow uses a `production` GitHub Environment — create it under Settings → Environments (or remove the `environment: production` lines if you prefer not to).
+> The OVH Mongo URI is **never** stored in GitHub — only in the Render backend dashboards. GitHub
+> holds only deploy-hook URLs. A leaked GitHub token cannot reach your database.
 
 ### 5. Done
 
-Every merge to `main` now deploys automatically. Use *Actions → Deploy → Run workflow* for a manual redeploy.
+- Merge to `develop` → preprod deploys automatically. Verify at the preprod URLs.
+- Open a PR `develop` → `main`; on merge, the prod deploy **waits for your approval** in
+  *Actions → Deploy → review deployments*, then ships.
+- *Actions → Deploy (preprod) / Deploy → Run workflow* triggers a manual redeploy of either env.
 
 ## How frontend/backend stay in sync
 
-- Both deploy from the **same commit**; the backend deploys **first** and the frontend build only starts once `/health_check` passes.
-- The frontend build bakes in `VITE_API_BASE_URL` (see [src/config/api.ts](../empty-project/src/config/api.ts)); locally it falls back to `http://localhost:3000`.
-- The backend allows the frontend's origin through CORS via `ALLOWED_ORIGINS`.
-- A `concurrency` group ensures deploys never overlap.
+- Within an env, both deploy from the **same commit/branch**; the backend deploys **first** and the
+  static-site build is only triggered once `/health_check` reports `status:"ok"`.
+- The frontend build bakes in `VITE_API_BASE_URL` (see [src/config/api.ts](../empty-project/src/config/api.ts)) — preprod and prod are **separate static sites** with different URLs. Locally it falls back to `http://localhost:3000`.
+- Each backend allows its frontend's origin through CORS via `ALLOWED_ORIGINS`.
+- A `concurrency` group per env ensures deploys never overlap.
+- Each Render service tracks its own `branch` (backends + frontends: `main` for prod, `develop` for preprod), so a deploy hook always builds the right commit.
 
-## Production configuration reference
+## Configuration reference
 
 | Variable | Where | Purpose |
 |----------|-------|---------|
-| `APP_ENVIRONMENT=production` | render.yaml | Loads `configuration/production.yaml` |
+| `APP_ENVIRONMENT=production` | render.yaml (both backends) | Loads `configuration/production.yaml`. (No `staging`/`preprod` value exists — preprod runs as production and differs only by the secrets below.) |
 | `PORT` | injected by Render | Port the app binds to (overrides the YAML port) |
-| `APP_DATABASE__URI` | Render env (secret) | OVH MongoDB connection string |
-| `APP_DATABASE__DATABASE_NAME` | Render env (optional) | Database name, defaults to `rust_backend` |
-| `JWT_SECRET` | Render env (auto-generated) | Token signing key — required, never the dev default |
-| `ALLOWED_ORIGINS` | Render env | Extra CORS origins (comma-separated) |
-| `BACKEND_URL` | GitHub variable | Backend URL: health check + baked into the frontend build |
+| `APP_DATABASE__URI` | Render backend env (secret) | OVH MongoDB connection string (same cluster for both envs) |
+| `APP_DATABASE__DATABASE_NAME` | Render backend env (**required**) | Database name — `boardurance_prod` / `boardurance_preprod`. The isolation guarantee. |
+| `JWT_SECRET` | Render backend env (auto-generated, per service) | Token signing key — required, never the dev default; differs per env |
+| `ALLOWED_ORIGINS` | Render backend env | CORS origin(s) for that env's frontend (comma-separated) |
+| `VITE_API_BASE_URL` | Render static-site env | Backend URL baked into the frontend bundle at build time |
+| `NODE_VERSION=20` | render.yaml (static sites) | Pins the static build's Node version |
+| `BACKEND_URL` / `FRONTEND_URL` | GitHub env variables | URLs the deploy workflow health-checks / polls |
+| `APP_ENVIRONMENT=test` | CI only | Repository-layer mocks, no Mongo, no secrets — the test tier |
 
 ## Notes & alternatives
 
-- **Cold starts**: Render's free instance sleeps after 15 min idle; the first request then waits ~30–60s. Fine for a hobby project. If that bothers you, an external uptime pinger (e.g. a cron hitting `/health_check`) keeps it warm.
-- **Frontend host swap**: to use GitHub Pages instead of Cloudflare (one fewer account), replace the `deploy-frontend` job's last step with `actions/deploy-pages` and set Vite's `base` to the repo name.
+- **Cold starts** affect the **backend web services only** (sleep after 15 min idle, ~30–60s first
+  request). Static frontends never sleep. To keep prod backend warm, an external uptime pinger hitting
+  `/health_check` works — ping only prod to protect the free 750 instance-hrs/month cap.
+- **Free static-site limits**: 100 GB bandwidth/month and fair-use build minutes — far above hobby use.
+- **Even fewer services**: you could serve the built frontend directly from the Rust backend (Axum
+  static files + SPA fallback) for 2 services total and same-origin (no CORS), at the cost of a slow
+  Rust rebuild for every frontend change. Not currently done.
