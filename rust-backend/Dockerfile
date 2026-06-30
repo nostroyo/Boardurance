@@ -10,6 +10,12 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 # ---- Build ----
 FROM chef AS builder
+# openssl-sys compiles against the system OpenSSL and needs the dev headers +
+# pkg-config, which the slim cargo-chef image doesn't ship. (The runtime stage
+# links libssl3 separately.)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies only — this layer is cached as long as Cargo.lock is unchanged.
 # --locked: fail loudly if Cargo.lock is missing/stale instead of silently
