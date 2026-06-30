@@ -311,6 +311,7 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
             turnPhase={{
               turn_phase: state.currentTurnPhase,
               current_lap: state.race.current_lap,
+              total_laps: state.race.total_laps,
               lap_characteristic: state.race.lap_characteristic,
               submitted_players: [], // TODO: Get from API
               pending_players: [], // TODO: Get from API
