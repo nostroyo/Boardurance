@@ -2,13 +2,13 @@ name: Frontend CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'empty-project/**'
       - 'docs/openapi.json'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'empty-project/**'
       - 'docs/openapi.json'

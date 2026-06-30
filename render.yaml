@@ -5,9 +5,9 @@
 #
 # Four services, two environments:
 #   boardurance-api          (web, docker)  prod backend   — branch main
-#   boardurance-api-preprod  (web, docker)  preprod backend — branch develop
+#   boardurance-api-preprod  (web, docker)  preprod backend — branch dev
 #   boardurance-web          (static)       prod frontend  — branch main
-#   boardurance-web-preprod  (static)       preprod frontend — branch develop
+#   boardurance-web-preprod  (static)       preprod frontend — branch dev
 #
 # The two backends share the SAME OVH cluster but MUST use different databases.
 # The app picks the database from APP_DATABASE__DATABASE_NAME, NOT from the URI
@@ -53,13 +53,13 @@ services:
   # ── Backend: Preprod (staging) ───────────────────────────────────────────────
   # Identical image; runs as APP_ENVIRONMENT=production and differs from prod
   # ONLY by the dashboard secrets below (preprod URI/DB name/origins, its own
-  # JWT secret). Deployed from `develop` via deploy-preprod.yml.
+  # JWT secret). Deployed from `dev` via deploy-preprod.yml.
   - type: web
     name: boardurance-api-preprod
     runtime: docker
     plan: free
     region: frankfurt
-    branch: develop
+    branch: dev
     rootDir: rust-backend
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -110,7 +110,7 @@ services:
   - type: web
     name: boardurance-web-preprod
     runtime: static
-    branch: develop
+    branch: dev
     rootDir: empty-project
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist

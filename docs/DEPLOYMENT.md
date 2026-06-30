@@ -7,28 +7,28 @@ your existing **OVH MongoDB**.
 
 | Env | Trigger | Backend | Frontend | Database | Gate |
 |-----|---------|---------|----------|----------|------|
-| **test** | every PR + push to `main`/`develop` | CI only — no deploy | CI only (vitest) | **mock** (degraded mode, `APP_ENVIRONMENT=test`) | — |
-| **preprod** | push to `develop` | Render web `boardurance-api-preprod` | Render static `boardurance-web-preprod` | OVH cluster, `boardurance_preprod` DB | none (auto) |
+| **test** | every PR + push to `main`/`dev` | CI only — no deploy | CI only (vitest) | **mock** (degraded mode, `APP_ENVIRONMENT=test`) | — |
+| **preprod** | push to `dev` | Render web `boardurance-api-preprod` | Render static `boardurance-web-preprod` | OVH cluster, `boardurance_preprod` DB | none (auto) |
 | **prod** | push to `main` | Render web `boardurance-api` | Render static `boardurance-web` | OVH cluster, `boardurance_prod` DB | **manual approval** |
 
-Preprod is your **manual verification checkpoint**: `develop` deploys automatically with no gate so
-you can test against real OVH data, then promoting `develop` → `main` pauses on a one-click approval
+Preprod is your **manual verification checkpoint**: `dev` deploys automatically with no gate so
+you can test against real OVH data, then promoting `dev` → `main` pauses on a one-click approval
 before prod is touched.
 
 ```
 feature/* ─PR─► [test]    CI only: fmt, clippy, test-fast (MOCK Mongo) · tsc, vitest · no deploy
                             │ merge
-develop ──push─► [preprod] backend → Render web (preprod) ─┐ OVH cluster, DB: boardurance_preprod
+dev ─────push─► [preprod] backend → Render web (preprod) ─┐ OVH cluster, DB: boardurance_preprod
                             (auto, no gate)                 └ frontend → Render static (preprod)
-                            │ PR develop→main
+                            │ PR dev→main
 main ────push─► [prod]     ⏸ approval ─► backend → Render web (prod) ─┐ OVH cluster, DB: boardurance_prod
                                                                        └ frontend → Render static (prod)
 ```
 
 CI/CD via GitHub Actions:
 
-- **CI** ([backend-ci.yml](../.github/workflows/backend-ci.yml), [frontend-ci.yml](../.github/workflows/frontend-ci.yml)) runs on every PR and push to `main`/`develop`: format, lint, type-check, tests, build. No DB, no secrets.
-- **Deploy preprod** ([deploy-preprod.yml](../.github/workflows/deploy-preprod.yml)) runs on push to `develop`.
+- **CI** ([backend-ci.yml](../.github/workflows/backend-ci.yml), [frontend-ci.yml](../.github/workflows/frontend-ci.yml)) runs on every PR and push to `main`/`dev`: format, lint, type-check, tests, build. No DB, no secrets.
+- **Deploy preprod** ([deploy-preprod.yml](../.github/workflows/deploy-preprod.yml)) runs on push to `dev`.
 - **Deploy prod** ([deploy.yml](../.github/workflows/deploy.yml)) runs on push to `main`, behind the `production` environment approval gate.
 
 Both deploy workflows: (1) detect whether backend/frontend changed, (2) trigger the Render **backend**
@@ -139,8 +139,8 @@ job physically cannot reach prod's resources:
 
 ### 5. Done
 
-- Merge to `develop` → preprod deploys automatically. Verify at the preprod URLs.
-- Open a PR `develop` → `main`; on merge, the prod deploy **waits for your approval** in
+- Merge to `dev` → preprod deploys automatically. Verify at the preprod URLs.
+- Open a PR `dev` → `main`; on merge, the prod deploy **waits for your approval** in
   *Actions → Deploy → review deployments*, then ships.
 - *Actions → Deploy (preprod) / Deploy → Run workflow* triggers a manual redeploy of either env.
 
@@ -151,7 +151,7 @@ job physically cannot reach prod's resources:
 - The frontend build bakes in `VITE_API_BASE_URL` (see [src/config/api.ts](../empty-project/src/config/api.ts)) — preprod and prod are **separate static sites** with different URLs. Locally it falls back to `http://localhost:3000`.
 - Each backend allows its frontend's origin through CORS via `ALLOWED_ORIGINS`.
 - A `concurrency` group per env ensures deploys never overlap.
-- Each Render service tracks its own `branch` (backends + frontends: `main` for prod, `develop` for preprod), so a deploy hook always builds the right commit.
+- Each Render service tracks its own `branch` (backends + frontends: `main` for prod, `dev` for preprod), so a deploy hook always builds the right commit.
 
 ## Configuration reference
 

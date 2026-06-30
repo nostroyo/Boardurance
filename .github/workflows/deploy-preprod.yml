@@ -1,6 +1,6 @@
 name: Deploy (preprod)
 
-# Deploys on every push to develop (after CI passes on the PR).
+# Deploys on every push to dev (after CI passes on the PR).
 # Preprod is your manual verification checkpoint: it auto-deploys with NO
 # approval gate, runs against the real OVH cluster (a separate preprod
 # database), and gives you a stable URL to test before promoting to main.
@@ -10,7 +10,7 @@ name: Deploy (preprod)
 # commit — the frontend never ships against an older API.
 on:
   push:
-    branches: [develop]
+    branches: [dev]
   workflow_dispatch:
 
 # Never run two preprod deploys at once; a newer push supersedes a queued one.
@@ -85,7 +85,7 @@ jobs:
     environment: preprod
     steps:
       # The preprod frontend is a Render Static Site (boardurance-web-preprod),
-      # built from `develop` with the preprod VITE_API_BASE_URL set in its
+      # built from `dev` with the preprod VITE_API_BASE_URL set in its
       # dashboard. Trigger it after the preprod backend is healthy.
       - name: Trigger Render static-site deploy (preprod)
         run: curl -fsS -X POST "${{ secrets.RENDER_PREPROD_WEB_DEPLOY_HOOK_URL }}"
