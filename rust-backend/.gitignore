@@ -14,8 +14,11 @@
 
 # Configuration files with secrets
 configuration/local.yaml
-configuration/production.yaml
 configuration/staging.yaml
+# configuration/production.yaml is committed: it holds NO secrets (empty db
+# username/password placeholders) — the real OVH connection comes from the
+# APP_DATABASE__URI env var. The config loader requires the {env}.yaml file to
+# exist (it supplies application.port), so the prod image must contain it.
 *.key
 *.pem
 secrets/

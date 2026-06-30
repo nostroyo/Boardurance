@@ -1,0 +1,13 @@
+application:
+  port: 8080
+  base_url: "http://0.0.0.0"
+database:
+  # In production the full connection string is provided via the
+  # APP_DATABASE__URI environment variable (the OVH managed MongoDB URI).
+  # The values below are placeholders only used if no URI override is set.
+  host: "localhost"
+  port: 27017
+  database_name: "rust_backend"
+  username: ""
+  password: ""
+  require_ssl: true
