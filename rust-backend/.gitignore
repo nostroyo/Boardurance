@@ -1,7 +1,8 @@
 # Rust Build Artifacts
 /target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock is committed: this is a binary/app, not a library — reproducible
+# builds in CI/Docker require the lockfile (see Dockerfile `cargo ... --locked`).
 
 # Environment Variables and Secrets
 .env

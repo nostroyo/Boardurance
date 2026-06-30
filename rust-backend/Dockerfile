@@ -9,10 +9,12 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ---- Build ----
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-# Build dependencies only — this layer is cached as long as Cargo.lock is unchanged
-RUN cargo chef cook --release --recipe-path recipe.json
+# Build dependencies only — this layer is cached as long as Cargo.lock is unchanged.
+# --locked: fail loudly if Cargo.lock is missing/stale instead of silently
+# re-resolving to newer crate versions (which can exceed the base image's rustc MSRV).
+RUN cargo chef cook --locked --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --bin rust-backend
+RUN cargo build --locked --release --bin rust-backend
 
 # ---- Runtime ----
 FROM debian:bookworm-slim AS runtime
