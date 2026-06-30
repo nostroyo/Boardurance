@@ -1,5 +1,7 @@
 # ---- Dependency planning (cargo-chef caches the dependency build layer) ----
-FROM lukemathwalker/cargo-chef:latest-rust-1.87-slim-bookworm AS chef
+# Track current stable (matches CI's dtolnay/rust-toolchain@stable). Must stay
+# >= the MSRV of pinned deps — e.g. time 0.3.x requires rustc 1.88+.
+FROM lukemathwalker/cargo-chef:latest-rust-1.96-slim-bookworm AS chef
 WORKDIR /app
 
 FROM chef AS planner
