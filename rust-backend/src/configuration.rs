@@ -32,6 +32,20 @@ pub struct DatabaseSettings {
     /// host/port/username/password fields below.
     #[serde(default)]
     pub uri: Option<Secret<String>>,
+    /// Repository backend to use: `"mock"` (in-memory, no database) or
+    /// `"mongodb"` (real persistence). When unset, the backend is inferred
+    /// from `APP_ENVIRONMENT` — see [`DatabaseSettings::resolved_storage_backend`].
+    #[serde(default)]
+    pub storage_backend: Option<String>,
+}
+
+/// The repository backend selected at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageBackend {
+    /// In-memory mock repositories. Used for local development and tests.
+    Mock,
+    /// Real `MongoDB`-backed repositories. Used for production/preprod.
+    MongoDb,
 }
 
 impl DatabaseSettings {
@@ -86,6 +100,33 @@ impl DatabaseSettings {
             "mongodb://{}:{}/{}",
             self.host, self.port, self.database_name
         )
+    }
+
+    /// Resolve which repository backend to use. An explicit `storage_backend`
+    /// value (config file or `APP_DATABASE__STORAGE_BACKEND` env var) always
+    /// wins; otherwise the backend is inferred from the running environment:
+    /// `production` -> `MongoDb`, `local`/`test` -> `Mock`.
+    #[must_use]
+    pub fn resolved_storage_backend(&self, environment: &Environment) -> StorageBackend {
+        match self.storage_backend.as_deref() {
+            Some(explicit) if explicit.eq_ignore_ascii_case("mongodb") => StorageBackend::MongoDb,
+            Some(explicit) if explicit.eq_ignore_ascii_case("mock") => StorageBackend::Mock,
+            Some(other) => {
+                tracing::warn!(
+                    "Unrecognized database.storage_backend '{other}'; falling back to \
+                     environment-based default."
+                );
+                Self::default_backend_for(environment)
+            }
+            None => Self::default_backend_for(environment),
+        }
+    }
+
+    fn default_backend_for(environment: &Environment) -> StorageBackend {
+        match environment {
+            Environment::Production => StorageBackend::MongoDb,
+            Environment::Local | Environment::Test => StorageBackend::Mock,
+        }
     }
 }
 
@@ -144,6 +185,16 @@ impl Environment {
             Environment::Test => "test",
             Environment::Production => "production",
         }
+    }
+
+    /// Read the current runtime environment from `APP_ENVIRONMENT`, defaulting
+    /// to `local` when unset. Mirrors the detection in [`get_configuration`].
+    #[must_use]
+    pub fn current() -> Self {
+        std::env::var("APP_ENVIRONMENT")
+            .unwrap_or_else(|_| "local".into())
+            .try_into()
+            .expect("Failed to parse APP_ENVIRONMENT.")
     }
 }
 

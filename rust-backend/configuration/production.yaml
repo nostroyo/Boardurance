@@ -11,3 +11,5 @@ database:
   username: ""
   password: ""
   require_ssl: true
+  # Prod/preprod always persist to MongoDB; never fall back to mocks.
+  storage_backend: "mongodb"
