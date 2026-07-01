@@ -14,7 +14,7 @@ pub struct TestAppState {
     pub race_repo: Arc<MockRaceRepository>,
     pub session_repo: Arc<MockSessionRepository>,
     pub jwt_service: Arc<JwtService>,
-    pub session_manager: Arc<SessionManager<MockSessionRepository>>,
+    pub session_manager: Arc<SessionManager>,
 }
 
 impl TestAppState {

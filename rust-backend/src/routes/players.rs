@@ -17,12 +17,6 @@ use crate::app_state::AppState;
 use crate::domain::{
     Car, CarName, Pilot, PilotClass, PilotName, PilotRarity, PilotSkills, Player, TeamName,
 };
-use crate::repositories::{
-    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
-};
-
-/// Concrete in-memory application state used by the mock-backed player routes.
-type MockAppState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateTeamNameRequest {
@@ -73,7 +67,7 @@ pub struct PlayerResponse {
 ///
 /// TODO: protect these with `AuthMiddleware` + an ownership check — the routes
 /// currently trust the path `player_uuid`.
-pub fn team_routes() -> Router<MockAppState> {
+pub fn team_routes() -> Router<AppState> {
     Router::new()
         .route("/players/:player_uuid", get(get_player_by_uuid_mock))
         .route("/players/:player_uuid", put(update_team_name_mock))
@@ -97,7 +91,7 @@ pub fn team_routes() -> Router<MockAppState> {
 /// Get a player by UUID from the in-memory repository.
 #[tracing::instrument(name = "Fetching player by UUID (mock)", skip(state))]
 pub async fn get_player_by_uuid_mock(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
 ) -> Result<Json<Player>, StatusCode> {
     let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
@@ -118,7 +112,7 @@ pub async fn get_player_by_uuid_mock(
 /// Update a player's team name in the in-memory repository.
 #[tracing::instrument(name = "Updating team name (mock)", skip(state, payload))]
 pub async fn update_team_name_mock(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<UpdateTeamNameRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -152,7 +146,7 @@ pub async fn update_team_name_mock(
 /// Delete a player from the in-memory repository.
 #[tracing::instrument(name = "Deleting player (mock)", skip(state))]
 pub async fn delete_player_mock(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let player_uuid = Uuid::parse_str(&player_uuid_str).map_err(|e| {
@@ -171,13 +165,7 @@ pub async fn delete_player_mock(
 }
 
 /// Admin-only routes that require authentication and admin role
-pub fn admin_routes() -> Router<
-    crate::app_state::AppState<
-        crate::repositories::MockPlayerRepository,
-        crate::repositories::MockRaceRepository,
-        crate::repositories::MockSessionRepository,
-    >,
-> {
+pub fn admin_routes() -> Router<crate::app_state::AppState> {
     // Temporarily disabled due to tracing format issues in admin functions
     Router::new()
     // TODO: Re-enable admin routes after fixing tracing format issues
@@ -307,7 +295,7 @@ pub async fn get_player_by_email(
 )]
 #[tracing::instrument(name = "Updating player configuration", skip(state, payload))]
 pub async fn update_player_configuration(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<UpdatePlayerConfigurationRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -491,7 +479,7 @@ pub async fn delete_player(
 )]
 #[tracing::instrument(name = "Adding car to player", skip(state, payload))]
 pub async fn add_car_to_player(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddCarRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -559,7 +547,7 @@ pub async fn add_car_to_player(
 )]
 #[tracing::instrument(name = "Removing car from player", skip(state))]
 pub async fn remove_car_from_player(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path((player_uuid_str, car_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -619,7 +607,7 @@ pub async fn remove_car_from_player(
 )]
 #[tracing::instrument(name = "Adding pilot to player", skip(state, payload))]
 pub async fn add_pilot_to_player(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path(player_uuid_str): Path<String>,
     Json(payload): Json<AddPilotRequest>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
@@ -718,7 +706,7 @@ pub async fn add_pilot_to_player(
 )]
 #[tracing::instrument(name = "Removing pilot from player", skip(state))]
 pub async fn remove_pilot_from_player(
-    State(state): State<MockAppState>,
+    State(state): State<AppState>,
     Path((player_uuid_str, pilot_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PlayerResponse>, StatusCode> {
     let player_uuid = match Uuid::parse_str(&player_uuid_str) {
@@ -983,9 +971,10 @@ mod player_asset_tests {
     use axum::extract::{Path, State};
     use axum::Json;
 
-    /// Build a `MockAppState` whose in-memory repository holds a single player
-    /// (mirroring the post-registration state), returning that player's uuid.
-    fn seeded_state_with_player() -> (MockAppState, uuid::Uuid) {
+    /// Build an `AppState` (backed by mock repositories) whose in-memory
+    /// repository holds a single player (mirroring the post-registration
+    /// state), returning that player's uuid.
+    fn seeded_state_with_player() -> (AppState, uuid::Uuid) {
         let email = Email::parse("driver@example.com").unwrap();
         let password_hash = Password::new("Sup3rSecret!".to_string())
             .unwrap()

@@ -44,12 +44,7 @@ use crate::domain::{
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
 use crate::app_state::AppState;
-use crate::repositories::{
-    MockPlayerRepository, MockRaceRepository, MockSessionRepository, PlayerRepository,
-};
-
-/// Concrete `AppState` used by the turn-processing handlers (in-memory repos).
-type RaceTurnState = AppState<MockPlayerRepository, MockRaceRepository, MockSessionRepository>;
+use crate::repositories::PlayerRepository;
 
 /// Resolve a participant's full car data (car + engine + body + pilot) from the
 /// in-memory player aggregate. Returns `None` if any component cannot be found.
@@ -82,7 +77,7 @@ fn resolve_car_data(
 /// participants, reading from the in-memory player repository. Failures to
 /// resolve an individual participant are silently skipped.
 async fn build_car_data_map(
-    repo: &MockPlayerRepository,
+    repo: &dyn PlayerRepository,
     race: &Race,
 ) -> HashMap<Uuid, ValidatedCarData> {
     let mut map = HashMap::new();
@@ -118,13 +113,34 @@ struct BotIdentity {
 /// [`seed_solo_bots`] and read when bootstrapping a solo race.
 static SOLO_BOTS: LazyLock<Mutex<Vec<BotIdentity>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
+/// Deterministic namespace for deriving stable AI bot player UUIDs, so the
+/// same bot index always maps to the same UUID across processes/backends.
+const BOT_UUID_NAMESPACE: Uuid = Uuid::from_bytes([
+    0xb0, 0x70, 0x00, 0x00, 0xaa, 0xaa, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+]);
+
+/// Derive the stable player UUID for AI bot `index`. Using a fixed UUID v5
+/// (rather than the random uuid `Player::new_with_assets` would otherwise
+/// assign) is what makes re-seeding idempotent against a persistent backend:
+/// the same bot always resolves to the same document, so a redeploy upserts
+/// in place instead of inserting a duplicate.
+fn bot_player_uuid(index: usize) -> Uuid {
+    Uuid::new_v5(&BOT_UUID_NAMESPACE, format!("bot{index}").as_bytes())
+}
+
 /// Seed AI opponent players (each with a complete, pre-equipped car) into the
-/// in-memory player repository and record their racing identities. Idempotent:
-/// repeated calls after the first are no-ops.
+/// player repository and record their racing identities.
+///
+/// Idempotent across process restarts and against a persistent (Mongo)
+/// backend: each bot is assigned a stable UUID derived from its index
+/// ([`bot_player_uuid`]), and an existing player at that UUID is reused
+/// in-place (its identity is recorded, nothing is re-inserted) rather than
+/// duplicated. The `SOLO_BOTS` in-process cache still short-circuits repeat
+/// calls within the same process.
 ///
 /// Reuses [`crate::routes::auth::create_starter_assets`] so AI cars resolve
 /// through the same `build_car_data_map` pipeline as human players.
-pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
+pub async fn seed_solo_bots(repo: &dyn PlayerRepository) {
     use crate::domain::{Email, Password, Player, TeamName};
 
     if !SOLO_BOTS.lock().unwrap().is_empty() {
@@ -134,6 +150,40 @@ pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
     let mut identities = Vec::new();
 
     for i in 0..SOLO_BOT_COUNT {
+        let bot_uuid = bot_player_uuid(i);
+
+        // Reuse an already-seeded bot (e.g. from a previous deploy against the
+        // same Mongo database) instead of inserting a duplicate.
+        match repo.find_by_uuid(bot_uuid).await {
+            Ok(Some(existing)) => {
+                let Some(car) = existing.cars.first() else {
+                    tracing::error!("Existing AI bot {i} has no car; skipping");
+                    continue;
+                };
+                let pilot_count = car.pilot_uuids.len().max(1);
+                let pilot_uuid = car
+                    .pilot_uuids
+                    .get(i % pilot_count)
+                    .or_else(|| car.pilot_uuids.first())
+                    .copied();
+                let Some(pilot_uuid) = pilot_uuid else {
+                    tracing::error!("Existing AI bot {i} car has no pilots; skipping");
+                    continue;
+                };
+                identities.push(BotIdentity {
+                    player_uuid: existing.uuid,
+                    car_uuid: car.uuid,
+                    pilot_uuid,
+                });
+                continue;
+            }
+            Ok(None) => {} // Not seeded yet; fall through and create it.
+            Err(e) => {
+                tracing::error!("Failed to look up AI bot {i}: {e:?}");
+                continue;
+            }
+        }
+
         let (cars, pilots, engines, bodies) = match crate::routes::auth::create_starter_assets() {
             Ok(assets) => assets,
             Err(e) => {
@@ -164,7 +214,7 @@ pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
             }
         };
 
-        let player = match Player::new_with_assets(
+        let mut player = match Player::new_with_assets(
             email,
             password_hash,
             team_name,
@@ -179,6 +229,8 @@ pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
                 continue;
             }
         };
+        // Override the randomly-generated uuid with the bot's stable identity.
+        player.uuid = bot_uuid;
 
         // The first car is completed by `new_with_assets`. Vary opponents by
         // assigning each a different primary pilot from that car's roster.
@@ -196,13 +248,27 @@ pub async fn seed_solo_bots(repo: &MockPlayerRepository) {
             continue;
         };
 
-        if let Err(e) = repo.create(&player).await {
-            tracing::error!("Failed to seed AI bot player {i}: {e:?}");
-            continue;
-        }
+        // Another process/replica may have just won the race to create this
+        // bot; a Conflict on the (unique) email means it already exists, so
+        // fetch it instead of treating this as a hard failure.
+        let created_uuid = match repo.create(&player).await {
+            Ok(created) => created.uuid,
+            Err(crate::repositories::RepositoryError::Conflict(_)) => {
+                if let Ok(Some(existing)) = repo.find_by_email(player.email.as_ref()).await {
+                    existing.uuid
+                } else {
+                    tracing::error!("AI bot {i} conflicted on create but could not be re-fetched");
+                    continue;
+                }
+            }
+            Err(e) => {
+                tracing::error!("Failed to seed AI bot player {i}: {e:?}");
+                continue;
+            }
+        };
 
         identities.push(BotIdentity {
-            player_uuid: player.uuid,
+            player_uuid: created_uuid,
             car_uuid,
             pilot_uuid,
         });
@@ -283,7 +349,7 @@ pub struct CreateSoloRaceRequest {
 )]
 #[tracing::instrument(name = "Creating a solo race", skip(state, payload))]
 pub async fn create_solo_race(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateSoloRaceRequest>,
 ) -> Result<(StatusCode, Json<RaceResponse>), StatusCode> {
     let player_uuid = Uuid::parse_str(&payload.player_uuid).map_err(|e| {
@@ -937,7 +1003,7 @@ pub fn routes() -> Router<Database> {
 
 /// Turn-processing routes that need access to the in-memory player repository
 /// (via `AppState`) to compute real movement from each car's stats.
-pub fn turn_routes() -> Router<RaceTurnState> {
+pub fn turn_routes() -> Router<AppState> {
     Router::new()
         .route("/races/solo", post(create_solo_race))
         .route("/races/:race_uuid/submit-action", post(submit_turn_action))
@@ -1944,7 +2010,7 @@ pub async fn apply_lap_action(
     tag = "races"
 )]
 pub async fn pit_stop_action(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<PitStopRequest>,
 ) -> Result<Json<DetailedRaceStatusResponse>, (StatusCode, Json<BoostCardErrorResponse>)> {
@@ -1986,7 +2052,7 @@ pub async fn pit_stop_action(
     // round-trip. Previously the pit path never enqueued AI, so a solo turn
     // deadlocked waiting on opponents that never submitted.
     let car_data_map = match store_get(race_uuid) {
-        Some(race) => build_car_data_map(&state.player_repository, &race).await,
+        Some(race) => build_car_data_map(state.player_repository.as_ref(), &race).await,
         None => {
             return Err(err(
                 StatusCode::NOT_FOUND,
@@ -2163,7 +2229,7 @@ pub async fn pit_stop_action(
     )
 )]
 pub async fn get_car_data(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<CarDataResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -2433,7 +2499,7 @@ pub async fn get_car_data(
     )
 )]
 pub async fn get_performance_preview(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<PerformancePreviewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -3871,7 +3937,7 @@ pub async fn start_race(
 )]
 #[tracing::instrument(name = "Processing race turn", skip(state, payload))]
 pub async fn process_turn(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<ProcessLapRequest>,
 ) -> Result<Json<LapResultResponse>, StatusCode> {
@@ -3902,7 +3968,7 @@ pub async fn process_turn(
 
     // Build the real car-data map from the in-memory player repository.
     let car_data_map = if let Some(race) = store_get(race_uuid) {
-        build_car_data_map(&state.player_repository, &race).await
+        build_car_data_map(state.player_repository.as_ref(), &race).await
     } else {
         tracing::warn!("Race not found for UUID: {}", race_uuid);
         return Err(StatusCode::NOT_FOUND);
@@ -4238,7 +4304,7 @@ async fn drive_ai_only_turns(
 )]
 #[tracing::instrument(name = "Submitting turn action", skip(state, payload))]
 pub async fn submit_turn_action(
-    State(state): State<RaceTurnState>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<SubmitTurnActionRequest>,
 ) -> Result<Json<SubmitTurnActionResponse>, StatusCode> {
@@ -4266,7 +4332,7 @@ pub async fn submit_turn_action(
 
     // Build the real car-data map from the in-memory player repository.
     let car_data_map = if let Some(race) = store_get(race_uuid) {
-        build_car_data_map(&state.player_repository, &race).await
+        build_car_data_map(state.player_repository.as_ref(), &race).await
     } else {
         tracing::warn!("Race not found for UUID: {}", race_uuid);
         return Err(StatusCode::NOT_FOUND);
