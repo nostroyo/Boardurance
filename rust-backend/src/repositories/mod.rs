@@ -3,12 +3,14 @@ pub mod race_repository;
 pub mod session_repository;
 
 pub mod mocks;
+pub mod mongo;
 
 pub use player_repository::PlayerRepository;
 pub use race_repository::RaceRepository;
 pub use session_repository::SessionRepository;
 
 pub use mocks::{MockPlayerRepository, MockRaceRepository, MockSessionRepository};
+pub use mongo::{MongoPlayerRepository, MongoRaceRepository, MongoSessionRepository};
 
 /// Common database error type
 #[derive(Debug, thiserror::Error)]
