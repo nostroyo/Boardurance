@@ -397,6 +397,43 @@ mod tests {
         .unwrap()
     }
 
+    // Regression test for the review-gate BLOCK finding: `validate_car_for_race`
+    // used to query a raw `Database` directly, so a player registered through
+    // `player_repository` (the mock backend, e.g. local/test) was invisible to
+    // it. It now takes `&dyn PlayerRepository`, so the same repository instance
+    // registration writes into is exactly what validation reads from.
+    #[tokio::test]
+    async fn validate_car_for_race_finds_player_registered_via_repository() {
+        let engine = create_test_engine();
+        let body = create_test_body();
+        let pilots = [
+            create_test_pilot(),
+            create_test_pilot(),
+            create_test_pilot(),
+        ];
+        let car = create_test_car_with_components(&engine, &body, &pilots);
+        let player = create_test_player_with_assets(car.clone(), engine, body, pilots);
+        let player_uuid = player.uuid;
+        let car_uuid = car.uuid;
+
+        let repo = crate::repositories::MockPlayerRepository::with_players(vec![player]);
+
+        let result = CarValidationService::validate_car_for_race(&repo, player_uuid, car_uuid)
+            .await
+            .expect("player registered via the repository must be found through it");
+        assert_eq!(result.car.uuid, car_uuid);
+    }
+
+    #[tokio::test]
+    async fn validate_car_for_race_missing_player_is_not_found() {
+        let repo = crate::repositories::MockPlayerRepository::with_players(vec![]);
+
+        let result =
+            CarValidationService::validate_car_for_race(&repo, Uuid::new_v4(), Uuid::new_v4())
+                .await;
+        assert!(matches!(result, Err(CarValidationError::PlayerNotFound(_))));
+    }
+
     #[test]
     fn test_verify_car_ownership_success() {
         let engine = create_test_engine();
