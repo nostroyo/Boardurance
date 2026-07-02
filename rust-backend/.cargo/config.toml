@@ -6,4 +6,4 @@ test-fast = "test --lib --bins --test mock_repository_tests --test simple_mock_t
 test-all = "test"
 
 # Run only integration tests (requires MongoDB)
-test-integration = "test --test auth_integration_tests --test authorization_integration_tests --test boost_card_integration_tests --test protected_routes_integration_tests --test security_edge_cases_tests --test repository_conformance_mongo"
+test-integration = "test --test auth_integration_tests --test authorization_integration_tests --test boost_card_integration_tests --test protected_routes_integration_tests --test security_edge_cases_tests --test repository_conformance_mongo --test race_persistence_integration_tests"

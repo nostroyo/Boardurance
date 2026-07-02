@@ -326,13 +326,14 @@ pub async fn run(
     // so registered players' team data is available without a database.
     let team_routes = players::team_routes().with_state(app_state.clone());
 
-    // Turn-processing routes backed by AppState so they can resolve car stats
-    // from the in-memory player repository and compute real movement.
+    // Turn-processing routes backed by AppState: car stats come from
+    // `state.player_repository` and race state persists through
+    // `state.race_repository` (Mongo in prod/preprod, mock elsewhere) — the
+    // legacy process-global `RACE_STORE` this used to rely on has been removed.
     let race_turn_routes = races::turn_routes().with_state(app_state.clone());
 
     // Simple race CRUD routes, backed by AppState so they persist through
-    // `state.race_repository` (Mongo in prod/preprod, mock elsewhere) instead
-    // of the legacy process-global `RACE_STORE`.
+    // `state.race_repository` the same way.
     let race_routes = races::routes().with_state(app_state.clone());
 
     // Create admin-protected routes with AppState and middleware
