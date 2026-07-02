@@ -1368,16 +1368,19 @@ pub async fn register_player(
     };
 
     // 2. Validate car and get components
-    let car_data =
-        match CarValidationService::validate_car_for_race(&state.database, player_uuid, car_uuid)
-            .await
-        {
-            Ok(data) => data,
-            Err(e) => {
-                tracing::warn!("Car validation failed: {}", e);
-                return Err(StatusCode::BAD_REQUEST);
-            }
-        };
+    let car_data = match CarValidationService::validate_car_for_race(
+        state.player_repository.as_ref(),
+        player_uuid,
+        car_uuid,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::warn!("Car validation failed: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
 
     // 3. Register player in race
     let updated_race = match register_player_in_race(
@@ -1788,25 +1791,28 @@ pub async fn apply_lap_action(
     };
 
     // Validate car data
-    let car_data =
-        match CarValidationService::validate_car_for_race(&state.database, player_uuid, car_uuid)
-            .await
-        {
-            Ok(data) => data,
-            Err(e) => {
-                tracing::warn!("Car validation failed: {}", e);
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(BoostCardErrorResponse {
-                        error_code: "CAR_VALIDATION_FAILED".to_string(),
-                        message: format!("Car validation failed: {e}"),
-                        available_cards: vec![],
-                        pit_stops_completed: 0,
-                        cards_remaining: 0,
-                    }),
-                ));
-            }
-        };
+    let car_data = match CarValidationService::validate_car_for_race(
+        state.player_repository.as_ref(),
+        player_uuid,
+        car_uuid,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::warn!("Car validation failed: {}", e);
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(BoostCardErrorResponse {
+                    error_code: "CAR_VALIDATION_FAILED".to_string(),
+                    message: format!("Car validation failed: {e}"),
+                    available_cards: vec![],
+                    pit_stops_completed: 0,
+                    cards_remaining: 0,
+                }),
+            ));
+        }
+    };
 
     // Get race to validate boost card before processing
     let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {

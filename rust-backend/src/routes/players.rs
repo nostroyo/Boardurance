@@ -985,20 +985,12 @@ mod player_asset_tests {
         let player_uuid = player.uuid;
 
         let parts = TestAppState::with_test_data(vec![player], vec![], vec![]);
-        // The mongodb driver connects lazily, so constructing a `Client`/`Database`
-        // handle here performs no I/O and needs no real MongoDB instance — this
-        // stays a mock-only test.
-        let database = mongodb::Client::with_uri_str("mongodb://localhost:27017")
-            .await
-            .expect("client construction is lazy and does not connect")
-            .database("test_database");
         let state = AppState::new(
             parts.player_repo,
             parts.race_repo,
             parts.session_repo,
             parts.jwt_service,
             parts.session_manager,
-            database,
         );
         (state, player_uuid)
     }

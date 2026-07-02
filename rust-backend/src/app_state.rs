@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use mongodb::Database;
-
 use crate::repositories::{PlayerRepository, RaceRepository, SessionRepository};
 use crate::services::{JwtService, SessionManager};
 
@@ -11,6 +9,10 @@ use crate::services::{JwtService, SessionManager};
 /// against either the in-memory `Mock*` repositories (local/test) or the
 /// `Mongo*` repositories (prod/preprod) selected at startup — see
 /// `startup.rs::run` and `configuration::DatabaseSettings::resolved_storage_backend`.
+///
+/// Deliberately has no raw `Database` handle: every data access goes through
+/// one of the `*Repository` traits, so backend selection (mock vs Mongo) is
+/// respected everywhere instead of being bypassable per call site.
 #[derive(Clone)]
 pub struct AppState {
     pub player_repository: Arc<dyn PlayerRepository>,
@@ -18,11 +20,6 @@ pub struct AppState {
     pub session_repository: Arc<dyn SessionRepository>,
     pub jwt_service: Arc<JwtService>,
     pub session_manager: Arc<SessionManager>,
-    /// Raw Mongo handle, kept alongside the repository abstractions for the
-    /// few call sites (e.g. `CarValidationService`) that query collections
-    /// directly rather than through a `*Repository` trait. Cheap to clone
-    /// (an `Arc`-backed handle internally).
-    pub database: Database,
 }
 
 impl AppState {
@@ -33,7 +30,6 @@ impl AppState {
         session_repository: Arc<dyn SessionRepository>,
         jwt_service: Arc<JwtService>,
         session_manager: Arc<SessionManager>,
-        database: Database,
     ) -> Self {
         Self {
             player_repository,
@@ -41,7 +37,6 @@ impl AppState {
             session_repository,
             jwt_service,
             session_manager,
-            database,
         }
     }
 }

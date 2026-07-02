@@ -1,7 +1,7 @@
-use mongodb::{bson::doc, Database};
 use uuid::Uuid;
 
 use crate::domain::{Body, Car, Engine, Pilot, Player};
+use crate::repositories::PlayerRepository;
 
 /// Service for validating cars and their components for race participation
 pub struct CarValidationService;
@@ -195,7 +195,7 @@ impl CarValidationService {
     /// 3. Returns validated car data with all components
     ///
     /// # Arguments
-    /// * `database` - `MongoDB` database connection
+    /// * `player_repository` - repository the player is resolved through (selected backend: mock or Mongo)
     /// * `player_uuid` - UUID of the player who owns the car
     /// * `car_uuid` - UUID of the car to validate
     ///
@@ -203,12 +203,12 @@ impl CarValidationService {
     /// * `Ok(ValidatedCarData)` - Car and all components if validation passes
     /// * `Err(CarValidationError)` - Specific error if validation fails
     pub async fn validate_car_for_race(
-        database: &Database,
+        player_repository: &dyn PlayerRepository,
         player_uuid: Uuid,
         car_uuid: Uuid,
     ) -> Result<ValidatedCarData, CarValidationError> {
         // 1. Get the player and verify car ownership
-        let player = Self::get_player_by_uuid(database, player_uuid).await?;
+        let player = Self::get_player_by_uuid(player_repository, player_uuid).await?;
         let car = Self::verify_car_ownership(&player, car_uuid)?;
 
         // 2. Validate car has all required components
@@ -225,24 +225,17 @@ impl CarValidationService {
         })
     }
 
-    /// Gets a player by UUID from the database
+    /// Gets a player by UUID through the selected repository backend (mock
+    /// or Mongo) — never a raw Mongo query, so this always sees the same
+    /// player data as registration/team routes regardless of backend.
     async fn get_player_by_uuid(
-        database: &Database,
+        player_repository: &dyn PlayerRepository,
         player_uuid: Uuid,
     ) -> Result<Player, CarValidationError> {
-        let collection = database.collection::<Player>("players");
-        let filter = doc! { "uuid": player_uuid.to_string() };
-
-        match collection.find_one(filter, None).await {
+        match player_repository.find_by_uuid(player_uuid).await {
             Ok(Some(player)) => Ok(player),
             Ok(None) => Err(CarValidationError::PlayerNotFound(player_uuid)),
-            Err(e) => {
-                if e.to_string().contains("connection") {
-                    Err(CarValidationError::DatabaseConnectionError(e.to_string()))
-                } else {
-                    Err(CarValidationError::DatabaseQueryError(e.to_string()))
-                }
-            }
+            Err(e) => Err(CarValidationError::DatabaseQueryError(e.to_string())),
         }
     }
 

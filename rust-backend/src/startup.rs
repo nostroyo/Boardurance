@@ -316,7 +316,6 @@ pub async fn run(
         session_repository,
         jwt_service,
         session_manager.clone(),
-        db_pool.clone(),
     );
 
     // Create auth routes with AppState
