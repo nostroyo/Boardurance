@@ -974,7 +974,7 @@ mod player_asset_tests {
     /// Build an `AppState` (backed by mock repositories) whose in-memory
     /// repository holds a single player (mirroring the post-registration
     /// state), returning that player's uuid.
-    async fn seeded_state_with_player() -> (AppState, uuid::Uuid) {
+    fn seeded_state_with_player() -> (AppState, uuid::Uuid) {
         let email = Email::parse("driver@example.com").unwrap();
         let password_hash = Password::new("Sup3rSecret!".to_string())
             .unwrap()
@@ -1002,7 +1002,7 @@ mod player_asset_tests {
     /// the mock repo (as after registration); the car must be added, not 404'd.
     #[tokio::test]
     async fn add_car_targets_the_registration_store() {
-        let (state, player_uuid) = seeded_state_with_player().await;
+        let (state, player_uuid) = seeded_state_with_player();
 
         let response = add_car_to_player(
             State(state.clone()),

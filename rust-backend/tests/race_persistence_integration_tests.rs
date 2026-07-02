@@ -13,10 +13,10 @@
 //! now-removed in-memory shortcut.
 //!
 //! Follows the harness pattern of `tests/auth_integration_tests.rs`. That
-//! harness's `get_connection_pool` call eagerly pings MongoDB even when
+//! harness's `get_connection_pool` call eagerly pings `MongoDB` even when
 //! `StorageBackend::Mock` is selected for the repositories themselves, so
-//! (like `auth_integration_tests.rs`) this file requires MongoDB reachable at
-//! test time and runs under `cargo test-integration`, not `cargo test-fast`.
+//! (like `auth_integration_tests.rs`) this file requires `MongoDB` reachable
+//! at test time and runs under `cargo test-integration`, not `cargo test-fast`.
 
 use rust_backend::configuration::get_configuration;
 use rust_backend::startup::{get_connection_pool, run};
@@ -134,8 +134,8 @@ fn create_race_body() -> Value {
     })
 }
 
-/// Full create -> join -> turn -> get_race flow over real HTTP, asserting the
-/// race's mutated state (participants, turns_taken) is exactly what's expected
+/// Full create -> join -> turn -> `get_race` flow over real HTTP, asserting the
+/// race's mutated state (participants, `turns_taken`) is exactly what's expected
 /// at each step. This can only pass if every handler along the way actually
 /// reads/writes through the same backing store (`state.race_repository`); the
 /// old `RACE_STORE` global would have made this trivially true even with a
@@ -180,14 +180,8 @@ async fn race_persists_through_create_join_turn_and_refetch() {
         )
         .await;
     assert_eq!(200, join_a.status().as_u16());
-    let join_a_body: Value = join_a.json().await.expect("valid JSON");
-    assert_eq!(
-        join_a_body["race"]["participants"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
+    let body_a: Value = join_a.json().await.expect("valid JSON");
+    assert_eq!(body_a["race"]["participants"].as_array().unwrap().len(), 1);
 
     let player_b = Uuid::new_v4();
     let car_b = Uuid::new_v4();
@@ -203,17 +197,11 @@ async fn race_persists_through_create_join_turn_and_refetch() {
         )
         .await;
     assert_eq!(200, join_b.status().as_u16());
-    let join_b_body: Value = join_b.json().await.expect("valid JSON");
+    let body_b: Value = join_b.json().await.expect("valid JSON");
     // Both the previously-joined player_a AND the newly-joined player_b must
     // be present: proves join_b's handler loaded the race state that join_a's
     // handler wrote, not a stale/local copy.
-    assert_eq!(
-        join_b_body["race"]["participants"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
+    assert_eq!(body_b["race"]["participants"].as_array().unwrap().len(), 2);
 
     // 3. Independently re-fetch the race and confirm both joins persisted.
     let get_after_joins = app.get(&format!("/api/v1/races/{race_uuid}")).await;
