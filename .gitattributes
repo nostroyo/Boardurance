@@ -1,0 +1,7 @@
+# docs/openapi.json is compared byte-for-byte against freshly-generated JSON
+# (rust-backend's committed_openapi_schema_is_up_to_date test) using plain LF
+# line endings. Without this, Windows' core.autocrlf silently rewrites every
+# \n to \r\n on checkout, corrupting the comparison on any fresh clone/
+# checkout regardless of what's actually committed -- discovered when this
+# test failed identically on two unrelated branches after a plain re-checkout.
+docs/openapi.json text eol=lf

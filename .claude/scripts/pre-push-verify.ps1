@@ -8,15 +8,39 @@
 # Bypass with `git push --no-verify` when you genuinely need to (e.g. pushing
 # a WIP branch nobody's building CI for yet).
 
-$ErrorActionPreference = 'Stop'
+# NOT 'Stop': every Invoke-Step call below redirects a native command's
+# stderr (2>&1) to capture failure output, but PowerShell wraps EACH stderr
+# line from a native exe as a NativeCommandError -- with ErrorActionPreference
+# 'Stop' that throws and aborts the whole script on cargo's ordinary build
+# progress chatter (e.g. "Compiling proc-macro2"), long before the real
+# exit code is even known. Control flow here is exit-code-driven throughout,
+# not exception-driven, so 'Continue' is correct, not just tolerated.
+$ErrorActionPreference = 'Continue'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # .claude/scripts -> repo root
 $failures = @()
 
-function Invoke-Step([string]$label, [string]$dir, [string]$cmd) {
+# Invoked via `powershell.exe -NoProfile` from the git hook shim (deliberately,
+# for determinism/speed), which means PATH additions that only live in the
+# user's $PROFILE — cargo/rustup and Node.js both turned out to be PATH-via-
+# profile-only on the machine this was built on, not the persistent
+# user/system PATH — are NOT present. Add the standard install locations
+# explicitly rather than depending on any one profile's setup; harmless if
+# already on PATH.
+foreach ($p in @("$env:USERPROFILE\.cargo\bin", 'C:\Program Files\nodejs')) {
+    if ((Test-Path $p) -and ($env:PATH -notlike "*$p*")) {
+        $env:PATH = "$p;$env:PATH"
+    }
+}
+
+# Invoke the executable directly (no `cmd /c "...string..."` layer) -- that
+# extra hop proved unreliable in the exact process-spawn chain a git hook
+# uses (raw `powershell.exe` subprocess, no console/profile), silently
+# producing an empty exit code instead of actually running anything.
+function Invoke-Step([string]$label, [string]$dir, [string]$exe, [string[]]$argList) {
     Write-Output "  -> $label"
     Push-Location $dir
     try {
-        $out = & cmd /c "$cmd 2>&1"
+        $out = & $exe @argList 2>&1
         $code = $LASTEXITCODE
     } finally { Pop-Location }
     if ($code -ne 0) {
@@ -57,16 +81,24 @@ Write-Output "pre-push: running full verify loop for '$branch' (backend=$backend
 
 if ($backend) {
     $rb = Join-Path $repo 'rust-backend'
-    Invoke-Step 'backend: cargo fmt --check' $rb 'cargo fmt --check'
-    Invoke-Step 'backend: cargo clippy' $rb 'cargo clippy --all-targets --all-features -- -D warnings -A clippy::too_many_lines -A clippy::cast_possible_truncation -A clippy::cast_precision_loss -A clippy::cast_sign_loss -A clippy::cast_possible_wrap -A clippy::match_wildcard_for_single_variants -A clippy::manual_let_else -A clippy::needless_pass_by_value -A clippy::needless_range_loop -A dead_code'
-    Invoke-Step 'backend: cargo check' $rb 'cargo check --all-targets --all-features'
-    Invoke-Step 'backend: cargo test-fast' $rb 'cargo test-fast'
+    Invoke-Step 'backend: cargo fmt --check' $rb 'cargo' @('fmt', '--check')
+    Invoke-Step 'backend: cargo clippy' $rb 'cargo' @(
+        'clippy', '--all-targets', '--all-features', '--',
+        '-D', 'warnings',
+        '-A', 'clippy::too_many_lines', '-A', 'clippy::cast_possible_truncation',
+        '-A', 'clippy::cast_precision_loss', '-A', 'clippy::cast_sign_loss',
+        '-A', 'clippy::cast_possible_wrap', '-A', 'clippy::match_wildcard_for_single_variants',
+        '-A', 'clippy::manual_let_else', '-A', 'clippy::needless_pass_by_value',
+        '-A', 'clippy::needless_range_loop', '-A', 'dead_code'
+    )
+    Invoke-Step 'backend: cargo check' $rb 'cargo' @('check', '--all-targets', '--all-features')
+    Invoke-Step 'backend: cargo test-fast' $rb 'cargo' @('test-fast')
 }
 
 if ($frontend) {
     $fe = Join-Path $repo 'empty-project'
-    Invoke-Step 'frontend: tsc --noEmit' $fe 'npx tsc --noEmit'
-    Invoke-Step 'frontend: npm test' $fe 'npm run test -- --run'
+    Invoke-Step 'frontend: tsc --noEmit' $fe 'npx' @('tsc', '--noEmit')
+    Invoke-Step 'frontend: npm test' $fe 'npm' @('run', 'test', '--', '--run')
 }
 
 if ($failures.Count -eq 0) {
