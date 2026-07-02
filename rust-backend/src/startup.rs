@@ -34,11 +34,11 @@ impl Application {
             .database
             .resolved_storage_backend(&environment);
 
-        // The `races::routes()` router (join/create/start/get) still keys its
-        // state on a raw `Database` handle (see its `RACE_STORE`-backed
-        // handlers) regardless of the selected repository backend, so a
-        // connection is always attempted for it today. Only the *fail-fast*
-        // behavior below depends on `backend`.
+        // `AppState` carries a raw `Database` handle alongside the repository
+        // abstractions (for the few call sites, e.g. `CarValidationService`,
+        // that still query collections directly), so a connection is always
+        // attempted regardless of the selected repository backend. Only the
+        // *fail-fast* behavior below depends on `backend`.
         let connection_pool = match get_connection_pool(&configuration.database).await {
             Ok(pool) => {
                 tracing::info!("Successfully connected to MongoDB");
@@ -316,6 +316,7 @@ pub async fn run(
         session_repository,
         jwt_service,
         session_manager.clone(),
+        db_pool.clone(),
     );
 
     // Create auth routes with AppState
@@ -328,6 +329,11 @@ pub async fn run(
     // Turn-processing routes backed by AppState so they can resolve car stats
     // from the in-memory player repository and compute real movement.
     let race_turn_routes = races::turn_routes().with_state(app_state.clone());
+
+    // Simple race CRUD routes, backed by AppState so they persist through
+    // `state.race_repository` (Mongo in prod/preprod, mock elsewhere) instead
+    // of the legacy process-global `RACE_STORE`.
+    let race_routes = races::routes().with_state(app_state.clone());
 
     // Create admin-protected routes with AppState and middleware
     let admin_routes = players::admin_routes()
@@ -343,7 +349,7 @@ pub async fn run(
         .route("/health_check", get(health_check))
         .nest("/api/v1", team_routes) // Player team + asset routes backed by in-memory repo
         .nest("/api/v1", race_turn_routes) // Turn processing backed by in-memory repo
-        .nest("/api/v1", races::routes())
+        .nest("/api/v1", race_routes)
         .nest("/api/v1", auth_routes) // Nest auth routes under /api/v1
         .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))

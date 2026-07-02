@@ -974,7 +974,7 @@ mod player_asset_tests {
     /// Build an `AppState` (backed by mock repositories) whose in-memory
     /// repository holds a single player (mirroring the post-registration
     /// state), returning that player's uuid.
-    fn seeded_state_with_player() -> (AppState, uuid::Uuid) {
+    async fn seeded_state_with_player() -> (AppState, uuid::Uuid) {
         let email = Email::parse("driver@example.com").unwrap();
         let password_hash = Password::new("Sup3rSecret!".to_string())
             .unwrap()
@@ -985,12 +985,20 @@ mod player_asset_tests {
         let player_uuid = player.uuid;
 
         let parts = TestAppState::with_test_data(vec![player], vec![], vec![]);
+        // The mongodb driver connects lazily, so constructing a `Client`/`Database`
+        // handle here performs no I/O and needs no real MongoDB instance — this
+        // stays a mock-only test.
+        let database = mongodb::Client::with_uri_str("mongodb://localhost:27017")
+            .await
+            .expect("client construction is lazy and does not connect")
+            .database("test_database");
         let state = AppState::new(
             parts.player_repo,
             parts.race_repo,
             parts.session_repo,
             parts.jwt_service,
             parts.session_manager,
+            database,
         );
         (state, player_uuid)
     }
@@ -1002,7 +1010,7 @@ mod player_asset_tests {
     /// the mock repo (as after registration); the car must be added, not 404'd.
     #[tokio::test]
     async fn add_car_targets_the_registration_store() {
-        let (state, player_uuid) = seeded_state_with_player();
+        let (state, player_uuid) = seeded_state_with_player().await;
 
         let response = add_car_to_player(
             State(state.clone()),

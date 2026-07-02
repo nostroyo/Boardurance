@@ -6,10 +6,9 @@ use axum::{
     Router,
 };
 use chrono::{DateTime, Utc};
-use mongodb::Database;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -44,7 +43,7 @@ use crate::domain::{
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
 use crate::app_state::AppState;
-use crate::repositories::PlayerRepository;
+use crate::repositories::{PlayerRepository, RaceRepository, RepositoryError, RepositoryResult};
 
 /// Resolve a participant's full car data (car + engine + body + pilot) from the
 /// in-memory player aggregate. Returns `None` if any component cannot be found.
@@ -962,7 +961,7 @@ fn get_visible_sector_ids(center: u32, total_sectors: usize) -> Vec<u32> {
     ids
 }
 
-pub fn routes() -> Router<Database> {
+pub fn routes() -> Router<AppState> {
     Router::new()
         // Public routes (no authentication required)
         .route("/races", get(get_all_races))
@@ -1022,25 +1021,25 @@ pub fn turn_routes() -> Router<AppState> {
 // Helper Functions for Enhanced API
 
 async fn register_player_in_race(
-    database: &Database,
+    race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
     player_uuid: Uuid,
     car_uuid: Uuid,
     pilot_uuid: Uuid,
     tyre_type: TyreType,
-) -> Result<Option<Race>, mongodb::error::Error> {
+) -> RepositoryResult<Option<Race>> {
     // Get the race first
-    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+    let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
     };
 
     // Try to add participant with their chosen starting tyre
     if let Err(e) = race.add_participant_with_tyre(player_uuid, car_uuid, pilot_uuid, tyre_type) {
-        return Err(mongodb::error::Error::custom(e));
+        return Err(RepositoryError::Validation(e));
     }
 
-    // Persist the mutated race to the in-memory store and return it.
-    store_save(race.clone());
+    // Persist the mutated race and return it.
+    race_repository.save(&race).await?;
     Ok(Some(race))
 }
 
@@ -1307,25 +1306,25 @@ async fn build_player_specific_data(
 }
 
 async fn process_individual_lap_action(
-    database: &Database,
+    race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
     player_uuid: Uuid,
     boost_value: u32,
     car_data: &ValidatedCarData,
-) -> Result<Option<Race>, mongodb::error::Error> {
+) -> RepositoryResult<Option<Race>> {
     // Get the race first
-    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+    let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
     };
 
     // Process individual lap action using the new method
     match race.process_individual_lap_action(player_uuid, boost_value, car_data) {
         Ok(_individual_result) => {
-            // Persist the mutated race to the in-memory store and return it.
-            store_save(race.clone());
+            // Persist the mutated race and return it.
+            race_repository.save(&race).await?;
             Ok(Some(race))
         }
-        Err(e) => Err(mongodb::error::Error::custom(e)),
+        Err(e) => Err(RepositoryError::Validation(e)),
     }
 }
 
@@ -1348,7 +1347,7 @@ async fn process_individual_lap_action(
 )]
 #[tracing::instrument(
     name = "Registering player for race",
-    skip(database, payload),
+    skip(state, payload),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %payload.player_uuid,
@@ -1356,7 +1355,7 @@ async fn process_individual_lap_action(
     )
 )]
 pub async fn register_player(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<RegisterPlayerRequest>,
 ) -> Result<Json<RegisterPlayerResponse>, StatusCode> {
@@ -1387,7 +1386,9 @@ pub async fn register_player(
 
     // 2. Validate car and get components
     let car_data =
-        match CarValidationService::validate_car_for_race(&database, player_uuid, car_uuid).await {
+        match CarValidationService::validate_car_for_race(&state.database, player_uuid, car_uuid)
+            .await
+        {
             Ok(data) => data,
             Err(e) => {
                 tracing::warn!("Car validation failed: {}", e);
@@ -1397,7 +1398,7 @@ pub async fn register_player(
 
     // 3. Register player in race
     let updated_race = match register_player_in_race(
-        &database,
+        &state.race_repository,
         race_uuid,
         player_uuid,
         car_uuid,
@@ -1567,14 +1568,14 @@ pub async fn register_player(
 )]
 #[tracing::instrument(
     name = "Getting detailed race status",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = ?params.player_uuid
     )
 )]
 pub async fn get_race_status_detailed(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Query(params): Query<StatusQueryParams>,
 ) -> Result<Json<DetailedRaceStatusResponse>, StatusCode> {
@@ -1586,7 +1587,7 @@ pub async fn get_race_status_detailed(
         }
     };
 
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -1740,7 +1741,7 @@ pub async fn get_race_status_detailed(
 )]
 #[tracing::instrument(
     name = "Applying lap action",
-    skip(database, payload),
+    skip(state, payload),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %payload.player_uuid,
@@ -1748,7 +1749,7 @@ pub async fn get_race_status_detailed(
     )
 )]
 pub async fn apply_lap_action(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<ApplyLapRequest>,
 ) -> Result<Json<DetailedRaceStatusResponse>, (StatusCode, Json<BoostCardErrorResponse>)> {
@@ -1805,7 +1806,9 @@ pub async fn apply_lap_action(
 
     // Validate car data
     let car_data =
-        match CarValidationService::validate_car_for_race(&database, player_uuid, car_uuid).await {
+        match CarValidationService::validate_car_for_race(&state.database, player_uuid, car_uuid)
+            .await
+        {
             Ok(data) => data,
             Err(e) => {
                 tracing::warn!("Car validation failed: {}", e);
@@ -1823,7 +1826,7 @@ pub async fn apply_lap_action(
         };
 
     // Get race to validate boost card before processing
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -1876,7 +1879,7 @@ pub async fn apply_lap_action(
 
     // Process individual lap action
     let updated_race = match process_individual_lap_action(
-        &database,
+        &state.race_repository,
         race_uuid,
         player_uuid,
         payload.boost_value,
@@ -2769,13 +2772,13 @@ pub async fn get_performance_preview(
 )]
 #[tracing::instrument(
     name = "Getting turn phase for race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str
     )
 )]
 pub async fn get_turn_phase(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<TurnPhaseResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUID
@@ -2794,7 +2797,7 @@ pub async fn get_turn_phase(
     };
 
     // 2. Fetch race from database
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -3002,14 +3005,14 @@ pub async fn get_turn_phase(
 )]
 #[tracing::instrument(
     name = "Getting local view for player in race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %player_uuid_str
     )
 )]
 pub async fn get_local_view(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LocalViewResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -3042,7 +3045,7 @@ pub async fn get_local_view(
     };
 
     // 2. Fetch race from database
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -3252,14 +3255,14 @@ pub async fn get_local_view(
 )]
 #[tracing::instrument(
     name = "Getting boost availability for player in race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %player_uuid_str
     )
 )]
 pub async fn get_boost_availability(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<BoostAvailabilityResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -3292,7 +3295,7 @@ pub async fn get_boost_availability(
     };
 
     // 2. Fetch race from database
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -3489,14 +3492,14 @@ pub async fn get_boost_availability(
 )]
 #[tracing::instrument(
     name = "Getting lap history for player in race",
-    skip(database),
+    skip(state),
     fields(
         race_uuid = %race_uuid_str,
         player_uuid = %player_uuid_str
     )
 )]
 pub async fn get_lap_history(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path((race_uuid_str, player_uuid_str)): Path<(String, String)>,
 ) -> Result<Json<LapHistoryResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Parse and validate UUIDs
@@ -3529,7 +3532,7 @@ pub async fn get_lap_history(
     };
 
     // 2. Fetch race from database
-    let race = match get_race_by_uuid(&database, race_uuid).await {
+    let race = match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => race,
         Ok(None) => {
             tracing::warn!("Race not found for UUID: {}", race_uuid);
@@ -3649,7 +3652,7 @@ pub async fn get_lap_history(
 )]
 #[tracing::instrument(
     name = "Creating a new race",
-    skip(database, payload),
+    skip(state, payload),
     fields(
         race_name = %payload.name,
         track_name = %payload.track_name,
@@ -3657,7 +3660,7 @@ pub async fn get_lap_history(
     )
 )]
 pub async fn create_race(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateRaceRequest>,
 ) -> Result<(StatusCode, Json<RaceResponse>), StatusCode> {
     // Create sectors from request
@@ -3694,7 +3697,7 @@ pub async fn create_race(
 
     tracing::info!("Auto-starting race {} for improved UX", race.uuid);
 
-    match insert_race(&database, &race).await {
+    match insert_race(&state.race_repository, &race).await {
         Ok(created_race) => {
             tracing::info!(
                 "Race created and auto-started successfully with UUID: {}",
@@ -3725,11 +3728,9 @@ pub async fn create_race(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Fetching all races", skip(database))]
-pub async fn get_all_races(
-    State(database): State<Database>,
-) -> Result<Json<Vec<Race>>, StatusCode> {
-    match get_all_races_from_db(&database).await {
+#[tracing::instrument(name = "Fetching all races", skip(state))]
+pub async fn get_all_races(State(state): State<AppState>) -> Result<Json<Vec<Race>>, StatusCode> {
+    match get_all_races_from_db(&state.race_repository).await {
         Ok(races) => {
             tracing::info!("Successfully fetched {} races", races.len());
             Ok(Json(races))
@@ -3755,9 +3756,9 @@ pub async fn get_all_races(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Fetching race by UUID", skip(database))]
+#[tracing::instrument(name = "Fetching race by UUID", skip(state))]
 pub async fn get_race(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<Race>, StatusCode> {
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
@@ -3768,7 +3769,7 @@ pub async fn get_race(
         }
     };
 
-    match get_race_by_uuid(&database, race_uuid).await {
+    match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => {
             tracing::info!("Race found for UUID: {}", race_uuid);
             Ok(Json(race))
@@ -3801,9 +3802,9 @@ pub async fn get_race(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Joining race", skip(database, payload))]
+#[tracing::instrument(name = "Joining race", skip(state, payload))]
 pub async fn join_race(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
     Json(payload): Json<JoinRaceRequest>,
 ) -> Result<Json<RaceResponse>, StatusCode> {
@@ -3839,7 +3840,15 @@ pub async fn join_race(
         }
     };
 
-    match join_race_in_db(&database, race_uuid, player_uuid, car_uuid, pilot_uuid).await {
+    match join_race_in_db(
+        &state.race_repository,
+        race_uuid,
+        player_uuid,
+        car_uuid,
+        pilot_uuid,
+    )
+    .await
+    {
         Ok(Some(updated_race)) => {
             tracing::info!("Player {} joined race {}", player_uuid, race_uuid);
             Ok(Json(RaceResponse {
@@ -3880,9 +3889,9 @@ pub async fn join_race(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Starting race", skip(database))]
+#[tracing::instrument(name = "Starting race", skip(state))]
 pub async fn start_race(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<RaceResponse>, StatusCode> {
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
@@ -3893,7 +3902,7 @@ pub async fn start_race(
         }
     };
 
-    match start_race_in_db(&database, race_uuid).await {
+    match start_race_in_db(&state.race_repository, race_uuid).await {
         Ok(Some(updated_race)) => {
             tracing::info!("Race {} started successfully", race_uuid);
             Ok(Json(RaceResponse {
@@ -4012,9 +4021,9 @@ pub async fn process_turn(
     ),
     tag = "races"
 )]
-#[tracing::instrument(name = "Getting race status", skip(database))]
+#[tracing::instrument(name = "Getting race status", skip(state))]
 pub async fn get_race_status(
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Path(race_uuid_str): Path<String>,
 ) -> Result<Json<RaceStatus>, StatusCode> {
     let race_uuid = match Uuid::parse_str(&race_uuid_str) {
@@ -4025,7 +4034,7 @@ pub async fn get_race_status(
         }
     };
 
-    match get_race_by_uuid(&database, race_uuid).await {
+    match get_race_by_uuid(&state.race_repository, race_uuid).await {
         Ok(Some(race)) => {
             tracing::info!("Race status retrieved for UUID: {}", race_uuid);
             Ok(Json(race.status))
@@ -4042,58 +4051,59 @@ pub async fn get_race_status(
 }
 
 // Database operations
-#[tracing::instrument(name = "Saving new race in the database", skip(_database, race))]
-pub async fn insert_race(_database: &Database, race: &Race) -> Result<Race, mongodb::error::Error> {
-    let created_race = race.clone();
-    store_save(created_race.clone());
-    Ok(created_race)
+#[tracing::instrument(name = "Saving new race in the database", skip(race_repository, race))]
+pub async fn insert_race(
+    race_repository: &Arc<dyn RaceRepository>,
+    race: &Race,
+) -> RepositoryResult<Race> {
+    race_repository.save(race).await
 }
 
-#[tracing::instrument(name = "Getting all races from the database", skip(_database))]
+#[tracing::instrument(name = "Getting all races from the database", skip(race_repository))]
 pub async fn get_all_races_from_db(
-    _database: &Database,
-) -> Result<Vec<Race>, mongodb::error::Error> {
-    Ok(store_all())
+    race_repository: &Arc<dyn RaceRepository>,
+) -> RepositoryResult<Vec<Race>> {
+    race_repository.find_all().await
 }
 
-#[tracing::instrument(name = "Getting race by UUID from the database", skip(_database))]
+#[tracing::instrument(name = "Getting race by UUID from the database", skip(race_repository))]
 pub async fn get_race_by_uuid(
-    _database: &Database,
+    race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
-) -> Result<Option<Race>, mongodb::error::Error> {
-    Ok(store_get(race_uuid))
+) -> RepositoryResult<Option<Race>> {
+    race_repository.find_by_uuid(race_uuid).await
 }
 
-#[tracing::instrument(name = "Joining race in the database", skip(database))]
+#[tracing::instrument(name = "Joining race in the database", skip(race_repository))]
 pub async fn join_race_in_db(
-    database: &Database,
+    race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
     player_uuid: Uuid,
     car_uuid: Uuid,
     pilot_uuid: Uuid,
-) -> Result<Option<Race>, mongodb::error::Error> {
+) -> RepositoryResult<Option<Race>> {
     // Get the race first
-    let Some(mut race) = get_race_by_uuid(database, race_uuid).await? else {
+    let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
     };
 
     // Try to add participant
     if let Err(e) = race.add_participant(player_uuid, car_uuid, pilot_uuid) {
-        return Err(mongodb::error::Error::custom(e));
+        return Err(RepositoryError::Validation(e));
     }
 
-    // Persist the mutated race to the in-memory store and return it.
-    store_save(race.clone());
+    // Persist the mutated race and return it.
+    race_repository.save(&race).await?;
     Ok(Some(race))
 }
 
-#[tracing::instrument(name = "Starting race in the database", skip(database))]
+#[tracing::instrument(name = "Starting race in the database", skip(race_repository))]
 pub async fn start_race_in_db(
-    database: &Database,
+    race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
-) -> Result<Option<Race>, mongodb::error::Error> {
+) -> RepositoryResult<Option<Race>> {
     // Get the race first
-    let mut race = if let Some(race) = get_race_by_uuid(database, race_uuid).await? {
+    let mut race = if let Some(race) = get_race_by_uuid(race_repository, race_uuid).await? {
         race
     } else {
         tracing::warn!("Race not found: {}", race_uuid);
@@ -4107,13 +4117,13 @@ pub async fn start_race_in_db(
             race.status
         );
         tracing::warn!("{}", error_msg);
-        return Err(mongodb::error::Error::custom(error_msg));
+        return Err(RepositoryError::Validation(error_msg));
     }
 
     if race.participants.is_empty() {
         let error_msg = "Cannot start race without participants";
         tracing::warn!("{}", error_msg);
-        return Err(mongodb::error::Error::custom(error_msg));
+        return Err(RepositoryError::Validation(error_msg.to_string()));
     }
 
     tracing::info!(
@@ -4140,9 +4150,9 @@ pub async fn start_race_in_db(
         );
     }
 
-    // Persist the mutated race to the in-memory store and return it.
+    // Persist the mutated race and return it.
     tracing::info!("Updating race {} in store", race_uuid);
-    store_save(race.clone());
+    race_repository.save(&race).await?;
     tracing::info!("Successfully started race {}", race_uuid);
     Ok(Some(race))
 }

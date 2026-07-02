@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use mongodb::Database;
+
 use crate::repositories::{PlayerRepository, RaceRepository, SessionRepository};
 use crate::services::{JwtService, SessionManager};
 
@@ -16,6 +18,11 @@ pub struct AppState {
     pub session_repository: Arc<dyn SessionRepository>,
     pub jwt_service: Arc<JwtService>,
     pub session_manager: Arc<SessionManager>,
+    /// Raw Mongo handle, kept alongside the repository abstractions for the
+    /// few call sites (e.g. `CarValidationService`) that query collections
+    /// directly rather than through a `*Repository` trait. Cheap to clone
+    /// (an `Arc`-backed handle internally).
+    pub database: Database,
 }
 
 impl AppState {
@@ -26,6 +33,7 @@ impl AppState {
         session_repository: Arc<dyn SessionRepository>,
         jwt_service: Arc<JwtService>,
         session_manager: Arc<SessionManager>,
+        database: Database,
     ) -> Self {
         Self {
             player_repository,
@@ -33,6 +41,7 @@ impl AppState {
             session_repository,
             jwt_service,
             session_manager,
+            database,
         }
     }
 }
