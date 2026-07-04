@@ -17,7 +17,11 @@ on:
 jobs:
   frontend-ci:
     runs-on: ubuntu-latest
-    
+    # The toolchain (vitest 4, vite 7) hard-requires Node >=20; on an
+    # unsupported Node the vitest fork pool can hang forever instead of
+    # failing. Without a timeout GitHub lets a hung job run for 6 hours.
+    timeout-minutes: 15
+
     defaults:
       run:
         working-directory: ./empty-project
@@ -29,7 +33,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '24'
         cache: 'npm'
         cache-dependency-path: empty-project/package-lock.json
 
