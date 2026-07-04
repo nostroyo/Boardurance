@@ -1,0 +1,23 @@
+schema: spec-driven
+
+context: |
+  Boardurance: turn-based racing tycoon game. Backend: rust-backend/ (Rust +
+  Axum + MongoDB, JWT; domain logic in src/domain/, handlers in src/routes/).
+  Frontend: empty-project/ (React 19 + Vite + TS + Tailwind — despite the name,
+  this IS the web client). Full project context: openspec/project.md.
+  Windows 11 + PowerShell. Verify gates: .claude/scripts/be.ps1 (cargo
+  fmt/clippy/check/test-fast) and .claude/scripts/fe.ps1 (npx tsc --noEmit,
+  npm run test -- --run). Branch per feature off dev, work in a git worktree,
+  /review-gate before every PR. Race model: 1 boost = 1 turn = 1 lap; sectors
+  are relative standings. Legacy specs: .kiro/specs/ is frozen read-only
+  history — never edit, never treat as current truth.
+
+rules:
+  specs:
+    - Every requirement uses SHALL and has at least one GIVEN/WHEN/THEN scenario
+    - Each capability spec ends with a "## Verification" section listing the executable checks (commands, e2e steps) that prove it, annotated with the requirements each check exercises
+  proposal:
+    - State which capabilities are touched and whether an ADR (docs/adr/) is needed
+  tasks:
+    - Each task names the requirement(s) it implements (capability/Requirement Name)
+    - The final task of every change is running the matching verify gate (be.ps1 / fe.ps1) plus a full browser e2e race for gameplay-affecting changes, then /review-gate before the PR

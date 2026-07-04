@@ -1,6 +1,6 @@
 ---
-description: Autopilot factory — dequeue N tasks from .kiro/specs, run each through the chain (implement → verify) in its own git worktree, and leave a reviewable branch per task. Bounded; never pushes or merges.
-argument-hint: "[N] [spec-name]  (N defaults to 2; optional spec to scope the queue)"
+description: Autopilot factory — dequeue N tasks from openspec/changes, run each through the chain (implement → verify) in its own git worktree, and leave a reviewable branch per task. Bounded; never pushes or merges.
+argument-hint: "[N] [change-name]  (N defaults to 2; optional openspec change to scope the queue)"
 allowed-tools: Bash, PowerShell, Read, Grep, Glob, Edit, Write, Agent
 ---
 
@@ -10,13 +10,16 @@ leave a reviewable branch per task. **You never push or merge** — the human
 reviews (via `/review-gate`) and merges. "Le merge reste mon outil."
 
 Args `$ARGUMENTS`: first token = N (max concurrent tasks, default **2**, hard cap
-**2** on this 4-core machine); optional second token = a spec name to scope the queue.
+**2** on this 4-core machine); optional second token = an OpenSpec change name to
+scope the queue.
 
 ## 1. Build the queue
-Collect unchecked tasks (`- [ ]`) from `.kiro/specs/<spec>/tasks.md` (all specs if
-none given). Take the first **N** (default 2, never more than 2). Derive a kebab
-`task-id` per task (e.g. `ai-solo-mode-3`). Show the chosen tasks and **STOP for
-confirmation** if N > 2, or if a task touches schema / migrations / auth.
+Collect unchecked tasks (`- [ ]`) from `openspec/changes/<change>/tasks.md` (all
+active changes if none given — `openspec list --changes` enumerates them; archived
+changes under `changes/archive/` are never queued). Take the first **N** (default
+2, never more than 2). Derive a kebab `task-id` per task (e.g. `add-oauth-3`).
+Show the chosen tasks and **STOP for confirmation** if N > 2, or if a task
+touches schema / migrations / auth.
 
 ## 2. Per task — isolate, implement, verify (run the ≤N concurrently)
 Spawn one Agent per task (so they run in parallel). Each agent:
