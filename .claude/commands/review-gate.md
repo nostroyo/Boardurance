@@ -1,6 +1,6 @@
 ---
 description: Pre-PR judge gate — runs spec-conformance, correctness, and security judges on the branch diff, then writes a PASS/BLOCK verdict artifact.
-argument-hint: "[feature-spec-name]  (optional; e.g. auth-middleware — defaults to inferring from the branch)"
+argument-hint: "[change-name]  (optional; an openspec/changes/<change> folder — defaults to inferring from the branch)"
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, Agent, Skill
 ---
 
@@ -9,7 +9,7 @@ review step for Boardurance. Goal: catch the *looks-correct-but-isn't* class of
 bug (tenant-data leaks, weakened tests, spec gaps) that CI cannot, BEFORE a PR is
 opened. The human still owns the merge; this gate produces an on-record verdict.
 
-Feature spec argument (optional): `$ARGUMENTS`
+Change argument (optional): `$ARGUMENTS`
 
 Work from the repo root `Boardurance/` (the git repo). Follow these steps in order.
 
@@ -21,12 +21,15 @@ Work from the repo root `Boardurance/` (the git repo). Follow these steps in ord
   in-progress work is reviewed too.
 - Determine changed areas: `rust-backend/` (backend) and/or `empty-project/`
   (frontend).
-- Resolve the relevant spec folder under `.kiro/specs/`:
-  - if `$ARGUMENTS` is given, use `.kiro/specs/$ARGUMENTS/`;
-  - else infer from the branch name (`git branch --show-current`);
-  - else if you cannot confidently map it, ask the user which spec applies (or
-    confirm "no spec — ad hoc change", in which case skip the conformance judge
+- Resolve the active OpenSpec change under `openspec/changes/`:
+  - if `$ARGUMENTS` is given, use `openspec/changes/$ARGUMENTS/`;
+  - else infer from the branch name (`git branch --show-current`), using
+    `openspec list --changes` to enumerate candidates;
+  - else if you cannot confidently map it, ask the user which change applies (or
+    confirm "no change — ad hoc", in which case skip the conformance judge
     but say so explicitly in the artifact).
+- If a change was resolved, also run `openspec validate <change> --strict` —
+  a validation failure is a finding for the conformance judge.
 
 ## 2. Run THREE independent judges
 
@@ -34,13 +37,15 @@ Run them so their verdicts don't contaminate each other. Capture each judge's
 findings with severity (high / medium / low) and file:line references.
 
 1. **Spec-conformance judge** — spawn a subagent (Agent tool, `Explore` or
-   general-purpose) with: the diff, and the resolved
-   `.kiro/specs/<feature>/requirements.md` + `tasks.md`. It must check, per EARS
-   acceptance criterion (`WHEN … THE … SHALL …`):
-   - is the criterion implemented in the diff?
+   general-purpose) with: the diff, and the resolved change's
+   `openspec/changes/<change>/` contents (proposal.md, delta specs under
+   `specs/`, tasks.md). It must check, per delta requirement
+   (`### Requirement:` under `## ADDED/MODIFIED/REMOVED Requirements`) and per
+   `#### Scenario:` (GIVEN/WHEN/THEN):
+   - is the requirement implemented in the diff as scenario'd?
    - is there a functional/BDD test that exercises it, and does it actually run
      (not skipped/ignored)?
-   Output a per-criterion **PASS / FAIL / N-A** checklist plus any gaps.
+   Output a per-requirement **PASS / FAIL / N-A** checklist plus any gaps.
 
 2. **Correctness judge** — invoke the `/code-review` skill on the current diff
    (correctness bugs, reuse, simplification, efficiency). Collect its findings.
@@ -75,12 +80,12 @@ branch name and `<seq>` is the next integer not already used for that branch in
 
 - Date: <today>
 - Base SHA: <BASE>  | Head SHA: <HEAD>
-- Spec: .kiro/specs/<feature>/  (or "none — ad hoc")
+- Spec: openspec/changes/<change>/  (or "none — ad hoc")
 - Changed areas: backend / frontend
 - Verdict: PASS | BLOCK
 
-## Acceptance-criteria checklist
-- [PASS|FAIL|N-A] <criterion> — <note / test path>
+## Requirement/scenario checklist
+- [PASS|FAIL|N-A] <requirement — scenario> — <note / test path>
 
 ## Correctness (code-review)
 - [severity] <file:line> — <finding>

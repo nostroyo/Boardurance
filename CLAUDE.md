@@ -8,7 +8,7 @@ A turn-based racing tycoon game. Two parts:
 ## Environment
 
 - OS: Windows 11. Shell is **PowerShell** — use `$env:VAR` (not `$VAR`), `$null` (not `/dev/null`), backtick for line continuation.
-- Process: feature work is specced under `.kiro/specs/<feature>/` (requirements → design → tasks). Bugfix/feature writeups land in `docs/bugfixes/` and `docs/features/`.
+- Process: feature work is specced with **OpenSpec**. Current truth lives in `openspec/specs/<capability>/spec.md`; every change goes through `openspec/changes/<change>/` (proposal → approve → implement `tasks.md` → `openspec archive`, which merges the deltas into `specs/` and moves the change to `changes/archive/`). Start a change with `/opsx:propose`. Legacy `.kiro/specs/` is **deprecated, frozen, read-only history** — never edit it, never treat it as current truth (mapping: `docs/migration/kiro-to-openspec.md`). Bugfix/feature writeups land in `docs/bugfixes/` and `docs/features/`.
 - **Command wrappers** (set cwd + test env for you, instead of a fragile `Set-Location …; $env:…; cargo …` prefix): `.claude/scripts/be.ps1 <cargo args>` (e.g. `be.ps1 test-fast`, `be.ps1 check --all-targets --all-features`) and `.claude/scripts/fe.ps1 <npm/npx args>` (e.g. `fe.ps1 npx tsc --noEmit`). The PowerShell cwd persists between calls — cd into an area once rather than re-prefixing every command.
 
 ## Definition of "done" (local CI parity)
@@ -27,6 +27,11 @@ cargo test-fast
 ```
 npx tsc --noEmit
 npm run test -- --run
+```
+
+**Specs** (whenever anything under `openspec/` changed):
+```
+openspec validate --all --strict
 ```
 
 ## Working efficiently (token & friction)
@@ -49,7 +54,7 @@ These are hard rules, born from real incidents. They override convenience.
 
 ## Loop discipline
 
-- **Plan first** for non-trivial work: design the approach before editing, then implement, then run the verify loop. Use existing `.kiro/specs/` as the source of truth for what "done" means per feature.
+- **Plan first** for non-trivial work: design the approach before editing, then implement, then run the verify loop. Use `openspec/specs/` as the source of truth for current behavior and the active change's `openspec/changes/<change>/` (proposal + delta specs + tasks) for what "done" means; archive the change (`openspec archive`) once merged.
 - **Termination rule:** after **3 failed attempts** at the same error with no new information, stop and summarize the blocker rather than retrying the same strategy.
 - **Read the full error** (stack trace / clippy span / failing assertion) before revising — distinguish a recoverable error from a hard blocker.
 - **Review gate before shipping:** before opening a PR or merging to `main`, run `/review-gate` (spec-conformance + correctness + security judges) and resolve any **BLOCK**. The verdict is recorded under `docs/reviews/`.
