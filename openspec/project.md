@@ -35,8 +35,10 @@ Two-tier app:
   player-game-interface/), plus `pages/`, `hooks/`, `services/`, `types/`,
   `utils/`.
 
-Deployment: three all-Render environments (test / preprod / prod) with auto-deploy;
-branch `dev` deploys to preprod. CI in `.github/workflows/`.
+Deployment: two Render environments (preprod, prod), four services total, all
+with `autoDeploy: false` — releases happen only via the GitHub Actions deploy
+hooks (see `ci-cd` capability spec): push to `dev` releases preprod, push to
+`main` releases prod. CI in `.github/workflows/`.
 
 ## Conventions
 
