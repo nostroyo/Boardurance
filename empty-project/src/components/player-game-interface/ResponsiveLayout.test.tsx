@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TrackDisplayRedesign } from './TrackDisplayRedesign';
 import { BoostControlPanel } from './BoostControlPanel';
@@ -113,7 +113,7 @@ describe('Responsive Layout Tests', () => {
       expect(screen.getByText('Track View')).toBeInTheDocument();
 
       // Check for desktop-specific classes (these would be applied by Tailwind)
-      const header = screen.getByText('Track View').closest('div');
+      const header = screen.getByText('Track View').closest('.bg-gray-800');
       expect(header).toHaveClass('lg:px-6'); // Desktop padding
     });
 
@@ -134,7 +134,7 @@ describe('Responsive Layout Tests', () => {
 
       // Mobile should have compact layout
       expect(screen.getByText('Track View')).toBeInTheDocument();
-      const header = screen.getByText('Track View').closest('div');
+      const header = screen.getByText('Track View').closest('.bg-gray-800');
       expect(header).toHaveClass('px-3'); // Mobile padding
     });
 
@@ -176,10 +176,16 @@ describe('Responsive Layout Tests', () => {
       const buttonGrid = document.querySelector('.sm\\:grid-cols-6');
       expect(buttonGrid).toBeInTheDocument();
 
-      // All boost buttons should be visible
-      for (let i = 0; i <= 5; i++) {
-        expect(screen.getByRole('button', { name: `Select boost value ${i}` })).toBeInTheDocument();
+      // All boost buttons (values 0-4) should be visible
+      for (const boost of mockProps.availableBoosts) {
+        expect(
+          screen.getByRole('button', { name: `Select boost value ${boost}` }),
+        ).toBeInTheDocument();
       }
+      // Boost values are 0-4; there is no boost 5 button
+      expect(
+        screen.queryByRole('button', { name: 'Select boost value 5' }),
+      ).not.toBeInTheDocument();
     });
 
     it('should render 3-column grid on mobile', () => {
@@ -190,9 +196,11 @@ describe('Responsive Layout Tests', () => {
       const buttonGrid = document.querySelector('.grid-cols-3');
       expect(buttonGrid).toBeInTheDocument();
 
-      // All boost buttons should still be accessible
-      for (let i = 0; i <= 5; i++) {
-        expect(screen.getByRole('button', { name: `Select boost value ${i}` })).toBeInTheDocument();
+      // All boost buttons (values 0-4) should still be accessible
+      for (const boost of mockProps.availableBoosts) {
+        expect(
+          screen.getByRole('button', { name: `Select boost value ${boost}` }),
+        ).toBeInTheDocument();
       }
     });
 
@@ -215,7 +223,7 @@ describe('Responsive Layout Tests', () => {
 
       // Click validate to show confirmation
       const validateButton = screen.getByRole('button', { name: /Validate turn/ });
-      validateButton.click();
+      fireEvent.click(validateButton);
 
       // Check for mobile stacking - look for the actual grid class used
       const buttonContainer = document.querySelector('.sm\\:grid-cols-2');
@@ -346,8 +354,9 @@ describe('Responsive Layout Tests', () => {
       render(<TrackDisplayRedesign localView={mockLocalView} playerUuid="player-1" />);
 
       // Text should be readable on mobile - check for responsive text classes
+      // on the status text container
       const statusText = screen.getByText(/Player in sector/);
-      expect(statusText).toHaveClass('text-xs');
+      expect(statusText.parentElement).toHaveClass('text-xs');
     });
   });
 });

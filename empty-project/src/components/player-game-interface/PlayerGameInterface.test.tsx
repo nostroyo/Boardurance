@@ -1,14 +1,9 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
-import { PlayerGameInterface } from './PlayerGameInterface';
-import { PlayerGameProvider } from '../../contexts/PlayerGameContext';
-
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import PlayerGameInterface from './PlayerGameInterface';
 import { PlayerGameProvider } from '../../contexts/PlayerGameContext';
+import { raceAPI } from '../../utils/raceAPI';
 
 // Simple mock for the race API
 vi.mock('../../utils/raceAPI', () => ({
@@ -32,12 +27,37 @@ vi.mock('../../utils/raceAPI', () => ({
   },
 }));
 
+// PlayerGameInterface and PlayerGameContext both call raceAPIService (a
+// different module from utils/raceAPI above) for getTurnPhase/getLocalView/
+// getBoostAvailability. Without this mock those hit the real fetch-based
+// service.
+vi.mock('../../services/raceAPI', () => ({
+  raceAPIService: {
+    getTurnPhase: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    getLocalView: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    getBoostAvailability: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    submitTurnAction: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+  },
+}));
+
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <PlayerGameProvider>{children}</PlayerGameProvider>
 );
 
 describe('PlayerGameInterface Integration', () => {
+  beforeEach(() => {
+    // Restore the default behavior in case a test overrode the implementation
+    vi.mocked(raceAPI.getRace).mockResolvedValue({ success: false, error: 'Mock not configured' });
+  });
+
   test('renders loading state initially', () => {
+    // The default mock resolves immediately, so React flushes past the
+    // transient loading state before the synchronous assertion runs. Keep the
+    // race fetch pending for this test so the loading state stays observable
+    // (getRace can be called more than once during mount, so a persistent
+    // implementation is needed rather than mockImplementationOnce).
+    vi.mocked(raceAPI.getRace).mockImplementation(() => new Promise<never>(() => {}));
+
     render(
       <TestWrapper>
         <PlayerGameInterface raceUuid="test-race-uuid" playerUuid="test-player-uuid" />
