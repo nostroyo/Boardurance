@@ -75,7 +75,15 @@ function playerGameReducer(state: PlayerGameState, action: PlayerGameAction): Pl
       return { ...state, isLoading: action.payload };
 
     case 'SET_ERROR':
-      return { ...state, error: action.payload, isLoading: false };
+      // A real error ends any in-flight loading; merely clearing the error
+      // (payload null) must not -- initializeRace dispatches SET_LOADING true
+      // then SET_ERROR null in the same batch, and clobbering isLoading here
+      // made the loading state unreachable.
+      return {
+        ...state,
+        error: action.payload,
+        isLoading: action.payload === null ? state.isLoading : false,
+      };
 
     case 'SET_RACE_DATA':
       return { ...state, race: action.payload };

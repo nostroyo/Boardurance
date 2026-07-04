@@ -96,7 +96,9 @@ describe('TrackDisplayRedesign', () => {
 
     expect(screen.getByText('Track View')).toBeInTheDocument();
     expect(screen.getByText(/Showing 5 sectors/)).toBeInTheDocument();
-    expect(screen.getByText(/Player in sector 5/)).toBeInTheDocument();
+    // Display numbering is inverted (lead sector = 1): with 8 total sectors,
+    // the player's engine sector 5 is shown as sector 3.
+    expect(screen.getByText(/Player in sector 3/)).toBeInTheDocument();
   });
 
   it('displays sectors in linear arrangement', () => {
@@ -108,12 +110,14 @@ describe('TrackDisplayRedesign', () => {
       />,
     );
 
-    // Should show all sectors by their aria-labels
-    expect(screen.getByLabelText('Sector 3: Sector 3')).toBeInTheDocument();
+    // Should show all sectors by their aria-labels. Display numbering is
+    // inverted (lead sector = 1): engine sector 7 is shown as "Sector 1",
+    // engine sector 3 as "Sector 5". Sector names keep their engine identity.
+    expect(screen.getByLabelText('Sector 1: Sector 7')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sector 2: Sector 6')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sector 3: Player Sector')).toBeInTheDocument();
     expect(screen.getByLabelText('Sector 4: Sector 4')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sector 5: Player Sector')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sector 6: Sector 6')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sector 7: Sector 7')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sector 5: Sector 3')).toBeInTheDocument();
   });
 
   it('shows sector capacity indicators', () => {
@@ -162,8 +166,10 @@ describe('TrackDisplayRedesign', () => {
       />,
     );
 
-    // Click on a sector (the SectorGrid component should handle the click)
-    const sectorElement = screen.getByLabelText('Sector 3: Sector 3');
+    // Click on a sector (the SectorGrid component should handle the click).
+    // Engine sector 3 is displayed as "Sector 5" (inverted numbering), but the
+    // callback still receives the engine sector id.
+    const sectorElement = screen.getByLabelText('Sector 5: Sector 3');
     fireEvent.click(sectorElement);
 
     expect(mockOnSectorClick).toHaveBeenCalledWith(3);

@@ -53,7 +53,9 @@ describe('SectorGrid', () => {
     expect(screen.getByText('Test Sector')).toBeInTheDocument();
   });
 
-  it('displays sector type badge correctly', () => {
+  it('does not display a per-sector type badge', () => {
+    // Per the race-interface-redesign spec, the lap characteristic
+    // (Straight/Curve) is shown in the race status header, not per sector.
     render(
       <SectorGrid
         sector={mockSector}
@@ -63,8 +65,8 @@ describe('SectorGrid', () => {
       />,
     );
 
-    expect(screen.getByText('Straight')).toBeInTheDocument();
-    expect(screen.getByText('➡️')).toBeInTheDocument();
+    expect(screen.queryByText('Straight')).not.toBeInTheDocument();
+    expect(screen.queryByText('➡️')).not.toBeInTheDocument();
   });
 
   it('shows value range information', () => {
@@ -127,7 +129,7 @@ describe('SectorGrid', () => {
     expect(screen.getByText('🎯 YOU')).toBeInTheDocument();
   });
 
-  it('shows occupied slots with car initials', () => {
+  it('shows occupied slots with car sprites', () => {
     render(
       <SectorGrid
         sector={mockSector}
@@ -137,9 +139,14 @@ describe('SectorGrid', () => {
       />,
     );
 
-    // Should show car initials for occupied slots
-    expect(screen.getByText('R')).toBeInTheDocument(); // Red Car initial
-    expect(screen.getByText('B')).toBeInTheDocument(); // Blue Car initial
+    // Should render a car sprite for each participant in an occupied slot
+    expect(screen.getByRole('img', { name: 'Car sprite for Player One' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Car sprite for Player Two' })).toBeInTheDocument();
+
+    // Occupied slots are labeled with the player and car names
+    // (Player One matches playerUuid, so their label carries the "(You)" suffix)
+    expect(screen.getByLabelText('Player One - Red Car (You)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Player Two - Blue Car')).toBeInTheDocument();
   });
 
   it('calls onSectorClick when sector is clicked', () => {

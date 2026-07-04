@@ -90,11 +90,16 @@ describe('BoostSelector', () => {
   });
 
   it('shows loading state during submission', () => {
-    render(<BoostSelector {...defaultProps} selectedBoost={2} isSubmitting={true} />);
+    // Start with isSubmitting=false so the submit button is enabled and can
+    // open the confirmation dialog (when isSubmitting the button is disabled)
+    const { rerender } = render(<BoostSelector {...defaultProps} selectedBoost={2} />);
 
     // Click submit to show confirmation
     const submitButton = screen.getByLabelText('Submit boost selection');
     fireEvent.click(submitButton);
+
+    // Parent flips isSubmitting once the submission is in flight
+    rerender(<BoostSelector {...defaultProps} selectedBoost={2} isSubmitting={true} />);
 
     expect(screen.getByText('Submitting...')).toBeInTheDocument();
   });

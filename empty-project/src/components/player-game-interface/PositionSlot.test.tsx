@@ -24,7 +24,7 @@ describe('PositionSlot', () => {
     expect(screen.getByLabelText('Position 3 - Empty')).toBeInTheDocument();
   });
 
-  it('renders occupied slot with car initial', () => {
+  it('renders occupied slot with car sprite', () => {
     render(
       <PositionSlot
         slotNumber={1}
@@ -34,7 +34,7 @@ describe('PositionSlot', () => {
       />,
     );
 
-    expect(screen.getByText('R')).toBeInTheDocument(); // Red Racer initial
+    expect(screen.getByRole('img', { name: 'Car sprite for Test Player' })).toBeInTheDocument();
     expect(screen.getByLabelText('Test Player - Red Racer')).toBeInTheDocument();
   });
 
