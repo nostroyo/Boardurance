@@ -1,10 +1,4 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
-import { PlayerGameInterface } from './PlayerGameInterface';
-import { PlayerGameProvider } from '../../contexts/PlayerGameContext';
-
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import PlayerGameInterface from './PlayerGameInterface';
@@ -29,6 +23,19 @@ vi.mock('../../utils/raceAPI', () => ({
     isRetryableError: vi.fn(() => true),
     getUserFriendlyError: vi.fn((error) => error || 'Unknown error'),
     requiresUserAction: vi.fn(() => false),
+  },
+}));
+
+// PlayerGameInterface and PlayerGameContext both call raceAPIService (a
+// different module from utils/raceAPI above) for getTurnPhase/getLocalView/
+// getBoostAvailability. Without this mock those hit the real fetch-based
+// service.
+vi.mock('../../services/raceAPI', () => ({
+  raceAPIService: {
+    getTurnPhase: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    getLocalView: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    getBoostAvailability: vi.fn().mockRejectedValue(new Error('Mock not configured')),
+    submitTurnAction: vi.fn().mockRejectedValue(new Error('Mock not configured')),
   },
 }));
 

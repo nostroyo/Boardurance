@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
 import type {
   PlayerGameState,
   Race,
@@ -440,9 +447,13 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     return () => clearInterval(pollInterval);
   }, [state.race, updateRaceData]);
 
-  const contextValue: PlayerGameContextType = {
-    state,
-    actions: {
+  // actions must stay referentially stable across renders that don't change any
+  // of the underlying callbacks -- consumers (e.g. PlayerGameInterface) depend
+  // on `actions` in their own effect dependency arrays, so a fresh object here
+  // every render re-fires those effects every render, which re-dispatches and
+  // re-renders the provider, looping forever.
+  const actions = useMemo(
+    () => ({
       initializeRace,
       updateRaceData,
       selectBoost,
@@ -450,8 +461,22 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
       setError,
       clearError,
       setAnimationState,
-    },
-  };
+    }),
+    [
+      initializeRace,
+      updateRaceData,
+      selectBoost,
+      submitBoostAction,
+      setError,
+      clearError,
+      setAnimationState,
+    ],
+  );
+
+  const contextValue: PlayerGameContextType = useMemo(
+    () => ({ state, actions }),
+    [state, actions],
+  );
 
   return <PlayerGameContext.Provider value={contextValue}>{children}</PlayerGameContext.Provider>;
 };
