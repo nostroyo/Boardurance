@@ -262,8 +262,10 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
         </div>
       </div>
 
-      {/* Multiplayer turn countdown (MM:SS, server-synced) */}
-      {timeRemaining !== undefined && timeRemaining > 0 && (
+      {/* Multiplayer turn countdown (MM:SS, server-synced). Shown at 00:00
+          too — that is the "deadline passed, resolving on the next poll"
+          moment, and hiding the row there reads as a glitch. */}
+      {timeRemaining !== undefined && timeRemaining >= 0 && (
         <div className="mt-4 pt-4 border-t border-gray-700">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-400">Time Remaining:</span>

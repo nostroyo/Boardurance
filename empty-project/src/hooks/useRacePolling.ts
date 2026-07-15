@@ -20,7 +20,11 @@ import { raceAPIService } from '../services/raceAPI';
 import type { TurnPhase } from '../types/race-api';
 
 const POLL_INTERVAL = 2000; // 2 seconds
-const MAX_POLL_ATTEMPTS = 60; // 2 minutes max (60 * 2 seconds)
+// Must outlast the backend's maximum turn deadline (turn_timeout_secs is
+// capped at 600 s server-side): a waiting client that stops polling before
+// the deadline can never see the auto-played turn — and with lazy server
+// enforcement, a race nobody polls never advances at all.
+const MAX_POLL_ATTEMPTS = 330; // ~11 minutes (330 * 2 seconds) > 600 s cap
 
 export interface UseRacePollingOptions {
   raceUuid: string;
@@ -149,15 +153,16 @@ export function useRacePolling({
       errorCountRef.current = 0;
       lastSuccessfulPollRef.current = Date.now();
 
-      // Detect phase change
+      // Deliver every poll result — seconds_remaining and the pending roster
+      // change while the phase string stays "WaitingForPlayers", and the
+      // countdown re-sync depends on each fresh payload. Log only on change.
       if (lastPhaseRef.current !== turnPhase.turn_phase) {
         console.log(
           `[useRacePolling] Phase changed: ${lastPhaseRef.current} → ${turnPhase.turn_phase}`,
         );
-
         lastPhaseRef.current = turnPhase.turn_phase;
-        onTurnPhaseChange(turnPhase);
       }
+      onTurnPhaseChange(turnPhase);
 
       // Complete when the race is over, or when the turn we were waiting on
       // has executed (the polled counter moved past our submission baseline).

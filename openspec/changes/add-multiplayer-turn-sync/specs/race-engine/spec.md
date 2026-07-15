@@ -5,10 +5,14 @@
 ### Requirement: Per-turn deadline with auto-play for absent players
 
 Races SHALL carry an optional `turn_timeout_secs` (set at creation; solo races
-have none). For a race that is `InProgress` with two or more human
-participants and a configured timeout, the system SHALL arm a turn deadline of
-`now + turn_timeout_secs` lazily — on the first turn-phase read or action
-submission of the turn — and SHALL re-arm it after each processed turn.
+have none). For a race that is `InProgress` with two or more active
+(non-finished) human participants and a configured timeout, the system SHALL
+arm a turn deadline of `now + turn_timeout_secs` lazily — on the first
+turn-phase read or action submission of the turn — and SHALL re-arm it after
+each processed turn. Once a single active human remains, deadline enforcement
+stands down (nobody is waiting on the survivor). An expired turn SHALL always
+resolve: a pending seat whose car data cannot be resolved is auto-played with
+the free boost 0 rather than stalling the race.
 Enforcement SHALL also be lazy: on every turn-phase read and every action
 submission, IF the armed deadline has passed and the turn is unresolved, the
 system SHALL generate an action for every pending human participant using the

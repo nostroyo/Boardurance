@@ -91,4 +91,25 @@ describe('useTurnCountdown', () => {
     act(() => vi.advanceTimersByTime(10_000));
     expect(onExpire).not.toHaveBeenCalled();
   });
+
+  it('re-syncs and re-arms when the same value arrives under a new sync key', () => {
+    // Two consecutive turns can report the identical seconds_remaining (e.g.
+    // both freshly armed at 60): the value alone cannot be the sync signal.
+    const onExpire = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ s, key }: { s: number | null; key: unknown }) =>
+        useTurnCountdown({ secondsRemaining: s, syncKey: key, onExpire }),
+      { initialProps: { s: 1 as number | null, key: 1 as unknown } },
+    );
+    act(() => vi.advanceTimersByTime(1000));
+    expect(result.current).toBe(0);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+
+    // Next turn: same number, fresh poll payload.
+    rerender({ s: 1, key: 2 });
+    expect(result.current).toBe(1);
+
+    act(() => vi.advanceTimersByTime(1000));
+    expect(onExpire).toHaveBeenCalledTimes(2);
+  });
 });

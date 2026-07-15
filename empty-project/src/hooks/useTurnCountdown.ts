@@ -20,12 +20,20 @@ import { useEffect, useRef, useState } from 'react';
 export interface UseTurnCountdownOptions {
   /** Latest server-reported seconds until the deadline; null = no deadline. */
   secondsRemaining: number | null;
+  /**
+   * Identity of the poll payload the value came from (e.g. the turnPhase
+   * object). Two consecutive turns can report the identical number (both
+   * freshly armed at the same timeout), so the numeric value alone cannot
+   * signal "a fresh server sync arrived" — the key does.
+   */
+  syncKey?: unknown;
   /** Fired once per armed countdown when it reaches zero. */
   onExpire?: () => void;
 }
 
 export function useTurnCountdown({
   secondsRemaining,
+  syncKey,
   onExpire,
 }: UseTurnCountdownOptions): number | null {
   const [remaining, setRemaining] = useState<number | null>(secondsRemaining);
@@ -34,7 +42,7 @@ export function useTurnCountdown({
   const onExpireRef = useRef(onExpire);
   onExpireRef.current = onExpire;
 
-  // Re-sync to every fresh server value; tick locally between polls.
+  // Re-sync on every fresh server payload; tick locally between polls.
   useEffect(() => {
     setRemaining(secondsRemaining);
 
@@ -45,6 +53,10 @@ export function useTurnCountdown({
     if (secondsRemaining > 0) {
       // A fresh positive value means a new (or still-running) turn: re-arm.
       expiredRef.current = false;
+    } else {
+      // Already at zero: nothing to tick down — the expiry effect below
+      // handles the one-shot onExpire; no interval needed.
+      return;
     }
 
     const id = setInterval(() => {
@@ -52,7 +64,7 @@ export function useTurnCountdown({
     }, 1000);
 
     return () => clearInterval(id);
-  }, [secondsRemaining]);
+  }, [secondsRemaining, syncKey]);
 
   // Fire once per armed countdown when it hits zero.
   useEffect(() => {

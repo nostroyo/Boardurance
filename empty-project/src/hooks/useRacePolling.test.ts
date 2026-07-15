@@ -87,4 +87,21 @@ describe('useRacePolling turn-advancement detection', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
     unmount();
   });
+
+  it('delivers every poll result, not only phase-string changes', async () => {
+    // seconds_remaining and the pending roster change every poll while the
+    // phase string stays "WaitingForPlayers" — the countdown re-sync depends
+    // on receiving each fresh payload.
+    mockGetTurnPhase.mockResolvedValue(makePhase({ turns_taken: 3 }));
+
+    const { onTurnPhaseChange, unmount } = renderPolling(3);
+
+    await waitFor(() => expect(mockGetTurnPhase).toHaveBeenCalledTimes(2), {
+      timeout: 4000,
+    });
+    await waitFor(() =>
+      expect(onTurnPhaseChange.mock.calls.length).toBeGreaterThanOrEqual(2),
+    );
+    unmount();
+  });
 });

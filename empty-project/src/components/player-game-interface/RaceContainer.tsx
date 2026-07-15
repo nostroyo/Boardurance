@@ -623,16 +623,14 @@ export function RaceContainer({
    */
   const handleCountdownExpired = useCallback(() => {
     setState((prev) => {
-      if (
-        prev.hasSubmittedThisTurn ||
-        prev.isPolling ||
-        prev.isRaceComplete ||
-        prev.turnPhase == null
-      ) {
+      // Restart even for a submitted player whose poller died (e.g. max
+      // attempts): with lazy server enforcement, a client that stops polling
+      // is a client whose race never advances.
+      if (prev.isPolling || prev.isRaceComplete || prev.turnPhase == null) {
         return prev;
       }
       console.log(
-        '[RaceContainer] Turn deadline reached without submission — polling for auto-played turn',
+        '[RaceContainer] Turn deadline reached — polling for the (auto-)resolved turn',
       );
       return {
         ...prev,
@@ -644,6 +642,9 @@ export function RaceContainer({
 
   const timeRemaining = useTurnCountdown({
     secondsRemaining: state.turnPhase?.seconds_remaining ?? null,
+    // The turnPhase object is replaced on every poll — its identity marks a
+    // fresh server sync even when the numeric value repeats across turns.
+    syncKey: state.turnPhase,
     onExpire: handleCountdownExpired,
   });
 
@@ -811,8 +812,35 @@ export function RaceContainer({
           },
         );
 
-        // The pit consumes the turn (a free boost-0 lap). Clear local selection
-        // and refresh all race data so the refilled pool / new tyre is shown.
+        // The pit consumes the turn as a free boost-0 action — but in
+        // multiplayer it only STAGES the action until every player acts.
+        // Ask the backend whether our action is still pending: if so, mirror
+        // the boost-submit waiting branch (lock inputs, poll with a baseline);
+        // only a resolved turn refreshes immediately (the solo path).
+        const phase = await raceAPIService.getTurnPhase(raceUuid).catch(() => null);
+        const stillWaiting = phase?.submitted_players.includes(playerUuid) ?? false;
+
+        if (stillWaiting && phase) {
+          console.log('[RaceContainer] Pit staged, waiting for other players');
+          setState((prev) => ({
+            ...prev,
+            isSubmitting: false,
+            hasSubmittedThisTurn: true,
+            selectedBoost: null,
+            turnPhase: phase,
+            baselineTurn: phase.turns_taken,
+            isPolling: true,
+            error: null,
+          }));
+          stopLoading(LOADING_KEYS.SUBMIT_ACTION);
+          startLoading(LOADING_KEYS.POLLING, 'polling', {
+            message: 'Waiting for turn to complete...',
+          });
+          return;
+        }
+
+        // Turn resolved (solo, or we were the last to act): clear local
+        // selection and refresh all race data so the refilled pool shows.
         setState((prev) => ({
           ...prev,
           isSubmitting: false,

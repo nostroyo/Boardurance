@@ -49,8 +49,8 @@ use crate::domain::boost_hand_manager::{
 };
 use crate::domain::{
     BoostCycleSummary, BoostUsageRecord, LapAction, LapCharacteristic, LapResult,
-    MovementProbability, MovementType, PerformanceCalculation, Race, RaceParticipant, RaceStatus,
-    Sector, SectorType, Track, TyreType,
+    MovementProbability, MovementType, PerformanceCalculation, Race, RaceStatus, Sector,
+    SectorType, Track, TyreType,
 };
 use crate::services::car_validation::{CarValidationService, ValidatedCarData};
 
@@ -4143,10 +4143,6 @@ pub async fn start_race_in_db(
     Ok(Some(race))
 }
 
-// Takes the default-hasher map the whole turn pipeline uses; generalizing over
-// the hasher would force the same on every domain method it calls downstream.
-#[allow(clippy::implicit_hasher)]
-#[tracing::instrument(name = "Processing turn in the database", skip(actions, car_data_map))]
 /// Compute REAL performances from each car's stats. If resolution failed for
 /// any participant (Err), fall back to the placeholder map so nothing 500s.
 fn compute_performances(
@@ -4211,6 +4207,7 @@ fn process_lap_locked(
 // `implicit_hasher` only surfaces once `async` is gone, and generalizing the
 // hasher would be noise for an internal std-hasher-only map.
 #[allow(clippy::implicit_hasher)]
+#[tracing::instrument(name = "Processing turn in the database", skip(actions, car_data_map))]
 pub fn process_lap_in_db(
     race_uuid: Uuid,
     actions: &[LapAction],
@@ -4268,33 +4265,36 @@ fn drive_ai_only_turns(
             return Ok(());
         }
 
-        let Some(mut race) = store_get(race_uuid) else {
-            return Ok(());
-        };
+        // One atomic pass per AI turn: check, enqueue, and process inside a
+        // single `store_update` critical section. The poll path is a writer
+        // too (deadline enforcement), so a clone-write here could clobber a
+        // concurrently resolved turn.
+        let now = chrono::Utc::now().timestamp();
+        let step = store_update(race_uuid, |race| -> Result<bool, String> {
+            if race.status != RaceStatus::InProgress {
+                return Ok(false);
+            }
+            let any_active = race.participants.iter().any(|p| !p.is_finished);
+            let human_active = race.participants.iter().any(|p| !p.is_finished && !p.is_ai);
+            // Nothing to drive, or a human still needs to act this turn.
+            if !any_active || human_active {
+                return Ok(false);
+            }
 
-        if race.status != RaceStatus::InProgress {
-            return Ok(());
+            race.enqueue_ai_actions(car_data_map);
+            if race.pending_actions.is_empty() {
+                return Ok(false);
+            }
+            let actions = race.pending_actions.clone();
+            process_lap_locked(race, &actions, car_data_map, now)?;
+            Ok(true)
+        });
+
+        match step {
+            None | Some(Ok(false)) => return Ok(()),
+            Some(Ok(true)) => {}
+            Some(Err(e)) => return Err(mongodb::error::Error::custom(e)),
         }
-
-        let active: Vec<&RaceParticipant> = race
-            .participants
-            .iter()
-            .filter(|p| !p.is_finished)
-            .collect();
-
-        // Nothing to drive, or a human still needs to act this turn.
-        if active.is_empty() || active.iter().any(|p| !p.is_ai) {
-            return Ok(());
-        }
-
-        race.enqueue_ai_actions(car_data_map);
-        let actions = race.pending_actions.clone();
-        if actions.is_empty() {
-            return Ok(());
-        }
-        store_save(race);
-
-        process_lap_in_db(race_uuid, &actions, car_data_map)?;
     }
 
     tracing::warn!(
@@ -4458,6 +4458,16 @@ fn resolve_turn_core(
 
     if race.is_turn_expired(now) {
         race.enqueue_actions_for_all_pending(car_data_map);
+        // Seats whose car data cannot be resolved are skipped by the AI fill;
+        // give them the free boost 0 so an expired turn always resolves — an
+        // unresolvable seat must never stall the race the deadline exists to
+        // protect (performance falls back to the placeholder path).
+        for player_uuid in race.get_pending_players() {
+            race.pending_actions.push(LapAction {
+                player_uuid,
+                boost_value: 0,
+            });
+        }
     }
 
     if race.all_actions_submitted() {
@@ -4519,17 +4529,35 @@ async fn enforce_turn_deadline(race_uuid: Uuid, repo: &MockPlayerRepository) -> 
     if race.status != RaceStatus::InProgress {
         return Ok(());
     }
+    // Deadlines exist only for multiplayer races with a configured timeout.
+    // For anything else the poll stays strictly read-only — in particular a
+    // solo turn-phase poll must not stage AI actions or take the write lock.
+    if !race.is_multiplayer() || race.turn_timeout_secs.is_none() {
+        return Ok(());
+    }
 
-    let car_data_map = build_car_data_map(repo, &race).await;
     let now = chrono::Utc::now().timestamp();
-
-    match store_update(race_uuid, |race| {
-        resolve_turn_core(race, None, &car_data_map, now)
-    }) {
-        // "Not in progress" here means the race finished between the status
-        // check and the locked pass — a benign race, not an error.
-        Some(Err(e)) if e != RACE_NOT_IN_PROGRESS => Err(e),
-        _ => Ok(()),
+    match race.turn_deadline {
+        // First touch of the turn: arm lazily. Arming needs no car data, so
+        // skip the per-participant repository fan-out entirely.
+        None => {
+            store_update(race_uuid, |race| race.arm_turn_deadline(now));
+            Ok(())
+        }
+        // Armed and still running: the common steady-state poll stays cheap.
+        Some(deadline) if now < deadline => Ok(()),
+        // Expired: auto-play the absentees under the lock.
+        Some(_) => {
+            let car_data_map = build_car_data_map(repo, &race).await;
+            match store_update(race_uuid, |race| {
+                resolve_turn_core(race, None, &car_data_map, now)
+            }) {
+                // "Not in progress" here means the race finished between the
+                // snapshot and the locked pass — a benign race, not an error.
+                Some(Err(e)) if e != RACE_NOT_IN_PROGRESS => Err(e),
+                _ => Ok(()),
+            }
+        }
     }
 }
 
@@ -5219,6 +5247,101 @@ mod turn_resolution_tests {
             "a fresh deadline is armed for the next turn"
         );
         assert!(resp.turn_deadline.unwrap() > 1);
+    }
+
+    #[test]
+    fn expired_turn_resolves_even_with_unresolvable_seats() {
+        let (race_uuid, human_a, human_b, mut map) = seed_multiplayer_race(60);
+        // B's car data can no longer be resolved (traded car, repo failure...).
+        map.remove(&human_b);
+
+        run_core(
+            race_uuid,
+            Some((human_a, TurnIntent::Boost(2))),
+            &map,
+            1_000,
+        )
+        .unwrap();
+        let outcome = run_core(race_uuid, None, &map, 1_060).unwrap();
+
+        assert!(
+            matches!(outcome, TurnCoreOutcome::Processed),
+            "an unresolvable seat must not stall an expired turn"
+        );
+        let race = store_get(race_uuid).unwrap();
+        assert_eq!(race.turns_taken, 1);
+        assert!(race.pending_actions.is_empty());
+    }
+
+    /// The AI-only continuation must run through the locked core so it can
+    /// never clone-write over a concurrent poll's enforcement pass.
+    #[test]
+    fn drive_ai_only_turns_finishes_an_ai_only_race() {
+        let mut race = Race::new("AI Only".to_string(), test_track(), 3);
+        race.status = RaceStatus::InProgress;
+        let ai1 = Uuid::new_v4();
+        let ai2 = Uuid::new_v4();
+        race.add_ai_participant(ai1, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai2, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for p in &mut race.participants {
+            p.current_sector = 0;
+        }
+        let race_uuid = race.uuid;
+        store_save(race);
+        let mut map = HashMap::new();
+        map.insert(ai1, make_car_data());
+        map.insert(ai2, make_car_data());
+
+        drive_ai_only_turns(race_uuid, &map).expect("AI continuation succeeds");
+
+        let race = store_get(race_uuid).unwrap();
+        assert_eq!(
+            race.status,
+            RaceStatus::Finished,
+            "the race runs to completion"
+        );
+        assert_eq!(race.turns_taken, 3);
+    }
+
+    /// A turn-phase poll on a race that can never arm a deadline (solo) must
+    /// stay read-only: no AI actions staged, no state mutated.
+    #[tokio::test]
+    async fn solo_poll_is_read_only() {
+        use crate::repositories::mocks::MockPlayerRepository;
+
+        let repo = MockPlayerRepository::new();
+        seed_solo_bots(&repo).await;
+        let bots: Vec<BotIdentity> = SOLO_BOTS.lock().unwrap().clone();
+        assert!(bots.len() >= 2, "startup seeding provides AI opponents");
+
+        let mut race = Race::new("Solo Poll".to_string(), test_track(), 3);
+        race.status = RaceStatus::InProgress;
+        let human = Uuid::new_v4();
+        race.add_participant(human, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for bot in &bots {
+            race.add_ai_participant(bot.player_uuid, bot.car_uuid, bot.pilot_uuid)
+                .unwrap();
+        }
+        for p in &mut race.participants {
+            p.current_sector = 0;
+        }
+        let race_uuid = race.uuid;
+        store_save(race);
+
+        let resp = turn_phase_for_race(race_uuid, &repo)
+            .await
+            .expect("race exists");
+
+        let race = store_get(race_uuid).unwrap();
+        assert!(
+            race.pending_actions.is_empty(),
+            "polling must not stage AI actions before the human acts"
+        );
+        assert!(resp.submitted_players.is_empty());
+        assert_eq!(race.turn_deadline, None);
     }
 
     #[tokio::test]

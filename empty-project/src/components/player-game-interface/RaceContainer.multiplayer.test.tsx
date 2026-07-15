@@ -222,6 +222,36 @@ describe('RaceContainer multiplayer turn sync', () => {
     });
   });
 
+  it('treats a multiplayer pit as a staged action: polls instead of refreshing', async () => {
+    let pitted = false;
+    installDefaultMocks(() =>
+      makeTurnPhase(
+        pitted
+          ? { submitted_players: [ME], pending_players: [OTHER], turns_taken: 0 }
+          : { turns_taken: 0 },
+      ),
+    );
+    api.pitStop.mockImplementation(async () => {
+      pitted = true;
+      return { race_status: 'InProgress' } as never;
+    });
+
+    render(<RaceContainer raceUuid={RACE} playerUuid={ME} />);
+
+    const pitButton = await screen.findByText(/Pit & refill/, undefined, { timeout: 5000 });
+    fireEvent.click(pitButton);
+
+    await waitFor(() => expect(api.pitStop).toHaveBeenCalledTimes(1), { timeout: 5000 });
+
+    // The pit is staged, not resolved: the turn is still waiting on OTHER, so
+    // the UI must lock inputs and poll — not refresh as if the turn completed.
+    await waitFor(
+      () => expect(screen.getAllByText(/Turn Validated|submitted/i).length).toBeGreaterThan(0),
+      { timeout: 5000 },
+    );
+    expect(api.batchRaceData).not.toHaveBeenCalled();
+  });
+
   it('starts polling on countdown expiry without a submission (AFK auto-advance)', async () => {
     let polls = 0;
     installDefaultMocks(() => {

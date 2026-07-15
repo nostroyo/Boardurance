@@ -516,13 +516,19 @@ impl Race {
         rng.gen_range(0..=max_sector)
     }
 
-    /// Number of human (non-AI) participants.
+    /// Number of active (non-finished) human participants.
     #[must_use]
     pub fn human_count(&self) -> usize {
-        self.participants.iter().filter(|p| !p.is_ai).count()
+        self.participants
+            .iter()
+            .filter(|p| !p.is_ai && !p.is_finished)
+            .count()
     }
 
-    /// A race is multiplayer when at least two humans hold seats.
+    /// A race is multiplayer when at least two humans are still racing.
+    /// Finished humans don't count: once only one human remains, nobody is
+    /// waiting on them, so deadline enforcement (which exists to protect the
+    /// *other* players) stands down and the survivor plays at their own pace.
     #[must_use]
     pub fn is_multiplayer(&self) -> bool {
         self.human_count() >= 2
@@ -1792,6 +1798,27 @@ mod tests {
 
         let duo = create_started_race(2, 2);
         assert!(duo.is_multiplayer());
+    }
+
+    #[test]
+    fn finished_humans_do_not_count_for_multiplayer() {
+        let mut race = create_started_race(2, 2);
+        race.turn_timeout_secs = Some(60);
+        race.participants
+            .iter_mut()
+            .find(|p| !p.is_ai)
+            .unwrap()
+            .is_finished = true;
+
+        assert!(
+            !race.is_multiplayer(),
+            "a race with one active human is effectively solo"
+        );
+        race.arm_turn_deadline(1_000);
+        assert_eq!(
+            race.turn_deadline, None,
+            "the sole surviving human is never deadline-enforced"
+        );
     }
 
     #[test]
