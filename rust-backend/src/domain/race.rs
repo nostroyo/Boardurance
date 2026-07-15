@@ -229,6 +229,12 @@ pub struct Race {
     pub pending_actions: Vec<LapAction>,
     pub action_submissions: HashMap<Uuid, i64>, // Track submission times as Unix timestamps
     pub pending_performance_calculations: HashMap<Uuid, PerformanceCalculation>, // Store performance calculations
+    /// Per-turn submission timeout in seconds; `None` = no timer (solo races).
+    #[serde(default)]
+    pub turn_timeout_secs: Option<u32>,
+    /// Armed deadline for the current turn (Unix seconds); `None` = not armed.
+    #[serde(default)]
+    pub turn_deadline: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -392,6 +398,8 @@ impl Race {
             pending_actions: Vec::new(),
             action_submissions: HashMap::new(),
             pending_performance_calculations: HashMap::new(),
+            turn_timeout_secs: None,
+            turn_deadline: None,
         }
     }
 
@@ -506,6 +514,42 @@ impl Race {
         #[allow(clippy::cast_possible_truncation)]
         let max_sector = (self.track.sectors.len() - 1) as u32;
         rng.gen_range(0..=max_sector)
+    }
+
+    /// Number of human (non-AI) participants.
+    #[must_use]
+    pub fn human_count(&self) -> usize {
+        self.participants.iter().filter(|p| !p.is_ai).count()
+    }
+
+    /// A race is multiplayer when at least two humans hold seats.
+    #[must_use]
+    pub fn is_multiplayer(&self) -> bool {
+        self.human_count() >= 2
+    }
+
+    /// Arm the current turn's submission deadline, if this race uses one.
+    ///
+    /// Arms only when the race is `InProgress`, multiplayer, configured with a
+    /// timeout, and not already armed — so solo races never get a deadline and
+    /// repeated arming attempts mid-turn cannot extend it. Callers re-arm by
+    /// clearing `turn_deadline` when a turn resolves.
+    pub fn arm_turn_deadline(&mut self, now: i64) {
+        if self.turn_deadline.is_none()
+            && self.status == RaceStatus::InProgress
+            && self.is_multiplayer()
+        {
+            if let Some(timeout) = self.turn_timeout_secs {
+                self.turn_deadline = Some(now + i64::from(timeout));
+            }
+        }
+    }
+
+    /// Whether the armed deadline has passed (`now == deadline` counts as
+    /// expired). An unarmed race never expires.
+    #[must_use]
+    pub fn is_turn_expired(&self, now: i64) -> bool {
+        self.turn_deadline.is_some_and(|deadline| now >= deadline)
     }
 
     pub fn start_race(&mut self) -> Result<(), String> {
@@ -1006,6 +1050,27 @@ impl Race {
     /// action into `pending_actions`. Participants whose car data cannot be
     /// resolved are skipped so a missing entry never stalls the turn.
     pub fn enqueue_ai_actions(&mut self, car_data_map: &HashMap<Uuid, ValidatedCarData>) {
+        self.enqueue_auto_actions(car_data_map, false);
+    }
+
+    /// Auto-play every pending active participant — humans included. Used by
+    /// turn-deadline enforcement: an absent human's seat is filled with the
+    /// same AI decision, card consumption, and usage-history recording as an
+    /// AI turn, so the record is indistinguishable from a manual action.
+    pub fn enqueue_actions_for_all_pending(
+        &mut self,
+        car_data_map: &HashMap<Uuid, ValidatedCarData>,
+    ) {
+        self.enqueue_auto_actions(car_data_map, true);
+    }
+
+    /// Shared auto-action path. `include_humans = false` fills only AI seats
+    /// (regular solo flow); `true` fills every pending seat (deadline expiry).
+    fn enqueue_auto_actions(
+        &mut self,
+        car_data_map: &HashMap<Uuid, ValidatedCarData>,
+        include_humans: bool,
+    ) {
         use crate::domain::ai_player;
         use crate::domain::boost_hand_manager::BoostHandManager;
 
@@ -1020,7 +1085,11 @@ impl Race {
         let decisions: Vec<(Uuid, ai_player::AiTurnAction)> = self
             .participants
             .iter()
-            .filter(|p| p.is_ai && !p.is_finished && !already_acted.contains(&p.player_uuid))
+            .filter(|p| {
+                (include_humans || p.is_ai)
+                    && !p.is_finished
+                    && !already_acted.contains(&p.player_uuid)
+            })
             .filter_map(|p| {
                 let car_data = car_data_map.get(&p.player_uuid)?;
                 let sector = self.track.sectors.get(p.current_sector as usize)?;
@@ -1647,6 +1716,113 @@ mod tests {
         }
     }
 
+    /// Builds an `InProgress` race with `humans` human and `ais` AI seats.
+    fn create_started_race(humans: usize, ais: usize) -> Race {
+        let mut race = Race::new("Deadline Test".to_string(), create_test_track(), 3);
+        for _ in 0..humans {
+            race.add_participant(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+                .unwrap();
+        }
+        for _ in 0..ais {
+            race.add_ai_participant(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+                .unwrap();
+        }
+        race.start_race().unwrap();
+        race
+    }
+
+    #[test]
+    fn arm_turn_deadline_arms_for_multiplayer_in_progress() {
+        let mut race = create_started_race(2, 0);
+        race.turn_timeout_secs = Some(60);
+
+        race.arm_turn_deadline(1_000);
+
+        assert_eq!(race.turn_deadline, Some(1_060));
+    }
+
+    #[test]
+    fn arm_turn_deadline_does_not_rearm_when_already_armed() {
+        let mut race = create_started_race(2, 0);
+        race.turn_timeout_secs = Some(60);
+
+        race.arm_turn_deadline(1_000);
+        race.arm_turn_deadline(2_000);
+
+        assert_eq!(race.turn_deadline, Some(1_060));
+    }
+
+    #[test]
+    fn arm_turn_deadline_requires_in_progress() {
+        let mut race = Race::new("Waiting".to_string(), create_test_track(), 3);
+        race.add_participant(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_participant(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.turn_timeout_secs = Some(60);
+
+        race.arm_turn_deadline(1_000);
+
+        assert_eq!(race.turn_deadline, None);
+    }
+
+    #[test]
+    fn arm_turn_deadline_requires_timeout_config() {
+        let mut race = create_started_race(2, 0);
+
+        race.arm_turn_deadline(1_000);
+
+        assert_eq!(race.turn_deadline, None);
+    }
+
+    #[test]
+    fn solo_shaped_race_never_arms_deadline() {
+        let mut race = create_started_race(1, 2);
+        race.turn_timeout_secs = Some(60);
+
+        race.arm_turn_deadline(1_000);
+
+        assert_eq!(race.turn_deadline, None);
+    }
+
+    #[test]
+    fn is_multiplayer_counts_humans_only() {
+        let solo = create_started_race(1, 2);
+        assert!(!solo.is_multiplayer());
+
+        let duo = create_started_race(2, 2);
+        assert!(duo.is_multiplayer());
+    }
+
+    #[test]
+    fn is_turn_expired_boundary() {
+        let mut race = create_started_race(2, 0);
+        assert!(!race.is_turn_expired(i64::MAX), "unarmed never expires");
+
+        race.turn_timeout_secs = Some(60);
+        race.arm_turn_deadline(1_000);
+        assert!(!race.is_turn_expired(1_059));
+        assert!(
+            race.is_turn_expired(1_060),
+            "now == deadline counts as expired"
+        );
+        assert!(race.is_turn_expired(1_061));
+    }
+
+    #[test]
+    fn race_json_without_deadline_fields_deserializes_to_none() {
+        let race = create_started_race(2, 0);
+        let mut value = serde_json::to_value(&race).unwrap();
+        let map = value.as_object_mut().unwrap();
+        map.remove("turn_timeout_secs");
+        map.remove("turn_deadline");
+
+        let restored: Race = serde_json::from_value(value).unwrap();
+
+        assert_eq!(restored.turn_timeout_secs, None);
+        assert_eq!(restored.turn_deadline, None);
+    }
+
     #[test]
     fn enqueue_ai_actions_fills_only_ai_seats() {
         let track = create_test_track();
@@ -1695,6 +1871,186 @@ mod tests {
         // Calling again is idempotent (does not double-add already-acted seats).
         race.enqueue_ai_actions(&car_data_map);
         assert_eq!(race.pending_actions.len(), 3);
+    }
+
+    #[test]
+    fn enqueue_actions_for_all_pending_fills_humans_and_ai() {
+        let mut race = Race::new("Auto-play Test".to_string(), create_test_track(), 3);
+        race.status = RaceStatus::InProgress;
+
+        let human_a = Uuid::new_v4();
+        let human_b = Uuid::new_v4();
+        let ai = Uuid::new_v4();
+        race.add_participant(human_a, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_participant(human_b, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        race.add_ai_participant(ai, Uuid::new_v4(), Uuid::new_v4())
+            .unwrap();
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+
+        let mut car_data_map = HashMap::new();
+        for uuid in [human_a, human_b, ai] {
+            car_data_map.insert(uuid, make_ai_car_data());
+        }
+
+        race.enqueue_actions_for_all_pending(&car_data_map);
+
+        assert_eq!(race.pending_actions.len(), 3, "every seat is auto-played");
+        assert!(race.all_actions_submitted());
+        let initial_cards = BoostHand::with_tyre(TyreType::default()).cards_remaining;
+        for participant in &race.participants {
+            assert_eq!(
+                participant.boost_usage_history.len(),
+                1,
+                "auto-play records usage history exactly like a manual action"
+            );
+            let action = race
+                .pending_actions
+                .iter()
+                .find(|a| a.player_uuid == participant.player_uuid)
+                .expect("action staged for every participant");
+            assert!(action.boost_value <= 4);
+            let expected_remaining = if action.boost_value > 0 {
+                initial_cards - 1
+            } else {
+                initial_cards
+            };
+            assert_eq!(
+                participant.boost_hand.cards_remaining, expected_remaining,
+                "a non-zero auto-played boost consumes exactly one real card"
+            );
+        }
+    }
+
+    #[test]
+    fn enqueue_actions_for_all_pending_skips_acted_and_finished() {
+        let mut race = Race::new("Auto-play Skip Test".to_string(), create_test_track(), 3);
+        race.status = RaceStatus::InProgress;
+
+        let acted = Uuid::new_v4();
+        let finished = Uuid::new_v4();
+        let pending = Uuid::new_v4();
+        for uuid in [acted, finished, pending] {
+            race.add_participant(uuid, Uuid::new_v4(), Uuid::new_v4())
+                .unwrap();
+        }
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        race.participants
+            .iter_mut()
+            .find(|p| p.player_uuid == finished)
+            .unwrap()
+            .is_finished = true;
+        race.pending_actions.push(LapAction {
+            player_uuid: acted,
+            boost_value: 2,
+        });
+
+        let mut car_data_map = HashMap::new();
+        for uuid in [acted, finished, pending] {
+            car_data_map.insert(uuid, make_ai_car_data());
+        }
+
+        race.enqueue_actions_for_all_pending(&car_data_map);
+
+        assert_eq!(
+            race.pending_actions.len(),
+            2,
+            "only the pending human is added; acted kept, finished skipped"
+        );
+        let acted_history = &race
+            .participants
+            .iter()
+            .find(|p| p.player_uuid == acted)
+            .unwrap()
+            .boost_usage_history;
+        assert!(
+            acted_history.is_empty(),
+            "an already-acted player is not auto-played again"
+        );
+        assert!(race
+            .pending_actions
+            .iter()
+            .all(|a| a.player_uuid != finished));
+
+        // Idempotent: a second pass adds nothing.
+        race.enqueue_actions_for_all_pending(&car_data_map);
+        assert_eq!(race.pending_actions.len(), 2);
+    }
+
+    #[test]
+    fn enqueue_actions_for_all_pending_skips_missing_car_data() {
+        let mut race = Race::new("Auto-play NoData Test".to_string(), create_test_track(), 3);
+        race.status = RaceStatus::InProgress;
+
+        let with_data = Uuid::new_v4();
+        let without_data = Uuid::new_v4();
+        for uuid in [with_data, without_data] {
+            race.add_participant(uuid, Uuid::new_v4(), Uuid::new_v4())
+                .unwrap();
+        }
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+
+        let mut car_data_map = HashMap::new();
+        car_data_map.insert(with_data, make_ai_car_data());
+
+        race.enqueue_actions_for_all_pending(&car_data_map);
+
+        assert_eq!(
+            race.pending_actions.len(),
+            1,
+            "seat without data is skipped"
+        );
+        assert_eq!(race.pending_actions[0].player_uuid, with_data);
+    }
+
+    #[test]
+    fn enqueue_actions_for_all_pending_handles_empty_pool() {
+        let mut race = Race::new("Auto-play Empty Pool".to_string(), create_test_track(), 3);
+        race.status = RaceStatus::InProgress;
+
+        let broke = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        for uuid in [broke, other] {
+            race.add_participant(uuid, Uuid::new_v4(), Uuid::new_v4())
+                .unwrap();
+        }
+        for participant in &mut race.participants {
+            participant.current_sector = 0;
+        }
+        {
+            let hand = &mut race
+                .participants
+                .iter_mut()
+                .find(|p| p.player_uuid == broke)
+                .unwrap()
+                .boost_hand;
+            hand.cards.clear();
+            hand.cards_remaining = 0;
+        }
+
+        let mut car_data_map = HashMap::new();
+        for uuid in [broke, other] {
+            car_data_map.insert(uuid, make_ai_car_data());
+        }
+
+        race.enqueue_actions_for_all_pending(&car_data_map);
+
+        let action = race
+            .pending_actions
+            .iter()
+            .find(|a| a.player_uuid == broke)
+            .expect("empty-pool player still gets an action");
+        assert_eq!(
+            action.boost_value, 0,
+            "empty pool degrades to the free boost 0 (possibly via pit)"
+        );
     }
 
     /// The solo-mode track shape (mirrors `routes::races::build_solo_track`):

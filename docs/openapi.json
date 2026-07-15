@@ -2762,6 +2762,13 @@
           },
           "track_name": {
             "type": "string"
+          },
+          "turn_timeout_secs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Per-turn submission timeout in seconds for multiplayer races.\nDefaults to 60 when omitted; valid range 5-600.",
+            "nullable": true,
+            "minimum": 0
           }
         }
       },
@@ -4055,6 +4062,19 @@
           "track": {
             "$ref": "#/components/schemas/Track"
           },
+          "turn_deadline": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Armed deadline for the current turn (Unix seconds); `None` = not armed.",
+            "nullable": true
+          },
+          "turn_timeout_secs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Per-turn submission timeout in seconds; `None` = no timer (solo races).",
+            "nullable": true,
+            "minimum": 0
+          },
           "turns_taken": {
             "type": "integer",
             "format": "int32",
@@ -4547,7 +4567,8 @@
           "message",
           "turn_phase",
           "players_submitted",
-          "total_players"
+          "total_players",
+          "turns_taken"
         ],
         "properties": {
           "message": {
@@ -4568,6 +4589,12 @@
           },
           "turn_phase": {
             "type": "string"
+          },
+          "turns_taken": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Turn counter after this submission — the client's baseline for\ndetecting that the turn it is waiting on has executed.",
+            "minimum": 0
           }
         }
       },
@@ -4644,7 +4671,8 @@
           "lap_characteristic",
           "submitted_players",
           "pending_players",
-          "total_active_players"
+          "total_active_players",
+          "turns_taken"
         ],
         "properties": {
           "current_lap": {
@@ -4660,6 +4688,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "seconds_remaining": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Server-computed seconds until the deadline, clamped to >= 0; `null`\nwhenever `turn_deadline` is. Drives the client countdown without\ntrusting client clocks.",
+            "nullable": true
           },
           "submitted_players": {
             "type": "array",
@@ -4677,8 +4711,20 @@
             "format": "int32",
             "minimum": 0
           },
+          "turn_deadline": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Armed submission deadline for the current turn (Unix epoch seconds);\n`null` for solo races or when no timeout is configured.",
+            "nullable": true
+          },
           "turn_phase": {
             "type": "string"
+          },
+          "turns_taken": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Turn counter — increments exactly once per processed turn. Clients\ndetect \"the turn I was waiting on executed\" by this exceeding the\nbaseline captured at submission (`current_lap` saturates at\n`total_laps` and cannot signal the final turn).",
+            "minimum": 0
           }
         }
       },
