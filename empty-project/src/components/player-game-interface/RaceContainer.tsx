@@ -29,6 +29,7 @@ import { raceAPIService } from '../../services/raceAPI';
 import type { ErrorState } from '../../services/errorHandling';
 import { createErrorState, withErrorHandling } from '../../services/errorHandling';
 import { useRacePolling } from '../../hooks/useRacePolling';
+import { useTurnCountdown } from '../../hooks/useTurnCountdown';
 import { useToast } from '../../hooks/useToast';
 import { useLoadingState, LOADING_KEYS } from '../../hooks/useLoadingState';
 // import { useDebounce } from '../../hooks/useDebouncedCallback';
@@ -67,6 +68,12 @@ interface RaceContainerState {
   isSubmitting: boolean;
   isPolling: boolean;
   hasSubmittedThisTurn: boolean;
+  /**
+   * Turn counter captured when this turn's wait began (from the submit
+   * response, or the current phase for AFK auto-advance). The poller
+   * completes when the polled `turns_taken` exceeds it.
+   */
+  baselineTurn: number | null;
   isRaceComplete: boolean;
   finalPosition: number | null;
 
@@ -106,6 +113,7 @@ export function RaceContainer({
     isSubmitting: false,
     isPolling: false,
     hasSubmittedThisTurn: false,
+    baselineTurn: null,
     isRaceComplete: false,
     finalPosition: null,
 
@@ -466,6 +474,7 @@ export function RaceContainer({
           hasSubmittedThisTurn: false,
           selectedBoost: null,
           isPolling: false,
+          baselineTurn: null,
           isRaceComplete: true,
           finalPosition,
           error: null,
@@ -526,6 +535,7 @@ export function RaceContainer({
         hasSubmittedThisTurn: false, // Reset for next turn
         selectedBoost: null, // Clear selection for next turn
         isPolling: false, // Stop polling
+        baselineTurn: null, // Next turn captures a fresh baseline
         isRaceComplete, // Update race completion status
         finalPosition, // Store final position
         error: null,
@@ -597,10 +607,44 @@ export function RaceContainer({
   const { isPolling: pollingActive } = useRacePolling({
     raceUuid,
     enabled: state.isPolling,
+    baselineTurn: state.baselineTurn,
     onTurnPhaseChange: handleTurnPhaseChange,
     onComplete: handleTurnComplete,
     onError: handlePollingError,
     onMaxAttemptsReached: handleMaxAttemptsReached,
+  });
+
+  /**
+   * Per-turn countdown (multiplayer only — solo phases carry null deadline
+   * fields). When it reaches zero without a submission, the backend will
+   * auto-play this player's turn; start polling with the current counter as
+   * baseline so the auto-resolved turn is picked up and the UI advances.
+   * Requirements: race-ui/Turn countdown and AFK auto-advance
+   */
+  const handleCountdownExpired = useCallback(() => {
+    setState((prev) => {
+      if (
+        prev.hasSubmittedThisTurn ||
+        prev.isPolling ||
+        prev.isRaceComplete ||
+        prev.turnPhase == null
+      ) {
+        return prev;
+      }
+      console.log(
+        '[RaceContainer] Turn deadline reached without submission — polling for auto-played turn',
+      );
+      return {
+        ...prev,
+        baselineTurn: prev.turnPhase.turns_taken,
+        isPolling: true,
+      };
+    });
+  }, []);
+
+  const timeRemaining = useTurnCountdown({
+    secondsRemaining: state.turnPhase?.seconds_remaining ?? null,
+    onExpire: handleCountdownExpired,
   });
 
   /**
@@ -688,11 +732,14 @@ export function RaceContainer({
         // Turn not immediately processed, start polling
         console.log('[RaceContainer] Turn submitted, starting polling for completion');
 
-        // Update state to reflect successful submission and start polling
+        // Update state to reflect successful submission and start polling.
+        // The response's turns_taken is the baseline: the turn we are waiting
+        // on has executed once a poll reports a larger value.
         setState((prev) => ({
           ...prev,
           isSubmitting: false,
           hasSubmittedThisTurn: true,
+          baselineTurn: response.turns_taken,
           isPolling: true, // Start polling for turn completion
           error: null,
         }));
@@ -917,6 +964,7 @@ export function RaceContainer({
           isSubmitting={state.isSubmitting}
           hasSubmittedThisTurn={state.hasSubmittedThisTurn}
           isPolling={pollingActive}
+          timeRemaining={timeRemaining}
           // Loading states
           isLoadingPreview={isLoading(LOADING_KEYS.PERFORMANCE_PREVIEW)}
           isLoadingSubmit={isLoading(LOADING_KEYS.SUBMIT_ACTION)}

@@ -206,7 +206,6 @@ const EngineTab: React.FC<{ engine: CarData['engine'] }> = ({ engine }) => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };
@@ -261,7 +260,6 @@ const BodyTab: React.FC<{ body: CarData['body'] }> = ({ body }) => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };
@@ -408,7 +406,6 @@ const PilotTab: React.FC<{ pilot: CarData['pilot'] }> = ({ pilot }) => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };

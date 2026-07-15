@@ -36,6 +36,8 @@ export interface RaceInterfaceProps {
   isSubmitting: boolean;
   hasSubmittedThisTurn: boolean;
   isPolling: boolean;
+  /** Seconds left on the multiplayer turn deadline; null/undefined = no countdown (solo). */
+  timeRemaining?: number | null;
 
   // Loading states
   isLoadingPreview: boolean;
@@ -64,6 +66,7 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
     isSubmitting,
     hasSubmittedThisTurn,
     isPolling,
+    timeRemaining,
     // isLoadingPreview, // Currently unused but available for future enhancements
     isLoadingSubmit,
     // isAnyLoading, // Currently unused but available for future enhancements
@@ -91,6 +94,7 @@ export const RaceInterface: React.FC<RaceInterfaceProps> = React.memo(
               turnPhase={turnPhase}
               raceStatus="InProgress"
               hasSubmittedAction={hasSubmittedThisTurn}
+              timeRemaining={timeRemaining ?? undefined}
             />
           )}
 

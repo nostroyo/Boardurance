@@ -58,15 +58,17 @@ Implements: race-engine/Turn phase reporting (new fields); race-engine/Race crea
 
 Implements: race-ui/Turn resolution flow (baseline detection).
 
-- [ ] 6.1 Regenerate API types (`npm run gen:api`) and extend `types/race-api.ts` with the new fields.
-- [ ] 6.2 Tests first (Vitest): poller with `baselineTurn = 3` fires `onComplete` when a poll reports `turns_taken: 4`; does not fire on `turns_taken: 3` phase-flapping; still fires on `'Complete'`. Then implement the `baselineTurn` option in `hooks/useRacePolling.ts`; run to green.
+- [x] 6.1 Regenerate API types (`npm run gen:api`) and extend `types/race-api.ts` with the new fields.
+- [x] 6.2 Tests first (Vitest): poller with `baselineTurn = 3` fires `onComplete` when a poll reports `turns_taken: 4`; does not fire on `turns_taken: 3` phase-flapping; still fires on `'Complete'`. Then implement the `baselineTurn` option in `hooks/useRacePolling.ts`; run to green.
 
 ## 7. Frontend: countdown and AFK auto-advance
 
 Implements: race-ui/Turn countdown and AFK auto-advance.
 
-- [ ] 7.1 Tests first (Vitest fake timers): `useTurnCountdown` ticks down at 1 s and re-syncs on a new `seconds_remaining`; null stays hidden (solo). Then implement the hook.
-- [ ] 7.2 Tests first: `RaceContainer` stores the submit response's `turns_taken` as baseline on the `WaitingForPlayers` branch and starts polling; countdown-at-zero without submission starts polling with the current baseline (AFK auto-advance). Then wire `timeRemaining` through `RaceInterface` to `SimultaneousTurnController`/`RaceStatusPanel` and run the frontend verify gate (`fe.ps1`: tsc, vitest).
+- [x] 7.1 Tests first (Vitest fake timers): `useTurnCountdown` ticks down at 1 s and re-syncs on a new `seconds_remaining`; null stays hidden (solo). Then implement the hook.
+- [x] 7.2 Tests first: `RaceContainer` stores the submit response's `turns_taken` as baseline on the `WaitingForPlayers` branch and starts polling; countdown-at-zero without submission starts polling with the current baseline (AFK auto-advance). Then wire `timeRemaining` through `RaceInterface` to `RaceStatusPanel` and run the frontend verify gate (tsc ✓, vitest 116/116 ✓).
+
+> Review (groups 6+7 jointly): PASS (round 1, zero-context Opus reviewer; zero findings). Red evidence: import-resolution failure on the missing hook + all 3 container behaviors failing. Design deviation, disclosed and reviewer-endorsed: `SimultaneousTurnController` (the design's intended countdown host) is dead code — never rendered — so the MM:SS countdown renders in the live `RaceStatusPanel` instead; container test pins the end-to-end render. Container tests drive the real submit UI (boost → Validate → Confirm).
 
 ## 8. Verification, ADR, review gate
 

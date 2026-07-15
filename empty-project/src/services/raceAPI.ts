@@ -342,10 +342,7 @@ export class RaceAPIService {
    * picks the player's first complete car and fills the grid with AI bots.
    * Returns the created (already started) race.
    */
-  async createSoloRace(
-    playerUuid: string,
-    tyreType?: TyreType,
-  ): Promise<CreateSoloRaceResponse> {
+  async createSoloRace(playerUuid: string, tyreType?: TyreType): Promise<CreateSoloRaceResponse> {
     const url = `${this.baseUrl}/races/solo`;
 
     const requestBody: { player_uuid: string; tyre_type?: TyreType } = {

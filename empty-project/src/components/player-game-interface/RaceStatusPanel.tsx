@@ -262,17 +262,17 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
         </div>
       </div>
 
-      {/* Time remaining (if provided) */}
+      {/* Multiplayer turn countdown (MM:SS, server-synced) */}
       {timeRemaining !== undefined && timeRemaining > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-700">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-400">Time Remaining:</span>
             <span
-              className={`text-lg font-bold ${
+              className={`text-lg font-bold font-mono ${
                 timeRemaining < 10 ? 'text-red-400 animate-pulse' : 'text-blue-400'
               }`}
             >
-              {timeRemaining}s
+              {`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}
             </span>
           </div>
         </div>
