@@ -1471,8 +1471,8 @@ export interface components {
             turn_phase: string;
             /**
              * Format: int32
-             * @description Turn counter after this submission — the client's baseline for
-             *     detecting that the turn it is waiting on has executed.
+             * @description Turn counter after this submission — the client's baseline for detecting
+             *     that the turn it is waiting on has executed.
              */
             turns_taken: number;
         };
@@ -1497,9 +1497,8 @@ export interface components {
             pending_players: string[];
             /**
              * Format: int64
-             * @description Server-computed seconds until the deadline, clamped to >= 0; `null`
-             *     whenever `turn_deadline` is. Drives the client countdown without
-             *     trusting client clocks.
+             * @description Server-computed seconds until the deadline, clamped >= 0; null whenever
+             *     `turn_deadline` is. Drives the client countdown without trusting client clocks.
              */
             seconds_remaining?: number | null;
             submitted_players: string[];
@@ -1510,16 +1509,15 @@ export interface components {
             /**
              * Format: int64
              * @description Armed submission deadline for the current turn (Unix epoch seconds);
-             *     `null` for solo races or when no timeout is configured.
+             *     null for solo races or when no timeout is configured.
              */
             turn_deadline?: number | null;
             turn_phase: string;
             /**
              * Format: int32
-             * @description Turn counter — increments exactly once per processed turn. Clients
-             *     detect "the turn I was waiting on executed" by this exceeding the
-             *     baseline captured at submission (`current_lap` saturates at
-             *     `total_laps` and cannot signal the final turn).
+             * @description Turn counter — increments once per processed turn. Clients detect a
+             *     resolved turn by this exceeding the baseline captured at submission
+             *     (`current_lap` saturates at `total_laps`, so it can't signal the last turn).
              */
             turns_taken: number;
         };

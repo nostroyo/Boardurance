@@ -50,8 +50,11 @@ endpoints already exist).
 - No lobby/matchmaking/ready flow.
 - No push transport (WebSocket/SSE).
 - No auth hardening: endpoints keep trusting body `player_uuid` (documented
-  gap, races.rs:927-931); server-authoritative identity is its own change.
-- No Mongo persistence of races (they stay in-memory; see `persistence` spec).
+  gap); server-authoritative identity is its own change.
+- No repository-level optimistic concurrency. Races now persist through
+  `RaceRepository` (mongo-persistence, merged to `dev`); this feature adds a
+  per-race route-layer lock for single-process atomicity (D2) but does not add
+  multi-writer conflict detection to the repository itself.
 
 ## Decisions
 
@@ -73,19 +76,42 @@ trade-off: a GET mutates state (idempotent — a second enforcer sees the turn
 already resolved), and a fully unwatched race stalls until someone polls
 (acceptable: nobody is watching). → ADR.
 
-### D2 — Atomic turn core via `store_update`
+### D2 — Atomic turn core via a per-race async lock over `RaceRepository`
 
-Add `fn store_update<T>(uuid, impl FnOnce(&mut Race) -> T) -> Option<T>`
-beside `store_get`/`store_save` and run the whole turn mutation inside it as
-`resolve_turn_core(race, intent: Option<(Uuid, TurnIntent)>, car_data_map, now)`
-→ `Waiting { pending } | Processed(..)`. Verified feasible: the entire
-record → enqueue-AI → fill-expired → process sequence is synchronous; the only
-`await` (`build_car_data_map`) happens before mutation, so no lock is held
-across an await point. `resolve_human_turn` and `process_lap_in_db` rewire
-through the core (repo rule: one turn-resolution helper). Order inside the
-core: check InProgress → arm deadline → record caller's intent (late-submit
-grace) → enqueue AI → if expired, fill pending humans → if complete, process
-lap, clear staging, re-arm deadline. → ADR (same document as D1).
+**(Revised after mongo-persistence merged to `dev`.)** That change deleted the
+in-memory `RACE_STORE` and moved all race data access to an async
+`Arc<dyn RaceRepository>` (`find_by_uuid` / `save`). The original plan — a
+synchronous `store_update` closure holding the store `Mutex` across the whole
+turn mutation — no longer exists as a substrate: the repository model is
+load → mutate → save, which on its own reopens the concurrent-submit lost
+update this feature closed.
+
+Restore atomicity with a **per-race async lock in the route layer**: a
+process-global `TURN_LOCKS` registry hands out one `Arc<tokio::Mutex<()>>` per
+race uuid, and `resolve_turn_core` holds that race's guard across its entire
+`find_by_uuid` → mutate → `save` sequence. Two concurrent submissions for the
+same race therefore serialize (no lost update); different races never contend.
+The guard is a `tokio::Mutex` (async), so holding it across the repository
+awaits is sound.
+
+`resolve_turn_core(repo, uuid, intent, car_data_map, now) -> Waiting | Processed`
+is now `async`. Order inside the guard is unchanged: check InProgress → arm
+deadline → record caller's intent (late-submit grace) → enqueue AI → if
+expired, fill pending humans (and free-boost-0 any seat with unresolvable car
+data so the turn always resolves) → if complete, process lap, clear staging,
+re-arm deadline → one `save`. `resolve_human_turn`, the batch `process_turn`,
+`pit`, and deadline enforcement all funnel through it (repo rule: one
+turn-resolution helper). `drive_ai_only_turns` runs *after* the guard is
+released and re-takes the per-race guard for each AI turn it processes — never
+nested inside a held guard (a `tokio::Mutex` is not reentrant). → ADR.
+
+Accepted debt: `TURN_LOCKS` grows one entry per race for the process lifetime
+(unbounded in principle; races are few and the entry is a bare `Arc`, so it is
+immaterial at this scale — noted for a future sweep if race volume grows). The
+lock protects turn *resolution*, not the persisted store, so it is correct only
+while a single process owns writes (true today: mock in tests, single service
+in prod); genuine multi-writer Mongo concurrency would need optimistic
+concurrency in the repository — out of scope, recorded in the ADR.
 
 ### D3 — Multiplayer is derived, never stored
 

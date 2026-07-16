@@ -181,9 +181,14 @@ async fn spawn_app() -> TestApp {
         .await
         .expect("Failed to connect to database");
 
-    let server = run(listener, database, base_url)
-        .await
-        .expect("Failed to build application.");
+    let server = run(
+        listener,
+        database,
+        base_url,
+        rust_backend::configuration::StorageBackend::Mock,
+    )
+    .await
+    .expect("Failed to build application.");
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(async move { server.await.expect("Server failed to start") });
 

@@ -8,3 +8,8 @@ database:
   username: "rust_app"
   password: "rust_password"
   require_ssl: false
+  # Repository backend: "mock" (in-memory) or "mongodb" (real persistence).
+  # Left unset here so it defaults by APP_ENVIRONMENT (production -> mongodb,
+  # local/test -> mock); override per-environment below or via
+  # APP_DATABASE__STORAGE_BACKEND.
+  storage_backend: ~

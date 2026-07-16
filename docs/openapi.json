@@ -4593,7 +4593,7 @@
           "turns_taken": {
             "type": "integer",
             "format": "int32",
-            "description": "Turn counter after this submission — the client's baseline for\ndetecting that the turn it is waiting on has executed.",
+            "description": "Turn counter after this submission — the client's baseline for detecting\nthat the turn it is waiting on has executed.",
             "minimum": 0
           }
         }
@@ -4692,7 +4692,7 @@
           "seconds_remaining": {
             "type": "integer",
             "format": "int64",
-            "description": "Server-computed seconds until the deadline, clamped to >= 0; `null`\nwhenever `turn_deadline` is. Drives the client countdown without\ntrusting client clocks.",
+            "description": "Server-computed seconds until the deadline, clamped >= 0; null whenever\n`turn_deadline` is. Drives the client countdown without trusting client clocks.",
             "nullable": true
           },
           "submitted_players": {
@@ -4714,7 +4714,7 @@
           "turn_deadline": {
             "type": "integer",
             "format": "int64",
-            "description": "Armed submission deadline for the current turn (Unix epoch seconds);\n`null` for solo races or when no timeout is configured.",
+            "description": "Armed submission deadline for the current turn (Unix epoch seconds);\nnull for solo races or when no timeout is configured.",
             "nullable": true
           },
           "turn_phase": {
@@ -4723,7 +4723,7 @@
           "turns_taken": {
             "type": "integer",
             "format": "int32",
-            "description": "Turn counter — increments exactly once per processed turn. Clients\ndetect \"the turn I was waiting on executed\" by this exceeding the\nbaseline captured at submission (`current_lap` saturates at\n`total_laps` and cannot signal the final turn).",
+            "description": "Turn counter — increments once per processed turn. Clients detect a\nresolved turn by this exceeding the baseline captured at submission\n(`current_lap` saturates at `total_laps`, so it can't signal the last turn).",
             "minimum": 0
           }
         }

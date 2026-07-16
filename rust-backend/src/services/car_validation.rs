@@ -1,7 +1,7 @@
-use mongodb::{bson::doc, Database};
 use uuid::Uuid;
 
 use crate::domain::{Body, Car, Engine, Pilot, Player};
+use crate::repositories::PlayerRepository;
 
 /// Service for validating cars and their components for race participation
 pub struct CarValidationService;
@@ -195,7 +195,7 @@ impl CarValidationService {
     /// 3. Returns validated car data with all components
     ///
     /// # Arguments
-    /// * `database` - `MongoDB` database connection
+    /// * `player_repository` - repository the player is resolved through (selected backend: mock or Mongo)
     /// * `player_uuid` - UUID of the player who owns the car
     /// * `car_uuid` - UUID of the car to validate
     ///
@@ -203,12 +203,12 @@ impl CarValidationService {
     /// * `Ok(ValidatedCarData)` - Car and all components if validation passes
     /// * `Err(CarValidationError)` - Specific error if validation fails
     pub async fn validate_car_for_race(
-        database: &Database,
+        player_repository: &dyn PlayerRepository,
         player_uuid: Uuid,
         car_uuid: Uuid,
     ) -> Result<ValidatedCarData, CarValidationError> {
         // 1. Get the player and verify car ownership
-        let player = Self::get_player_by_uuid(database, player_uuid).await?;
+        let player = Self::get_player_by_uuid(player_repository, player_uuid).await?;
         let car = Self::verify_car_ownership(&player, car_uuid)?;
 
         // 2. Validate car has all required components
@@ -225,24 +225,17 @@ impl CarValidationService {
         })
     }
 
-    /// Gets a player by UUID from the database
+    /// Gets a player by UUID through the selected repository backend (mock
+    /// or Mongo) — never a raw Mongo query, so this always sees the same
+    /// player data as registration/team routes regardless of backend.
     async fn get_player_by_uuid(
-        database: &Database,
+        player_repository: &dyn PlayerRepository,
         player_uuid: Uuid,
     ) -> Result<Player, CarValidationError> {
-        let collection = database.collection::<Player>("players");
-        let filter = doc! { "uuid": player_uuid.to_string() };
-
-        match collection.find_one(filter, None).await {
+        match player_repository.find_by_uuid(player_uuid).await {
             Ok(Some(player)) => Ok(player),
             Ok(None) => Err(CarValidationError::PlayerNotFound(player_uuid)),
-            Err(e) => {
-                if e.to_string().contains("connection") {
-                    Err(CarValidationError::DatabaseConnectionError(e.to_string()))
-                } else {
-                    Err(CarValidationError::DatabaseQueryError(e.to_string()))
-                }
-            }
+            Err(e) => Err(CarValidationError::DatabaseQueryError(e.to_string())),
         }
     }
 
@@ -402,6 +395,43 @@ mod tests {
             vec![body],
         )
         .unwrap()
+    }
+
+    // Regression test for the review-gate BLOCK finding: `validate_car_for_race`
+    // used to query a raw `Database` directly, so a player registered through
+    // `player_repository` (the mock backend, e.g. local/test) was invisible to
+    // it. It now takes `&dyn PlayerRepository`, so the same repository instance
+    // registration writes into is exactly what validation reads from.
+    #[tokio::test]
+    async fn validate_car_for_race_finds_player_registered_via_repository() {
+        let engine = create_test_engine();
+        let body = create_test_body();
+        let pilots = [
+            create_test_pilot(),
+            create_test_pilot(),
+            create_test_pilot(),
+        ];
+        let car = create_test_car_with_components(&engine, &body, &pilots);
+        let player = create_test_player_with_assets(car.clone(), engine, body, pilots);
+        let player_uuid = player.uuid;
+        let car_uuid = car.uuid;
+
+        let repo = crate::repositories::MockPlayerRepository::with_players(vec![player]);
+
+        let result = CarValidationService::validate_car_for_race(&repo, player_uuid, car_uuid)
+            .await
+            .expect("player registered via the repository must be found through it");
+        assert_eq!(result.car.uuid, car_uuid);
+    }
+
+    #[tokio::test]
+    async fn validate_car_for_race_missing_player_is_not_found() {
+        let repo = crate::repositories::MockPlayerRepository::with_players(vec![]);
+
+        let result =
+            CarValidationService::validate_car_for_race(&repo, Uuid::new_v4(), Uuid::new_v4())
+                .await;
+        assert!(matches!(result, Err(CarValidationError::PlayerNotFound(_))));
     }
 
     #[test]

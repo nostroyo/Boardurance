@@ -8,6 +8,13 @@ use crate::services::car_validation::ValidatedCarData;
 #[async_trait]
 pub trait RaceRepository: Send + Sync {
     async fn create(&self, race: &Race) -> RepositoryResult<Race>;
+    /// Upsert the given race, replacing any existing race with the same uuid.
+    /// Default delegates to `create`, which is already upsert-semantics on every
+    /// implementation (Mock: `HashMap::insert` overwrites; Mongo: `replace_one`
+    /// upsert:true).
+    async fn save(&self, race: &Race) -> RepositoryResult<Race> {
+        self.create(race).await
+    }
     async fn find_all(&self) -> RepositoryResult<Vec<Race>>;
     async fn find_by_uuid(&self, race_uuid: Uuid) -> RepositoryResult<Option<Race>>;
     async fn find_by_pilot_uuid(&self, pilot_uuid: Uuid) -> RepositoryResult<Option<Race>>;
