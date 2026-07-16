@@ -6,6 +6,37 @@
 - Changed areas: backend + frontend
 - Verdict: **PASS** (after fixing 8 findings in-branch; see "Fixed during the gate")
 
+## Addendum — 2026-07-16: re-integration onto RaceRepository (Head 63bf935)
+
+`dev` merged mongo-persistence (PR #9), which deleted the in-memory `RACE_STORE`
+and moved race data to an async `RaceRepository`. The feature was re-integrated
+onto that substrate: turn atomicity is now a per-race `tokio::Mutex`
+(`lock_race_turn` / `TURN_LOCKS`) held across load→mutate→save in an async
+`resolve_turn_core` (design D2 / ADR-0002 revised).
+
+- **Focused adversarial review** (zero-context Opus, concurrency-targeted):
+  **PASS, no blockers.** Verified: no per-race-lock reentrancy/deadlock
+  (drive_ai_only_turns and process_lap_in_db never nest the guard; the sync
+  `process_lap_on_race` is the shared inner path); no unguarded turn-mutation
+  gap in the funnel; guard held across repo awaits (sound for `tokio::Mutex`);
+  solo path resolves in-request (regression tests green). Concerns raised were
+  pre-existing out-of-scope debt already recorded in ADR-0002 (legacy
+  `/apply-lap` and `join`/`register` do unguarded load-mutate-save).
+- **Gates:** backend fmt/clippy/check/test-fast (149 lib tests incl. a
+  multi-thread concurrency regression) green; frontend `tsc --noEmit` +
+  `npm run build` + vitest (119) green; `openspec validate --all --strict`
+  green; `gen:api:check` green.
+- **CI (PR #14):** backend-ci ✓, frontend-ci ✓ (after fixing two CI-only
+  failures: stale generated types via `npm run format`, and a `tsc -b`-only
+  error in the legacy PlayerGameInterface TurnPhase literal).
+- **Live e2e (degraded mode, worktree servers):** multiplayer happy path
+  (submit → waiting + MM:SS countdown → other submits → UI advances one poll
+  later, boost decremented); turn-phase exposes turns_taken/deadline/
+  seconds_remaining over the repo; solo shows no countdown and resolves
+  in-request.
+- Follow-up (non-blocking): bump the concurrency regression to ≥50 iterations
+  to exceed the documented lost-update repro threshold (34).
+
 Review base note: the command's default base is origin/main, but this PR targets
 `dev`; the diff was reviewed against `origin/dev...HEAD` so judges saw only this
 change. The /security-review skill cannot run from the session cwd (not a git
