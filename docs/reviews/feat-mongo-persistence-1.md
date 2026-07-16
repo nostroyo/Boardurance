@@ -1,0 +1,59 @@
+# Review gate — feat/mongo-persistence
+
+- Date: 2026-07-02
+- Base SHA: ea2f4d2194c2e87a3fe4789a09accbd5c0ab023a | Head SHA: 4c714440ac343db862a806ac965e7c610fd5620d
+- Spec: `.kiro/specs/mongo-persistence/`
+- Changed areas: backend (`rust-backend/`) only
+- **Verdict: BLOCK**
+
+## Acceptance-criteria checklist
+
+- [PASS] Req 1 — MongoDB repositories: `MongoPlayerRepository`/`MongoRaceRepository`/`MongoSessionRepository` implement the existing traits as thin domain-delegating wrappers, unique index per collection. (`repositories/mongo.rs`)
+- [PASS] Req 2 — Backend selection: `resolved_storage_backend()` (prod→mongodb, local/test→mock), verified in `configuration.rs`.
+- [PASS] Req 3 — Mock/Mongo parity: shared `tests/common/mod.rs` suite run against both via `repository_conformance_{mock,mongo}.rs`.
+- [PASS] Req 4 — Fail-fast, no mock reroute in prod: verified directly in `startup.rs` — the `Err(e) if backend == StorageBackend::MongoDb` arm returns an error and refuses to start; the mock-only degraded fallback is a separate, unaffected arm.
+- [PASS] Req 5 — Idempotent seeding: `seed_solo_bots` uses stable UUID v5 bot identities with by-uuid/by-email lookup before insert.
+- [PASS] Req 6 — Uniqueness indexes on `uuid`/`uuid`/`token` per collection, created at repository construction.
+- [PASS] Req 7 — Races persist: verified directly (not just via report) that `routes()` returns `Router<AppState>`, every one of the 13 simple-CRUD handlers plus the turn-orchestration path use `state.race_repository`, and `RACE_STORE` is fully deleted from source (only a historical comment remains).
+- [PASS] New HTTP-level integration test (`race_persistence_integration_tests.rs`) proves persistence through the route layer for the paths it covers (create→join→turn→refetch, solo create→submit-action→refetch).
+- [FAIL — see Blocking items] `register_player` and `apply_lap_action` do **not** correctly integrate with the mock backend — see below. This acceptance gap wasn't explicit in requirements.md, but it's a direct violation of the design's own "no domain/behavior change, only the persistence layer swaps" principle and of the project's `test-without-mongo` convention.
+- [N/A, disclosed] `cargo test-integration` against real MongoDB was not run — Docker unavailable in the implementation environment. The gap is disclosed, not hidden, in `.kiro/specs/mongo-persistence/tasks.md`.
+
+## Correctness (code-review, 8 finder angles + direct verification)
+
+- **[HIGH, CONFIRMED]** `rust-backend/src/routes/races.rs:1372,1792` (`register_player`, `apply_lap_action`) — both call `CarValidationService::validate_car_for_race(&state.database, ...)`, which queries the raw Mongo `players` collection directly (`car_validation.rs:229-247`), instead of `state.player_repository`. When the resolved backend is `mock` (local/test — the default dev/CI path), `player_repository` is `MockPlayerRepository` (in-memory) while `state.database` is a separate, real (or degraded-fallback) Mongo connection. **A player registered via `/auth/register` (which correctly uses `player_repository`) is invisible to this check** — `register_player`/`apply_lap_action` will fail with `PlayerNotFound`/400 for every player when the mock backend is selected, which is exactly the "test without Mongo" scenario this project's own memory says must always work. I verified this myself directly against the actual current file content (not just from an agent report) after first hitting and resolving an unrelated environment mixup (see note below). Not caught by `cargo test-fast` (doesn't touch these handlers' Mongo-dependent path) nor by either implementation commit's manual smoke test (neither exercised `register_player`/`apply_lap_action` specifically) nor by the new integration test (its solo-race path resolves the car directly from `player.cars`, bypassing `CarValidationService` entirely). Only `boost_card_integration_tests.rs` references this path, and it requires real Mongo to run at all (`test-integration`), which was never executed in this environment — so this bug has never actually been exercised by CI or by hand.
+  **Fix:** change `register_player`/`apply_lap_action` to resolve the player via `state.player_repository.find_by_uuid(player_uuid)` (already returns the same `Player` shape `CarValidationService` needs) instead of routing through `CarValidationService::validate_car_for_race`'s raw-Mongo path — or refactor that service to accept `&dyn PlayerRepository` instead of `&Database`. This is a small, contained fix.
+
+- **[MEDIUM, PLAUSIBLE]** Lost-update race on concurrent race mutation (`rust-backend/src/routes/races.rs`, every `find_by_uuid` → mutate → `save` helper, e.g. `resolve_human_turn`, `process_lap_in_db`, `drive_ai_only_turns`, `join_race_in_db`). Two independently-verified finder angles (cross-file tracer, line-by-line scan) converged on this. **Important nuance for accuracy:** the pre-existing `RACE_STORE` code had the same non-atomic "get→mutate→save" shape (the mutex only serialized the individual map operations, not the intervening business logic) — this is not a brand-new class of bug. What changed is the race window: an in-memory clone-and-swap was microseconds; a Mongo round-trip is milliseconds, making a genuine collision (e.g. a human `/submit-action` racing the AI-auto-advance loop within the same process) meaningfully more likely to actually manifest as a lost update (a submitted boost card silently dropped, or a stalled turn). Render's current `numInstances: 1` for both backend services limits this to same-process races for now, not cross-replica. Not a BLOCK by itself (no reproduction test, pre-existing shape), but a real production-durability gap worth a follow-up (e.g. an optimistic-concurrency version field, or per-race in-process serialization even against Mongo).
+
+- **[MEDIUM/HIGH-adjacent, PLAUSIBLE — treat as a must-address perf regression]** `drive_ai_only_turns`'s AI-auto-advance loop (up to `AI_AUTOADVANCE_MAX_TURNS` iterations) now does a full Mongo read+write per iteration where it previously did free in-memory `HashMap` operations — up to ~4000 sequential round-trips serializing/deserializing the whole `Race` document in a single HTTP request when a human finishes early. This is very likely why the code already needed a 10s wall-clock safety timeout that wasn't a real risk before this migration. Recommend measuring this against real Mongo latency before merge — this could cause real request timeouts under production conditions, not just "slower."
+
+## Security (security-review — partially completed, see gap below)
+
+- No NoSQL injection: all Mongo queries use the `doc!{}` macro / typed filters, never string-built queries.
+- No secrets/credentials logged; `map_mongo_err` doesn't leak connection strings.
+- Tenant isolation: Player/Race/Session documents are the tenant boundary themselves; the one cross-entity path (`deactivate_all_for_user`/`count_active_for_user`, filtered by `user_uuid`) has a dedicated cross-tenant test in the shared conformance suite.
+- **[Disclosed gap]** The security-review "identify vulnerabilities" pass did not complete — the underlying model hit a session rate limit and returned no output. It was not silently skipped; retry after the rate-limit window if a from-scratch security pass is wanted. The correctness-angle agents' overlapping security-adjacent findings (the `CarValidationService` split-brain above; no injection patterns found by 3 independent angles reading the same Mongo query code) partially cover this gap but do not substitute for a dedicated pass.
+
+## CLAUDE.md conventions
+
+- No violations found (dedicated angle, cross-checked against both the repo-root and `rust-backend/` CLAUDE.md). Tenant isolation, secrets-in-logs, test-integrity, and test-alias-gating (`test-fast` vs `test-integration`) rules are all respected.
+- Near-miss, not a violation: new `PlayerRepository` mutators take a bare `player_uuid` with no caller-identity check — this mirrors a pre-existing, already-documented TODO in `players.rs` about missing ownership checks at the HTTP layer, now also reachable through the Mongo-backed repository. Worth a human follow-up, out of this diff's scope.
+
+## Non-blocking notes (reuse / simplification / altitude)
+
+- `AppState` gained a `database: Database` field solely so `CarValidationService::validate_car_for_race` keeps compiling unchanged — this is the acknowledged, narrowly-scoped exception from the design doc, but the blocking finding above shows the "narrow exception" already caused a real functional bug. Recommend closing this by routing `CarValidationService` through `PlayerRepository` (which also removes the field entirely) rather than keeping it as a permanent narrow exception.
+- `RaceRepository::join_race`/`process_turn_actions`/`submit_turn_action` are implemented and conformance-tested on both backends but never called by any live route — the actual routes use separately-implemented `*_in_db` free functions that re-derive similar (but not always identical — e.g. `join_race_in_db`'s duplicate-check doesn't return `Conflict` the way the trait method does) logic. Not a bug today (nothing currently depends on the trait methods' exact behavior), but a documented latent trap for a future refactor, and arguably dead API surface relative to production traffic. Consider either wiring the live routes onto the trait methods, or documenting on the trait that these three exist for cross-backend conformance testing only.
+- `players.rs` still has its own raw Mongo CRUD functions (`insert_player`, `get_player_by_uuid_from_db`, etc.) that duplicate what `MongoPlayerRepository` now does, with different error-mapping (no `Conflict` translation). Confirm whether these are still live-called anywhere; if so, this is the same "looks-fixed-but-isn't" pattern as the races.rs `RACE_STORE` issue and should be closed the same way.
+- The 5 integration test files (including the new one) each hand-roll their own `TestApp`/`spawn_app` harness instead of reusing `src/test_utils.rs::TestApp`, which already exists. Not new to this diff, but this diff both touches 4 of the 5 and adds a 5th duplicate — a good moment to consolidate.
+- 3 Mongo repositories' unique-index creation happens sequentially at startup (each `.await`ed in turn); could run concurrently via `try_join!` to shave redundant round-trips off every boot/redeploy.
+- `find_active_race_for_pilot`/`get_races_by_status` do a full-collection scan-and-filter in Rust rather than a targeted Mongo query — fine at current scale, will need real filters as race history grows.
+
+## Blocking items (must fix before PR)
+
+1. Fix `register_player`/`apply_lap_action` to resolve players via `state.player_repository` instead of `CarValidationService`'s raw `state.database` query, so they work correctly against the mock backend (local/test/degraded-Mongo mode).
+2. Re-run this gate after the fix (this becomes `feat-mongo-persistence-2.md`).
+
+## Process note on this review's own conduct
+
+Mid-review, this environment's main working directory was found checked out to an unrelated, pre-existing local branch (`chore/enforce-review-gate-and-audit`, from separate prior work — a git worktree elsewhere already held `feat/mongo-persistence`). This caused one direct verification pass to read stale, pre-migration `races.rs` content and raise a false-alarm "critical" finding (that `routes()` handlers still used `State<Database>`) — traced to root cause and refuted by re-reading the correct worktree's copy before this artifact was written; the real code is correct on that specific point (Req 7, PASS above). Two of the eight originally-launched code-review finder agents (simplification angle, and the security-review identify pass) hit session rate limits and returned no findings — disclosed above rather than silently omitted.
