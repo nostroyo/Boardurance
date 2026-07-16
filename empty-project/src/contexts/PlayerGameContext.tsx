@@ -481,10 +481,7 @@ export const PlayerGameProvider: React.FC<PlayerGameProviderProps> = ({ children
     ],
   );
 
-  const contextValue: PlayerGameContextType = useMemo(
-    () => ({ state, actions }),
-    [state, actions],
-  );
+  const contextValue: PlayerGameContextType = useMemo(() => ({ state, actions }), [state, actions]);
 
   return <PlayerGameContext.Provider value={contextValue}>{children}</PlayerGameContext.Provider>;
 };

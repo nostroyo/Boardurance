@@ -15,9 +15,11 @@ First time / after dependency changes: `npm ci`.
 ## Verify loop (definition of "done")
 
 Run both before considering a frontend change complete (mirrors CI's hard gates):
+
 ```
 npx tsc --noEmit
 npm run test -- --run
 ```
+
 Lint and format are CI soft gates (`continue-on-error`), but run `npm run lint` and
 `npm run format:check` and fix what you reasonably can before finishing.

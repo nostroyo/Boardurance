@@ -189,7 +189,9 @@ const PerformancePreviewComponent: React.FC<PerformancePreviewProps> = ({
 
           <div className="flex justify-between items-center">
             <span className="text-gray-700">Cards Remaining:</span>
-            <span className="font-semibold text-indigo-700">{boost_cycle_info.cards_remaining}</span>
+            <span className="font-semibold text-indigo-700">
+              {boost_cycle_info.cards_remaining}
+            </span>
           </div>
 
           <div className="flex justify-between items-center">
