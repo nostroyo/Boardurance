@@ -316,6 +316,11 @@ const PlayerGameInterface: React.FC<PlayerGameInterfaceProps> = ({
               submitted_players: [], // TODO: Get from API
               pending_players: [], // TODO: Get from API
               total_active_players: state.race.participants.length,
+              // Multiplayer turn-sync fields (this legacy panel doesn't drive a
+              // countdown; the live RaceContainer path supplies real values).
+              turns_taken: 0,
+              turn_deadline: null,
+              seconds_remaining: null,
             }}
             raceStatus={
               state.race.status === 'Finished'
