@@ -65,15 +65,6 @@ export interface PerformanceCalculatorProps {
   onBoostChange: (boost: number) => void;
 }
 
-export interface SimultaneousTurnControllerProps {
-  currentTurnPhase: TurnPhase;
-  selectedBoost: number;
-  hasSubmitted: boolean;
-  onBoostSelect: (boost: number) => void;
-  onSubmitAction: () => Promise<void>;
-  timeRemaining?: number;
-}
-
 export interface LocalSectorMovementProps {
   movements: import('./race').ParticipantMovement[];
   onAnimationComplete: () => void;

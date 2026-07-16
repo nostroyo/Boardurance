@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { Race, TurnPhase as OldTurnPhase } from '../../types/race';
 import type { TurnPhase, TurnPhaseStatus, LapCharacteristic } from '../../types/race-api';
+import { formatTime } from '../../utils/time';
 
 export interface RaceStatusPanelProps {
   race?: Race; // Legacy race object (optional for backward compatibility)
@@ -274,7 +275,7 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
                 timeRemaining < 10 ? 'text-red-400 animate-pulse' : 'text-blue-400'
               }`}
             >
-              {`${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`}
+              {formatTime(timeRemaining)}
             </span>
           </div>
         </div>
