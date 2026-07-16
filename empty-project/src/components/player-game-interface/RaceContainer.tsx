@@ -629,9 +629,7 @@ export function RaceContainer({
       if (prev.isPolling || prev.isRaceComplete || prev.turnPhase == null) {
         return prev;
       }
-      console.log(
-        '[RaceContainer] Turn deadline reached — polling for the (auto-)resolved turn',
-      );
+      console.log('[RaceContainer] Turn deadline reached — polling for the (auto-)resolved turn');
       return {
         ...prev,
         baselineTurn: prev.turnPhase.turns_taken,

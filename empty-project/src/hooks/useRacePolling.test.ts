@@ -99,9 +99,7 @@ describe('useRacePolling turn-advancement detection', () => {
     await waitFor(() => expect(mockGetTurnPhase).toHaveBeenCalledTimes(2), {
       timeout: 4000,
     });
-    await waitFor(() =>
-      expect(onTurnPhaseChange.mock.calls.length).toBeGreaterThanOrEqual(2),
-    );
+    await waitFor(() => expect(onTurnPhaseChange.mock.calls.length).toBeGreaterThanOrEqual(2));
     unmount();
   });
 });
