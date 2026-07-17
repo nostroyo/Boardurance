@@ -1047,6 +1047,10 @@ async fn register_player_in_race(
     pilot_uuid: Uuid,
     tyre_type: TyreType,
 ) -> RepositoryResult<Option<Race>> {
+    // Serialize the read-modify-write per race so concurrent registrations
+    // can't clobber each other (lost update). Same guard as the turn core.
+    let _guard = lock_race_turn(race_uuid).await;
+
     // Get the race first
     let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
@@ -1331,6 +1335,12 @@ async fn process_individual_lap_action(
     boost_value: u32,
     car_data: &ValidatedCarData,
 ) -> RepositoryResult<Option<Race>> {
+    // Serialize the whole read-modify-write per race: without this guard two
+    // concurrent apply-lap calls both read the same snapshot and the second
+    // `save` clobbers the first, silently dropping one player's action (lost
+    // update). Same primitive the turn core uses; see `resolve_turn_core`.
+    let _guard = lock_race_turn(race_uuid).await;
+
     // Get the race first
     let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
@@ -4119,6 +4129,10 @@ pub async fn join_race_in_db(
     car_uuid: Uuid,
     pilot_uuid: Uuid,
 ) -> RepositoryResult<Option<Race>> {
+    // Serialize the read-modify-write per race so concurrent joins can't
+    // clobber each other (lost update). Same guard as the turn core.
+    let _guard = lock_race_turn(race_uuid).await;
+
     // Get the race first
     let Some(mut race) = get_race_by_uuid(race_repository, race_uuid).await? else {
         return Ok(None);
@@ -4139,6 +4153,12 @@ pub async fn start_race_in_db(
     race_repository: &Arc<dyn RaceRepository>,
     race_uuid: Uuid,
 ) -> RepositoryResult<Option<Race>> {
+    // Serialize the read-modify-write per race so a concurrent start (or a
+    // join landing mid-start) can't clobber the transition or be lost. Holding
+    // the guard across the status check also closes the start TOCTOU. Same
+    // guard as the turn core.
+    let _guard = lock_race_turn(race_uuid).await;
+
     // Get the race first
     let mut race = if let Some(race) = get_race_by_uuid(race_repository, race_uuid).await? {
         race
@@ -5113,6 +5133,50 @@ mod turn_resolution_tests {
                     p.boost_usage_history.len(),
                     1,
                     "iteration {iteration}: both submissions recorded exactly once"
+                );
+            }
+        }
+    }
+
+    /// Regression for the legacy apply-lap lost update (RACE-24): two humans
+    /// applying a lap at once via the legacy `process_individual_lap_action`
+    /// must both be recorded and the turn resolve exactly once. The
+    /// `lock_race_turn` guard inside that helper is what makes this safe on the
+    /// async repository. Mirrors `concurrent_submits_lose_no_update` but drives
+    /// the legacy per-player path. Runs on a multi-thread runtime for real
+    /// interleaving.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_apply_lap_lose_no_update() {
+        for iteration in 0..30 {
+            let (repo, race_uuid, human_a, human_b, map) = seed_multiplayer_race(60).await;
+            let car_a = map.get(&human_a).unwrap().clone();
+            let car_b = map.get(&human_b).unwrap().clone();
+            let repo_a = Arc::clone(&repo);
+            let repo_b = Arc::clone(&repo);
+
+            let task_a = tokio::spawn(async move {
+                process_individual_lap_action(&repo_a, race_uuid, human_a, 2, &car_a).await
+            });
+            let task_b = tokio::spawn(async move {
+                process_individual_lap_action(&repo_b, race_uuid, human_b, 2, &car_b).await
+            });
+            task_a.await.unwrap().expect("apply A ok");
+            task_b.await.unwrap().expect("apply B ok");
+
+            let race = load(&repo, race_uuid).await;
+            assert_eq!(
+                race.turns_taken, 1,
+                "iteration {iteration}: exactly one resolution"
+            );
+            assert!(
+                race.pending_actions.is_empty(),
+                "iteration {iteration}: staging cleared"
+            );
+            for p in &race.participants {
+                assert_eq!(
+                    p.boost_usage_history.len(),
+                    1,
+                    "iteration {iteration}: both applies recorded exactly once"
                 );
             }
         }
