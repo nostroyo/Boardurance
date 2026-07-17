@@ -46,6 +46,13 @@ npm ci
 npm run dev                          # UI on http://localhost:5173
 ```
 
+> **First-time backend setup:** the config loader requires a
+> `rust-backend/configuration/local.yaml` (gitignored — absent from a fresh
+> clone) on top of `base.yaml`. Create it with at least
+> `application: { port: 3000 }` plus your local database settings before
+> `cargo run` will boot. (`.env.example` documents the values, but `.env` is
+> **not** auto-loaded by the app.)
+
 - API docs (Swagger UI): http://localhost:3000/swagger-ui
 - Health check: http://localhost:3000/health_check
 - **No MongoDB? The backend still boots in degraded mode** — persistence is
