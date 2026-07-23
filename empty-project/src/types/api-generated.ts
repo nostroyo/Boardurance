@@ -993,6 +993,8 @@ export interface components {
         HealthResponse: {
             message: string;
             status: string;
+            /** @description Build identifier, sourced from the crate version at compile time. */
+            version: string;
         };
         JoinRaceRequest: {
             car_uuid: string;

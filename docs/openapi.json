@@ -3014,7 +3014,8 @@
         "type": "object",
         "required": [
           "status",
-          "message"
+          "message",
+          "version"
         ],
         "properties": {
           "message": {
@@ -3022,6 +3023,10 @@
           },
           "status": {
             "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Build identifier, sourced from the crate version at compile time."
           }
         }
       },
