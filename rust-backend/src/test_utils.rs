@@ -202,7 +202,8 @@ fn create_test_router(_state: &TestAppState) -> Router<()> {
     async fn test_health_check() -> Result<Json<serde_json::Value>, StatusCode> {
         Ok(Json(json!({
             "status": "ok",
-            "message": "Test service is healthy"
+            "message": "Test service is healthy",
+            "version": env!("CARGO_PKG_VERSION")
         })))
     }
 

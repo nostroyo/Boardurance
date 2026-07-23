@@ -19,9 +19,11 @@ Check service health and database connectivity.
 ```json
 {
   "status": "ok|degraded",
-  "message": "Service is healthy and database is connected"
+  "message": "Service is healthy and database is connected",
+  "version": "0.1.0"
 }
 ```
+`version` is the backend crate version (`CARGO_PKG_VERSION`), included to identify the running build across environments.
 
 ## Test Endpoints
 
