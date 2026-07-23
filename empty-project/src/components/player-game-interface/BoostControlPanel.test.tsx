@@ -169,7 +169,7 @@ describe('BoostControlPanel', () => {
     expect(onPitStop).toHaveBeenCalledWith('Soft');
   });
 
-  it('disables the pit button when it is not the player\'s turn to act', () => {
+  it("disables the pit button when it is not the player's turn to act", () => {
     const onPitStop = vi.fn();
     render(
       <BoostControlPanel

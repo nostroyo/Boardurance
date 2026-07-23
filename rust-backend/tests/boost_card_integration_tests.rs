@@ -271,9 +271,14 @@ async fn spawn_app() -> TestApp {
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{port}");
 
-    let server = run(listener, database, configuration.application.base_url)
-        .await
-        .expect("Failed to build application.");
+    let server = run(
+        listener,
+        database,
+        configuration.application.base_url,
+        rust_backend::configuration::StorageBackend::Mock,
+    )
+    .await
+    .expect("Failed to build application.");
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(async move { server.await.expect("Server failed to start") });
 

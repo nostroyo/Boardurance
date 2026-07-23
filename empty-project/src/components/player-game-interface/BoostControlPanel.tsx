@@ -170,8 +170,7 @@ export const BoostControlPanel: React.FC<BoostControlPanelProps> = ({
         <p className="text-xs sm:text-sm text-gray-400">Select your boost value for this turn</p>
         {tyreType && (
           <p className="text-xs text-gray-400 mt-1">
-            Tyre: <span className="font-semibold text-gray-200">{tyreType}</span> · 0 is always
-            free
+            Tyre: <span className="font-semibold text-gray-200">{tyreType}</span> · 0 is always free
           </p>
         )}
       </div>

@@ -8,8 +8,12 @@ A turn-based racing tycoon game. Two parts:
 ## Environment
 
 - OS: Windows 11. Shell is **PowerShell** — use `$env:VAR` (not `$VAR`), `$null` (not `/dev/null`), backtick for line continuation.
-- Process: feature work is specced under `.kiro/specs/<feature>/` (requirements → design → tasks). Bugfix/feature writeups land in `docs/bugfixes/` and `docs/features/`.
+- Process: feature work is specced with **OpenSpec**. Current truth lives in `openspec/specs/<capability>/spec.md`; every change goes through `openspec/changes/<change>/` (proposal → approve → implement `tasks.md` → `openspec archive`, which merges the deltas into `specs/` and moves the change to `changes/archive/`). Start a change with `/opsx:propose`. Legacy `.kiro/specs/` is **deprecated, frozen, read-only history** — never edit it, never treat it as current truth (mapping: `docs/migration/kiro-to-openspec.md`). Bugfix/feature writeups land in `docs/bugfixes/` and `docs/features/`.
 - **Command wrappers** (set cwd + test env for you, instead of a fragile `Set-Location …; $env:…; cargo …` prefix): `.claude/scripts/be.ps1 <cargo args>` (e.g. `be.ps1 test-fast`, `be.ps1 check --all-targets --all-features`) and `.claude/scripts/fe.ps1 <npm/npx args>` (e.g. `fe.ps1 npx tsc --noEmit`). The PowerShell cwd persists between calls — cd into an area once rather than re-prefixing every command.
+- **Concurrent sessions — never `git checkout` in the bare `Boardurance/` repo.** Multiple Claude Code sessions/agents can be active on this repo at once, and the bare checkout is a shared resource: one session switching its branch silently changes what every other session reads. This has caused real incidents (a session mid-review-gate read stale pre-migration code because another session checked out an unrelated branch underneath it; this very file has been edited out from under a concurrent session too). Keep the bare `Boardurance/` checkout pinned to `dev` and do **all** actual work — human-directed feature branches included, not just automated tasks — in an isolated `git worktree`:
+  - Automated/parallel-agent tasks: `.claude/scripts/new-worktree.ps1 <task-id> [-BaseRef main]` → creates `../Boardurance-worktrees/<task-id>` on branch `auto/<task-id>`; clean up with `.claude/scripts/rm-worktree.ps1 <task-id> [-DeleteBranch]` once merged/abandoned.
+  - Interactive feature/bugfix branches (branch-per-feature convention): `git worktree add ../Boardurance-worktrees/<slug> -b feat/<slug> dev` (or `fix/<slug>`) instead of `git checkout -b` in the bare repo; remove with `git worktree remove ../Boardurance-worktrees/<slug>` after the PR merges.
+- **Pre-push hook enforces the full backend/frontend verify loop** (including `clippy`, which the Stop hook skips for speed — see below) before code leaves the machine, so CI-only failures get caught locally instead. Run `.claude/scripts/install-git-hooks.ps1` once per clone/machine (worktrees share `.git/hooks`, so once per main checkout covers all of them). Bypass a single push with `git push --no-verify` when you genuinely need to.
 
 ## Definition of "done" (local CI parity)
 
@@ -27,6 +31,11 @@ cargo test-fast
 ```
 npx tsc --noEmit
 npm run test -- --run
+```
+
+**Specs** (whenever anything under `openspec/` changed):
+```
+openspec validate --all --strict
 ```
 
 ## Working efficiently (token & friction)
@@ -49,7 +58,7 @@ These are hard rules, born from real incidents. They override convenience.
 
 ## Loop discipline
 
-- **Plan first** for non-trivial work: design the approach before editing, then implement, then run the verify loop. Use existing `.kiro/specs/` as the source of truth for what "done" means per feature.
+- **Plan first** for non-trivial work: design the approach before editing, then implement, then run the verify loop. Use `openspec/specs/` as the source of truth for current behavior and the active change's `openspec/changes/<change>/` (proposal + delta specs + tasks) for what "done" means; archive the change (`openspec archive`) once merged.
 - **Termination rule:** after **3 failed attempts** at the same error with no new information, stop and summarize the blocker rather than retrying the same strategy.
 - **Read the full error** (stack trace / clippy span / failing assertion) before revising — distinguish a recoverable error from a hard blocker.
 - **Review gate before shipping:** before opening a PR or merging to `main`, run `/review-gate` (spec-conformance + correctness + security judges) and resolve any **BLOCK**. The verdict is recorded under `docs/reviews/`.

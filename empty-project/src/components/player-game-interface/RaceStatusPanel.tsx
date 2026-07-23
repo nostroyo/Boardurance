@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { Race, TurnPhase as OldTurnPhase } from '../../types/race';
 import type { TurnPhase, TurnPhaseStatus, LapCharacteristic } from '../../types/race-api';
+import { formatTime } from '../../utils/time';
 
 export interface RaceStatusPanelProps {
   race?: Race; // Legacy race object (optional for backward compatibility)
@@ -262,17 +263,19 @@ export const RaceStatusPanel: React.FC<RaceStatusPanelProps> = ({
         </div>
       </div>
 
-      {/* Time remaining (if provided) */}
-      {timeRemaining !== undefined && timeRemaining > 0 && (
+      {/* Multiplayer turn countdown (MM:SS, server-synced). Shown at 00:00
+          too — that is the "deadline passed, resolving on the next poll"
+          moment, and hiding the row there reads as a glitch. */}
+      {timeRemaining !== undefined && timeRemaining >= 0 && (
         <div className="mt-4 pt-4 border-t border-gray-700">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-400">Time Remaining:</span>
             <span
-              className={`text-lg font-bold ${
+              className={`text-lg font-bold font-mono ${
                 timeRemaining < 10 ? 'text-red-400 animate-pulse' : 'text-blue-400'
               }`}
             >
-              {timeRemaining}s
+              {formatTime(timeRemaining)}
             </span>
           </div>
         </div>

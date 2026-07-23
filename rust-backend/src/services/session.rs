@@ -86,10 +86,13 @@ impl SessionCache {
     }
 }
 
-/// Session manager with repository abstraction and in-memory caching
+/// Session manager with repository abstraction and in-memory caching.
+///
+/// Holds the repository as a trait object so the same manager works against
+/// either the in-memory `MockSessionRepository` or `MongoSessionRepository`.
 #[derive(Clone)]
-pub struct SessionManager<R: SessionRepository> {
-    repository: Arc<R>,
+pub struct SessionManager {
+    repository: Arc<dyn SessionRepository>,
     cache: Arc<RwLock<SessionCache>>,
     config: SessionConfig,
 }
@@ -111,10 +114,10 @@ pub enum SessionError {
     Cache(String),
 }
 
-impl<R: SessionRepository> SessionManager<R> {
+impl SessionManager {
     /// Create a new session manager
     #[must_use]
-    pub fn new(repository: Arc<R>, config: SessionConfig) -> Self {
+    pub fn new(repository: Arc<dyn SessionRepository>, config: SessionConfig) -> Self {
         Self {
             repository,
             cache: Arc::new(RwLock::new(SessionCache::new())),

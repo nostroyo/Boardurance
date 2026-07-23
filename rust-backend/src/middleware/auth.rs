@@ -12,7 +12,6 @@ use tower::{Layer, Service};
 use uuid::Uuid;
 
 use crate::domain::UserRole;
-use crate::repositories::MockSessionRepository;
 use crate::services::{JwtService, SessionManager};
 
 /// User context extracted from valid JWT token
@@ -55,16 +54,13 @@ impl From<AuthError> for StatusCode {
 #[derive(Clone)]
 pub struct AuthMiddleware {
     jwt_service: Arc<JwtService>,
-    session_manager: Arc<SessionManager<MockSessionRepository>>,
+    session_manager: Arc<SessionManager>,
 }
 
 impl AuthMiddleware {
     /// Create a new authentication middleware
     #[must_use]
-    pub fn new(
-        jwt_service: Arc<JwtService>,
-        session_manager: Arc<SessionManager<MockSessionRepository>>,
-    ) -> Self {
+    pub fn new(jwt_service: Arc<JwtService>, session_manager: Arc<SessionManager>) -> Self {
         Self {
             jwt_service,
             session_manager,
@@ -166,7 +162,7 @@ impl<S> Layer<S> for AuthMiddleware {
 pub struct AuthService<S> {
     inner: S,
     jwt_service: Arc<JwtService>,
-    session_manager: Arc<SessionManager<MockSessionRepository>>,
+    session_manager: Arc<SessionManager>,
 }
 
 impl<S> Service<Request> for AuthService<S>

@@ -94,6 +94,17 @@ export interface TurnPhase {
   submitted_players: string[];
   pending_players: string[];
   total_active_players: number;
+  /**
+   * Turn counter — increments exactly once per processed turn. The waiting
+   * client detects "my turn executed" by this exceeding the baseline captured
+   * at submission (`current_lap` saturates at `total_laps`, so it cannot
+   * signal the final turn).
+   */
+  turns_taken: number;
+  /** Armed submission deadline (Unix epoch seconds); null for solo races. */
+  turn_deadline: number | null;
+  /** Server-computed seconds until the deadline, clamped ≥ 0; null when no deadline. */
+  seconds_remaining: number | null;
 }
 
 // ============================================================================
@@ -183,6 +194,8 @@ export interface SubmitActionResponse {
   turn_phase: string; // "WaitingForPlayers", "Processing", "TurnProcessed"
   players_submitted: number;
   total_players: number;
+  /** Turn counter after this submission — baseline for turn-advancement detection. */
+  turns_taken: number;
 }
 
 // ============================================================================

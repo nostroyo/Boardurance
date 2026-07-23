@@ -904,6 +904,12 @@ export interface components {
             /** Format: int32 */
             total_laps: number;
             track_name: string;
+            /**
+             * Format: int32
+             * @description Per-turn submission timeout in seconds for multiplayer races.
+             *     Defaults to 60 when omitted; valid range 5-600.
+             */
+            turn_timeout_secs?: number | null;
         };
         CreateSectorRequest: {
             /** Format: int32 */
@@ -1298,6 +1304,16 @@ export interface components {
             total_laps: number;
             track: components["schemas"]["Track"];
             /**
+             * Format: int64
+             * @description Armed deadline for the current turn (Unix seconds); `None` = not armed.
+             */
+            turn_deadline?: number | null;
+            /**
+             * Format: int32
+             * @description Per-turn submission timeout in seconds; `None` = no timer (solo races).
+             */
+            turn_timeout_secs?: number | null;
+            /**
              * Format: int32
              * @description Number of processing turns taken so far. Used only as a safety bound to
              *     guarantee a race terminates even on an unwinnable track.
@@ -1453,6 +1469,12 @@ export interface components {
             /** Format: int32 */
             total_players: number;
             turn_phase: string;
+            /**
+             * Format: int32
+             * @description Turn counter after this submission — the client's baseline for detecting
+             *     that the turn it is waiting on has executed.
+             */
+            turns_taken: number;
         };
         TeamName: string;
         Track: {
@@ -1473,12 +1495,31 @@ export interface components {
             current_lap: number;
             lap_characteristic: string;
             pending_players: string[];
+            /**
+             * Format: int64
+             * @description Server-computed seconds until the deadline, clamped >= 0; null whenever
+             *     `turn_deadline` is. Drives the client countdown without trusting client clocks.
+             */
+            seconds_remaining?: number | null;
             submitted_players: string[];
             /** Format: int32 */
             total_active_players: number;
             /** Format: int32 */
             total_laps: number;
+            /**
+             * Format: int64
+             * @description Armed submission deadline for the current turn (Unix epoch seconds);
+             *     null for solo races or when no timeout is configured.
+             */
+            turn_deadline?: number | null;
             turn_phase: string;
+            /**
+             * Format: int32
+             * @description Turn counter — increments once per processed turn. Clients detect a
+             *     resolved turn by this exceeding the baseline captured at submission
+             *     (`current_lap` saturates at `total_laps`, so it can't signal the last turn).
+             */
+            turns_taken: number;
         };
         /**
          * @description Tyre type chosen at race entry (and at each pit stop). It determines the

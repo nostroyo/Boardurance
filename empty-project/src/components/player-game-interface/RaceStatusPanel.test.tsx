@@ -45,8 +45,21 @@ describe('RaceStatusPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Action Required')).toBeInTheDocument();
-    expect(screen.getByText('Submit your boost value to continue the race')).toBeInTheDocument();
+    expect(screen.getByText('Submit your boost action')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for player actions')).toBeInTheDocument();
+  });
+
+  it('does not prompt for action after the player has submitted', () => {
+    render(
+      <RaceStatusPanel
+        race={mockRace}
+        currentTurnPhase="WaitingForPlayers"
+        hasSubmittedAction={true}
+      />,
+    );
+
+    expect(screen.queryByText('Submit your boost action')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Waiting for other players').length).toBeGreaterThan(0);
   });
 
   it('shows processing notification when turn is processing', () => {
@@ -122,7 +135,7 @@ describe('RaceStatusPanel', () => {
     expect(screen.getByText('🌀')).toBeInTheDocument();
   });
 
-  it('displays lap progress bar', () => {
+  it('displays lap progress', () => {
     render(
       <RaceStatusPanel
         race={mockRace}
@@ -131,8 +144,9 @@ describe('RaceStatusPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Lap Progress:')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getByText('Lap:')).toBeInTheDocument();
+    expect(screen.getByText('2 / 5')).toBeInTheDocument();
+    expect(screen.queryByTitle('Final lap!')).not.toBeInTheDocument();
   });
 
   it('works with new backend API props', () => {

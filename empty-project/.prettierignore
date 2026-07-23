@@ -1,0 +1,8 @@
+# Generated from docs/openapi.json by `npm run gen:api` (raw openapi-typescript
+# output). CI's `gen:api:check` regenerates this file and fails on any diff, so
+# prettier must NOT reformat it — otherwise `npm run format` silently breaks CI.
+src/types/api-generated.ts
+
+# Build output
+dist/
+coverage/

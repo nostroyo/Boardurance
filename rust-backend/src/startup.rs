@@ -1,9 +1,13 @@
 #![allow(clippy::needless_for_each)]
 
 use crate::app_state::AppState;
-use crate::configuration::{DatabaseSettings, Settings};
+use crate::configuration::{DatabaseSettings, Environment, Settings, StorageBackend};
 use crate::middleware::{AuthMiddleware, RequireRole};
-use crate::repositories::{MockPlayerRepository, MockRaceRepository, MockSessionRepository};
+use crate::repositories::{
+    MockPlayerRepository, MockRaceRepository, MockSessionRepository, MongoPlayerRepository,
+    MongoRaceRepository, MongoSessionRepository, PlayerRepository, RaceRepository,
+    SessionRepository,
+};
 use crate::routes::{auth, health_check, players, races};
 use crate::services::{JwtConfig, JwtService, SessionConfig, SessionManager};
 use axum::{routing::get, Router};
@@ -25,22 +29,46 @@ pub struct Application {
 
 impl Application {
     pub async fn build(configuration: Settings) -> Result<Self, anyhow::Error> {
+        let environment = Environment::current();
+        let backend = configuration
+            .database
+            .resolved_storage_backend(&environment);
+
+        // `AppState` carries a raw `Database` handle alongside the repository
+        // abstractions (for the few call sites, e.g. `CarValidationService`,
+        // that still query collections directly), so a connection is always
+        // attempted regardless of the selected repository backend. Only the
+        // *fail-fast* behavior below depends on `backend`.
         let connection_pool = match get_connection_pool(&configuration.database).await {
             Ok(pool) => {
                 tracing::info!("Successfully connected to MongoDB");
                 pool
             }
+            Err(e) if backend == StorageBackend::MongoDb => {
+                // Hard rule: prod/preprod must never silently fall back to an
+                // in-memory/degraded database. Fail loudly and refuse to start
+                // so a dead Mongo is never hidden behind a healthy-looking
+                // deploy.
+                tracing::error!(
+                    "Failed to connect to MongoDB while the resolved storage backend is \
+                     '{:?}': {e}. Refusing to start.",
+                    backend
+                );
+                return Err(anyhow::anyhow!(
+                    "MongoDB connection failed and storage_backend=mongodb: {e}"
+                ));
+            }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to connect to MongoDB: {}. Server will run in degraded mode.",
-                    e
+                    "Failed to connect to MongoDB: {}. Continuing with the mock repository \
+                     backend (storage_backend={:?}); only /health_check reflects the DB state.",
+                    e,
+                    backend
                 );
                 // Degraded mode: build a client with short timeouts so that
                 // database-touching endpoints (e.g. /health_check) fail fast
                 // instead of blocking on the 30s default server-selection timeout.
-                let client = build_mongo_client("mongodb://localhost:27017")
-                    .await
-                    .unwrap();
+                let client = build_mongo_client("mongodb://localhost:27017").await?;
                 client.database("mock_database")
             }
         };
@@ -55,6 +83,7 @@ impl Application {
             listener,
             connection_pool,
             configuration.application.base_url,
+            backend,
         )
         .await?;
 
@@ -230,6 +259,7 @@ pub async fn run(
     listener: TokioTcpListener,
     db_pool: Database,
     _base_url: String,
+    backend: StorageBackend,
 ) -> Result<axum::serve::Serve<Router, Router>, anyhow::Error> {
     // Initialize JWT service
     let jwt_config = JwtConfig {
@@ -242,13 +272,35 @@ pub async fn run(
     };
     let jwt_service = Arc::new(JwtService::new(jwt_config));
 
-    // Initialize repository implementations (using mocks for now)
-    let player_repository = Arc::new(MockPlayerRepository::new());
-    let race_repository = Arc::new(MockRaceRepository::new());
-    let session_repository = Arc::new(MockSessionRepository::new());
+    // Select the repository backend: mock (in-memory, local/test) or Mongo
+    // (real persistence, prod/preprod) — see `configuration::StorageBackend`.
+    let (player_repository, race_repository, session_repository): (
+        Arc<dyn PlayerRepository>,
+        Arc<dyn RaceRepository>,
+        Arc<dyn SessionRepository>,
+    ) = match backend {
+        StorageBackend::Mock => (
+            Arc::new(MockPlayerRepository::new()),
+            Arc::new(MockRaceRepository::new()),
+            Arc::new(MockSessionRepository::new()),
+        ),
+        StorageBackend::MongoDb => {
+            tracing::info!("Using MongoDB-backed repositories (storage_backend=mongodb)");
+            let player_repository = MongoPlayerRepository::new(&db_pool).await?;
+            let race_repository = MongoRaceRepository::new(&db_pool).await?;
+            let session_repository = MongoSessionRepository::new(&db_pool).await?;
+            (
+                Arc::new(player_repository),
+                Arc::new(race_repository),
+                Arc::new(session_repository),
+            )
+        }
+    };
 
-    // Seed AI opponents for solo mode into the in-memory player repository.
-    crate::routes::races::seed_solo_bots(&player_repository).await;
+    // Seed AI opponents for solo mode into the player repository. Idempotent
+    // (stable bot uuids), so this is safe to re-run on every deploy against a
+    // persistent Mongo backend.
+    crate::routes::races::seed_solo_bots(player_repository.as_ref()).await;
 
     // Initialize session manager
     let session_config = SessionConfig::default();
@@ -273,9 +325,15 @@ pub async fn run(
     // so registered players' team data is available without a database.
     let team_routes = players::team_routes().with_state(app_state.clone());
 
-    // Turn-processing routes backed by AppState so they can resolve car stats
-    // from the in-memory player repository and compute real movement.
+    // Turn-processing routes backed by AppState: car stats come from
+    // `state.player_repository` and race state persists through
+    // `state.race_repository` (Mongo in prod/preprod, mock elsewhere) — the
+    // legacy process-global `RACE_STORE` this used to rely on has been removed.
     let race_turn_routes = races::turn_routes().with_state(app_state.clone());
+
+    // Simple race CRUD routes, backed by AppState so they persist through
+    // `state.race_repository` the same way.
+    let race_routes = races::routes().with_state(app_state.clone());
 
     // Create admin-protected routes with AppState and middleware
     let admin_routes = players::admin_routes()
@@ -291,7 +349,7 @@ pub async fn run(
         .route("/health_check", get(health_check))
         .nest("/api/v1", team_routes) // Player team + asset routes backed by in-memory repo
         .nest("/api/v1", race_turn_routes) // Turn processing backed by in-memory repo
-        .nest("/api/v1", races::routes())
+        .nest("/api/v1", race_routes)
         .nest("/api/v1", auth_routes) // Nest auth routes under /api/v1
         .nest("/api/v1/admin", admin_routes) // Nest the admin routes with middleware
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
