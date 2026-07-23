@@ -11,7 +11,7 @@
 # ─────────────────────────────────────────────────────────────────
 
 [core]
-project_name = "bmad-adoption"
+project_name = "Boardurance"
 document_output_language = "English"
 output_folder = "_bmad-output"
 

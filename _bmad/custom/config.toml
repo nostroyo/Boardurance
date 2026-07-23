@@ -5,3 +5,8 @@
 #
 # [agents.bmad-agent-pm]
 # description = "Prefers short, bulleted PRDs over narrative drafts."
+
+# The install ran from a git worktree named "bmad-adoption"; the real
+# project name is Boardurance. Pinned here so re-installs keep it.
+[core]
+project_name = "Boardurance"
