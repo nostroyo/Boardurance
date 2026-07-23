@@ -2,6 +2,9 @@
 # Root Level Git Ignore
 # ===========================================
 
+# BMAD personal install answers (regenerated per user by the installer)
+_bmad/config.user.toml
+
 # Environment Variables and Secrets
 .env
 .env.local
