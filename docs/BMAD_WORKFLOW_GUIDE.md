@@ -145,6 +145,16 @@ TEA is installed. Pull it in for anything test-heavy — artifacts land in
 
 ---
 
+## Spikes & assumption probes (verify before you build)
+
+Team extension (protocol: [`_bmad/custom/assumption-probes.md`](../_bmad/custom/assumption-probes.md), wired via `_bmad/custom/<skill>.toml` overrides — survives BMAD reinstalls):
+
+- **Every story starts with an `## Assumption Probes` table** — each load-bearing assumption is settled *before* code: `VERIFIED-BY-READING` (file:line), `VERIFIED-BY-PROBE` (≤15-min executable check, command + output recorded), `ACCEPTED-RISK` (human call), or it blocks `ready-for-dev`.
+- **`bmad-dev-story` gates on it**: pending probes run before Task 1; a failed load-bearing probe HALTS the story instead of building on sand (small miss → amend tasks; approach miss → `bmad-correct-course`).
+- **`bmad-quick-dev`** probes during its Plan step, before Tasks & Acceptance are written.
+- **Epic-level unknowns** (new tech, external contract, perf target) get a **leading spike story** — timeboxed, acceptance criterion = the probe question, deliverable = a decision note, no production code.
+- Probes are throwaway scratch checks; one that deserves to live becomes a regression test explicitly. And a probe must be able to fail — asserting what you yourself constructed proves nothing.
+
 ## Repo glue (non-negotiable — same as before BMAD)
 
 Do these around every feature, regardless of path:
@@ -172,6 +182,7 @@ Do these around every feature, regardless of path:
 | Review before PR | "run code review" | `bmad-code-review` |
 | Design tests / e2e | "talk to Murat" | `bmad-tea`, `bmad-testarch-*` |
 | Close out an epic | "run a retrospective" | `bmad-retrospective` |
+| Settle a big unknown first | "create a spike story for <question>" | `bmad-create-epics-and-stories` (+ probes protocol) |
 
 ---
 

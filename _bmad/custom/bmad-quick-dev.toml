@@ -1,0 +1,7 @@
+# Team override — probe assumptions during spec planning (see _bmad/custom/assumption-probes.md)
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/assumption-probes.md",
+  "During step-02 (Plan) investigation: identify the assumptions the intended approach depends on and settle the load-bearing ones BEFORE writing Tasks & Acceptance — by reading real code (cite file:line) or by a <=15-min executable probe (record command + output in the spec's Design Notes or Verification section). A spec whose approach rests on an unprobed load-bearing assumption is not ready-for-dev; surface it at CHECKPOINT 1 as UNVERIFIED or ACCEPTED-RISK for the human to decide.",
+]

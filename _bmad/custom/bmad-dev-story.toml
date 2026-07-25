@@ -1,0 +1,7 @@
+# Team override — assumption-probe gate before implementation (see _bmad/custom/assumption-probes.md)
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/assumption-probes.md",
+  "GATE before Task 1: read the story's '## Assumption Probes' table. Execute every probe still UNVERIFIED (throwaway scratch checks, <=15 min each), record command + observed output in the table, and update statuses. If a load-bearing probe FAILS: HALT and report — do not implement on a falsified assumption; small miss -> amend story tasks with human approval, approach-level miss -> bmad-correct-course. If the story has no Assumption Probes table, add one (even if only to state 'no load-bearing assumptions') before implementing.",
+]

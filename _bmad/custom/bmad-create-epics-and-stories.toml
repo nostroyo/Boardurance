@@ -1,0 +1,7 @@
+# Team override — spike stories for epic-level unknowns (see _bmad/custom/assumption-probes.md)
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/assumption-probes.md",
+  "When an epic's approach rests on a major unverified assumption (unfamiliar tech, external API/contract, performance target, platform capability), create a LEADING spike story for it (first story of the epic, e.g. N.0/N.1): the probe question is its acceptance criterion, it is timeboxed, and its deliverable is a decision note in the planning artifacts — not production code. Later stories in the epic reference the spike's decision instead of re-assuming.",
+]
