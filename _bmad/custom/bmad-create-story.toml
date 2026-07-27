@@ -1,0 +1,7 @@
+# Team override — assumption-probe discipline (see _bmad/custom/assumption-probes.md)
+
+[workflow]
+persistent_facts = [
+  "file:{project-root}/_bmad/custom/assumption-probes.md",
+  "Every story file MUST include an '## Assumption Probes' table (Assumption / Load-bearing? / Status / Evidence) per the assumption-probes protocol. Extract candidate assumptions from the epic, architecture and code analysis; settle what you can by reading (VERIFIED-BY-READING with file:line) or by a <=15-min probe (VERIFIED-BY-PROBE with command + output). A story with a load-bearing UNVERIFIED assumption is NOT ready-for-dev — probe it, or ask the human to mark it ACCEPTED-RISK, or propose a leading spike story.",
+]

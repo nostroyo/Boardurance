@@ -16,7 +16,7 @@ A turn-based racing tycoon game. Two parts:
 
 ## Method: BMAD v6 (the workflow)
 
-Installed: BMad Core + BMM v6.10.0 + Test Architect (TEA) v1.19.1 — skills in `.claude/skills/bmad-*`, config in `_bmad/` (durable overrides go in `_bmad/custom/config.toml`, never in the generated files), artifacts in `_bmad-output/`. Lost? **`bmad-help`** inspects the project and recommends the next step.
+Installed: BMad Core + BMM v6.10.0 + Test Architect (TEA) v1.19.1 — skills in `.claude/skills/bmad-*`, config in `_bmad/` (durable overrides go in `_bmad/custom/config.toml`, never in the generated files), artifacts in `_bmad-output/`. Lost? **`bmad-help`** inspects the project and recommends the next step. **Step-by-step how-to (personas, per-phase commands, cheat sheet): [`docs/BMAD_WORKFLOW_GUIDE.md`](docs/BMAD_WORKFLOW_GUIDE.md).**
 
 Feature work flows through the four BMAD phases:
 
